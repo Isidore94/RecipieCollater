@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Sign in · RecipeCollater{% endblock %}
+{% block plain_content %}
+<div class="card onboarding">
+  <div class="onboarding-brand">🍳 RecipeCollater</div>
+  <h1>Sign in</h1>
+  {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+  {% if names %}
+  <p class="muted">Choose your name and enter your PIN. You'll stay signed in on this device.</p>
+  <form method="post" action="/login" class="stack">
+    <label for="name">Your name</label>
+    <select id="name" name="name" required>
+      {% for n in names %}<option value="{{ n }}">{{ n }}</option>{% endfor %}
+    </select>
+    <label for="pin">PIN</label>
+    <input id="pin" name="pin" required autocomplete="off" inputmode="numeric"
+           pattern="[0-9]*" minlength="4" maxlength="12" class="code-input" placeholder="PIN">
+    <button type="submit" class="btn-primary">Sign in</button>
+  </form>
+  {% else %}
+  <p class="muted">No PINs have been set up yet. Ask an admin to set one for you on the
+    <em>Devices</em> page, or use a pairing code.</p>
+  {% endif %}
+  <p class="muted"><a href="/welcome">Use a pairing code instead</a></p>
+</div>
+{% endblock %}

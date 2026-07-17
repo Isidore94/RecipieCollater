@@ -64,6 +64,10 @@ first math commit starts correct.)*
   is the `device_sessions` row keyed by the SHA-256 hash of the cookie value.
 - Preferences such as theme use browser local storage or a server-side device record, never another
   cookie. `rc_session` is the only cookie the application creates.
+- An OPTIONAL per-user numeric PIN (migration 003) may mint a device session via `/login`; it
+  creates the same single `rc_session` cookie — never a second cookie or a separate identity.
+  Passwordless pairing remains the default. PINs are scrypt-hashed with per-user lockout
+  (`app/services/credentials.py`); see §6.
 
 ## 6. Scoped, opaque, hashed tokens
 
@@ -74,19 +78,23 @@ first math commit starts correct.)*
   ingestion jobs and nothing else. An ingest token must never read recipes, mutate pantry/shopping,
   reach admin, or act as a browser session. Browser session cookies must never authenticate the
   ingest API. There is a test asserting both boundaries; keep it green.
+- Optional PINs (migration 003) follow the same never-plaintext rule but use a slow KDF (scrypt),
+  not SHA-256, because a short numeric PIN is brute-forceable; per-user lockout (5 attempts →
+  15-minute cooldown) bounds guessing. A PIN authenticates a browser sign-in only, never ingest.
 
 ## 7. CSRF
 
-- Every state-changing browser route (POST/PUT/PATCH/DELETE authenticated by the cookie) is guarded
-  by `require_csrf`, layered so both htmx and no-JS form fallback are covered:
-  1. **Fetch Metadata** — if `Sec-Fetch-Site` is present (all modern browsers incl. iOS Safari),
-     allow only `same-origin`/`none`; reject `cross-site`/`same-site`. This browser-set header cannot
-     be forged cross-site and protects plain `<form>` posts.
-  2. **Legacy fallback** — browsers without Fetch Metadata must send a custom header a cross-site
-     form cannot set (`HX-Request` from htmx, or `X-RC-CSRF`).
-  `SameSite=Lax` withholds the auth cookie from cross-site POSTs underneath all of this.
-- Token-authenticated API endpoints (ingest) are exempt from the header check because they are not
-  cookie-authenticated and are not reachable from a victim's browser session.
+- **`SameSite=Lax` on `rc_session` is the primary CSRF defense**: the browser withholds the auth
+  cookie from every cross-site POST, so a forged cross-site request carries no authority. Every
+  state-changing browser route is additionally guarded by `require_csrf`, which rejects any request
+  the browser *explicitly* labels `Sec-Fetch-Site: cross-site`.
+- `require_csrf` does **not** require Fetch Metadata or a custom header. Measured reality
+  (2026-07-17): iOS Safari on the plain-HTTP LAN omits `Sec-Fetch-Site`, and a plain `<form>` post
+  cannot add a custom header — so requiring either blocked legitimate onboarding / PIN sign-in from
+  real family devices. Absent Fetch Metadata we rely on `SameSite=Lax`. (The original design
+  required a header fallback; corrected here after a real device could neither pair nor sign in.)
+- Token-authenticated API endpoints (ingest) are exempt: they are not cookie-authenticated and are
+  not reachable from a victim's browser session.
 
 ## 8. htmx / templates
 

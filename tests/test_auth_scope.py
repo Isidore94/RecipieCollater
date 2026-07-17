@@ -193,21 +193,16 @@ def test_first_admin_bootstrap_is_single_winner(migrated_db: sqlite3.Connection)
 # ---- CSRF dependency ------------------------------------------------------------------
 
 
-def test_csrf_allows_same_origin_fetch_metadata() -> None:
-    require_csrf(_make_request({"sec-fetch-site": "same-origin"}))  # no raise
-    require_csrf(_make_request({"sec-fetch-site": "none"}))  # user-initiated
+def test_csrf_allows_same_origin_none_and_absent() -> None:
+    # Same-origin, user-initiated, same-site, htmx, and browsers that omit Fetch Metadata over
+    # plain HTTP are all allowed; SameSite=Lax is the CSRF guarantee for the absent case.
+    require_csrf(_make_request({"sec-fetch-site": "same-origin"}))
+    require_csrf(_make_request({"sec-fetch-site": "none"}))
+    require_csrf(_make_request({"sec-fetch-site": "same-site"}))
+    require_csrf(_make_request({"hx-request": "true"}))
+    require_csrf(_make_request({}))
 
 
-def test_csrf_blocks_cross_site() -> None:
+def test_csrf_blocks_explicit_cross_site() -> None:
     with pytest.raises(CSRFError):
         require_csrf(_make_request({"sec-fetch-site": "cross-site"}))
-    with pytest.raises(CSRFError):
-        require_csrf(_make_request({"sec-fetch-site": "same-site"}))
-
-
-def test_csrf_legacy_requires_custom_header() -> None:
-    # No Fetch Metadata → must carry htmx or custom header.
-    require_csrf(_make_request({"hx-request": "true"}))
-    require_csrf(_make_request({"x-rc-csrf": "1"}))
-    with pytest.raises(CSRFError):
-        require_csrf(_make_request({}))

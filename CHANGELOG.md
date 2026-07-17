@@ -39,6 +39,8 @@ before any recipe features exist.
   `api_tokens`, `onboarding_tokens`.
 - Migration `002` adds an independent session-renewal timestamp so reads are not forced to write
   or renew the cookie on every request after day 30.
+- Migration `003` adds optional per-user PIN sign-in columns to `users` (see Identity below).
+  Phase-1 cookbook tables therefore begin at migration `004`.
 
 **Identity & onboarding**
 - Named users; first-run admin bootstrap.
@@ -50,6 +52,11 @@ before any recipe features exist.
 - Separate **scoped** ingest Bearer tokens (`api_tokens.scope`, ingest-only) — a spec
   refinement over `docs/03-data-model.md` §2, documented there in this commit.
 - Layered CSRF (Fetch-Metadata + custom-header fallback atop SameSite=Lax).
+- Optional per-user **PIN sign-in** (`/login`, migration 003): pick your name + a numeric PIN to
+  mint a device session on a new device instead of an admin-issued code. PINs are scrypt-hashed
+  (never plaintext) with per-user lockout (5 tries → 15 min); admins set/clear PINs on the Devices
+  page. Added at the owner's request over the original passwordless design (D7 updated); pairing
+  codes remain the no-typing fallback.
 
 **Worker & operations**
 - Huey worker on a **separate** `data/queue.db`: liveness `ping`, hourly heartbeat, and a

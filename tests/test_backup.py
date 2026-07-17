@@ -169,6 +169,23 @@ def test_external_backup_must_be_another_filesystem(data_dir: Path, monkeypatch)
         backup.create_backup(settings)
 
 
+def _symlinks_supported() -> bool:
+    # Windows needs admin/Developer Mode to create symlinks; skip there rather than fail.
+    import tempfile
+
+    try:
+        with tempfile.TemporaryDirectory() as scratch:
+            target = Path(scratch) / "t"
+            target.write_text("x", encoding="utf-8")
+            (Path(scratch) / "l").symlink_to(target)
+        return True
+    except (OSError, NotImplementedError):
+        return False
+
+
+@pytest.mark.skipif(
+    not _symlinks_supported(), reason="symlink creation requires admin/Developer Mode on Windows"
+)
 def test_backup_rejects_symlinks(data_dir: Path) -> None:
     settings = config.get_settings()
     settings.ensure_dirs()

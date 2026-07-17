@@ -33,11 +33,31 @@
 
 <section class="card">
   <h2>Household</h2>
-  <ul class="chip-list">
-    {% for u in users %}
-    <li class="chip">{{ u.name }}{% if u.is_admin %} <span class="chip-tag">admin</span>{% endif %}</li>
-    {% endfor %}
-  </ul>
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Household members">
+  <table class="data">
+    <thead><tr><th>Name</th><th>PIN</th><th>Set / change PIN</th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.name }}{% if u.is_admin %} <span class="chip-tag">admin</span>{% endif %}</td>
+        <td>{% if u.id in pin_user_ids %}set{% else %}<span class="muted">none</span>{% endif %}</td>
+        <td>
+          <form method="post" action="/admin/users/{{ u.id }}/pin" class="inline-form">
+            <input name="pin" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="12"
+                   placeholder="4 to 12 digits" required aria-label="New PIN for {{ u.name }}">
+            <button type="submit">Save PIN</button>
+          </form>
+          {% if u.id in pin_user_ids %}
+          <form method="post" action="/admin/users/{{ u.id }}/pin/clear" class="inline-form">
+            <button type="submit" class="btn-danger">Remove PIN</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
   <form method="post" action="/admin/users" class="inline-form">
     <input name="name" placeholder="Add a person" required aria-label="New user name">
     <label class="check"><input type="checkbox" name="is_admin" value="true"> admin</label>

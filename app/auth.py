@@ -18,7 +18,6 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from app.config import get_settings
 from app.deps import get_db
 from app.security import (
-    CSRF_HEADER,
     SESSION_COOKIE_NAME,
     SESSION_LIFETIME,
 )
@@ -113,24 +112,20 @@ def require_ingest_token(
 
 
 def require_csrf(request: Request) -> None:
-    """Reject cross-site state-changing requests (belt-and-braces atop SameSite=Lax).
+    """Reject cross-site state-changing requests.
 
-    Layered so both htmx and no-JS form fallback are protected:
-      1. Fetch Metadata: if the browser sends ``Sec-Fetch-Site`` (all modern browsers,
-         incl. iOS Safari), allow only ``same-origin``/``none`` — this header cannot be
-         forged by a cross-site page and covers plain ``<form>`` posts.
-      2. Legacy browsers without Fetch Metadata must carry a custom header a cross-site
-         HTML form cannot set (htmx's ``HX-Request`` or the app's ``X-RC-CSRF``).
-    ``SameSite=Lax`` already withholds the auth cookie from cross-site POSTs underneath.
+    ``SameSite=Lax`` on ``rc_session`` is the primary defense: the browser withholds the auth
+    cookie from every cross-site POST, so a forged cross-site request carries no authority. On
+    top of that we reject any request the browser *explicitly* labels ``Sec-Fetch-Site:
+    cross-site``.
+
+    We deliberately do NOT require Fetch Metadata or a custom header. Measured 2026-07-17: iOS
+    Safari on the plain-HTTP LAN omits ``Sec-Fetch-Site``, and a plain ``<form>`` post cannot add
+    a custom header — so requiring either blocked legitimate onboarding / PIN sign-in from real
+    family devices. Absent Fetch Metadata, ``SameSite=Lax`` is the guarantee (CONVENTIONS §7).
     """
-    fetch_site = request.headers.get("sec-fetch-site")
-    if fetch_site is not None:
-        if fetch_site in {"same-origin", "none"}:
-            return
+    if request.headers.get("sec-fetch-site") == "cross-site":
         raise CSRFError
-    if "hx-request" in request.headers or CSRF_HEADER in request.headers:
-        return
-    raise CSRFError
 
 
 # --------------------------------------------------------------------------------------

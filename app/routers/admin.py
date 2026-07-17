@@ -16,7 +16,7 @@ from fastapi.responses import RedirectResponse
 from app.auth import require_admin, require_csrf
 from app.config import get_settings
 from app.deps import get_db
-from app.services import onboarding, sessions, tokens
+from app.services import credentials, onboarding, sessions, tokens
 from app.services.users import User, create_user, get_user, get_user_by_name, list_users
 from app.templating import render
 
@@ -28,6 +28,7 @@ def _devices_context(db: sqlite3.Connection, **extra: Any) -> dict[str, Any]:
         "users": list_users(db),
         "sessions": sessions.list_sessions(db),
         "tokens": tokens.list_tokens(db),
+        "pin_user_ids": credentials.user_ids_with_pin(db),
         "app_base_url": get_settings().app_base_url,
         **extra,
     }
@@ -136,3 +137,37 @@ def revoke_token(
 ) -> Response:
     tokens.revoke_token(db, token_id)
     return RedirectResponse(url="/admin/devices", status_code=303)
+
+
+@router.post("/users/{user_id}/pin")
+def set_user_pin(
+    request: Request,
+    user_id: int,
+    pin: str = Form(...),
+    db: sqlite3.Connection = Depends(get_db),
+    admin: User = Depends(require_admin),
+    _: None = Depends(require_csrf),
+) -> Response:
+    target = get_user(db, user_id)
+    if target is None:
+        return _render_devices(request, db, admin, error="Unknown user.")
+    try:
+        credentials.set_pin(db, target.id, pin)
+    except credentials.PinError as exc:
+        return _render_devices(request, db, admin, error=f"{target.name}: {exc}")
+    return _render_devices(request, db, admin, notice=f"PIN set for {target.name}.")
+
+
+@router.post("/users/{user_id}/pin/clear")
+def clear_user_pin(
+    request: Request,
+    user_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    admin: User = Depends(require_admin),
+    _: None = Depends(require_csrf),
+) -> Response:
+    target = get_user(db, user_id)
+    if target is None:
+        return _render_devices(request, db, admin, error="Unknown user.")
+    credentials.clear_pin(db, target.id)
+    return _render_devices(request, db, admin, notice=f"PIN removed for {target.name}.")

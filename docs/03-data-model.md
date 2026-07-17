@@ -29,7 +29,15 @@ CREATE TABLE users (
   id            INTEGER PRIMARY KEY,
   name          TEXT NOT NULL UNIQUE,        -- "Aaron", "Sam"
   is_admin      INTEGER NOT NULL DEFAULT 0,
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Optional per-user PIN sign-in (migration 003; owner request over the original
+  -- passwordless design). Never plaintext: pin_hash is a salted scrypt string. A short
+  -- numeric PIN is protected by per-user lockout; a correct PIN only mints a device
+  -- session (rc_session stays the one identity authority).
+  pin_hash            TEXT,                  -- NULL = no PIN set
+  pin_set_at          TEXT,
+  pin_failed_attempts INTEGER NOT NULL DEFAULT 0,
+  pin_locked_until    TEXT                   -- NULL = not locked out
 );
 
 -- One row per browser/device install. Token lives in an HttpOnly cookie
