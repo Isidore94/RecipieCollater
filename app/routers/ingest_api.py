@@ -14,9 +14,24 @@ from fastapi.responses import JSONResponse
 
 from app.auth import require_ingest_token
 from app.deps import get_db
+from app.logging_config import get_logger
 from app.services import ingest, tokens
 
 router = APIRouter(prefix="/api")
+log = get_logger("ingest_api")
+
+
+def schedule_processing(job_id: int) -> None:
+    """Hand a new job to the worker; a queue hiccup must never break the fast 202 response.
+
+    The job is already durably recorded, so on failure it simply waits in 'queued' for a retry.
+    """
+    try:
+        from app.tasks import process_ingest_job
+
+        process_ingest_job(job_id)
+    except Exception:
+        log.warning("ingest_enqueue_failed", job_id=job_id)
 
 
 @router.post("/ingest")
@@ -42,6 +57,8 @@ async def submit_ingest(
         )
     except ingest.IngestError as exc:
         return JSONResponse({"detail": str(exc)}, status_code=400)
+    if created:
+        schedule_processing(job.id)
     return JSONResponse(
         {
             "job_id": job.id,

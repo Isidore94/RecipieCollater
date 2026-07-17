@@ -12,6 +12,7 @@ arrive with their phases and will use a short-lived subprocess per job.
 
 from __future__ import annotations
 
+import contextlib
 import os
 
 from huey import SqliteHuey, crontab
@@ -38,6 +39,39 @@ worker_health.write_heartbeat(_settings)
 def ping(value: str = "pong") -> str:
     """Liveness task used by tests and the admin worker check."""
     return value
+
+
+@huey.task(retries=2, retry_delay=60)
+def process_ingest_job(job_id: int) -> None:
+    """Process one ingest job (fetch -> extract -> save) in the worker subprocess.
+
+    Expected failures (a blocked fetch, no recipe on the page) are recorded on the job by the
+    pipeline and return normally. Only an *unexpected* error re-raises so Huey retries; the job is
+    marked failed first so a stuck job never lingers mid-lifecycle.
+    """
+    from app.db import connect  # lazy heavy imports (CONVENTIONS 4)
+    from app.services import ingest, pipeline
+
+    conn = connect(_settings.db_path)
+    try:
+        job = ingest.get_job(conn, job_id)
+        if job is None:
+            log.warning("ingest_job_missing", job_id=job_id)
+            return
+        ingest.increment_attempts(conn, job.id)
+        pipeline.run_job(conn, job)
+        final = ingest.get_job(conn, job_id)
+        log.info("ingest_job_processed", job_id=job_id, status=final.status if final else "gone")
+    except Exception:
+        log.exception("ingest_job_error", job_id=job_id)
+        with contextlib.suppress(Exception):
+            ingest.set_status(
+                conn, job_id, "failed", error_category="worker_error",
+                error_message="An unexpected error occurred while processing this link.",
+            )
+        raise
+    finally:
+        conn.close()
 
 
 @huey.periodic_task(crontab(minute="0"))
