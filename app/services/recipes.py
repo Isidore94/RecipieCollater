@@ -124,6 +124,7 @@ class RecipeDetail:
     source_type: str
     source_url: str | None
     source_name: str | None
+    image_path: str | None
     created_at: str
     updated_at: str
     ingredients: tuple[IngredientView, ...]
@@ -352,6 +353,14 @@ def delete_recipe(conn: sqlite3.Connection, recipe_id: int) -> bool:
     return cur.rowcount > 0
 
 
+def set_image(conn: sqlite3.Connection, recipe_id: int, image_path: str) -> None:
+    conn.execute(
+        "UPDATE recipes SET image_path = ?, updated_at = ? WHERE id = ?",
+        (image_path, now_iso(), recipe_id),
+    )
+    conn.commit()
+
+
 # --------------------------------------------------------------------------------------
 # Queries
 # --------------------------------------------------------------------------------------
@@ -401,7 +410,8 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
         cook_minutes=row["cook_minutes"], total_minutes=row["total_minutes"],
         active_minutes=row["active_minutes"], elapsed_minutes=row["elapsed_minutes"],
         source_type=row["source_type"], source_url=row["source_url"],
-        source_name=row["source_name"], created_at=row["created_at"], updated_at=row["updated_at"],
+        source_name=row["source_name"], image_path=row["image_path"],
+        created_at=row["created_at"], updated_at=row["updated_at"],
         ingredients=ingredients, steps=steps, tags=tags,
     )
 

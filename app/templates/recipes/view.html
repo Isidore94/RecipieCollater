@@ -11,6 +11,10 @@
   </p>
 </header>
 
+{% if recipe.image_path %}
+<img class="recipe-hero" src="/recipes/{{ recipe.slug }}/image" alt="{{ recipe.title }}">
+{% endif %}
+
 {% if recipe.tldr %}<p class="tldr">{{ recipe.tldr }}</p>{% endif %}
 {% if recipe.description %}<p>{{ recipe.description }}</p>{% endif %}
 

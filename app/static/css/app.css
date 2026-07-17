@@ -206,3 +206,4 @@ button:hover { filter: brightness(1.05); }
 .library-nav a.is-active { color: var(--ink); border-bottom-color: var(--brand); font-weight: 600; }
 .library-search { display: flex; gap: 8px; margin-bottom: 16px; }
 .library-search input { flex: 1; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.recipe-hero { display: block; max-width: 100%; max-height: 420px; border-radius: 12px; margin: 4px 0 16px; object-fit: cover; }

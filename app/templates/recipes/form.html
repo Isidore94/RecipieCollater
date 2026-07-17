@@ -20,7 +20,7 @@
 <header class="page-head"><h1>{{ heading }}</h1></header>
 {% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
-<form method="post" action="{{ action }}" class="recipe-form">
+<form method="post" action="{{ action }}" class="recipe-form" enctype="multipart/form-data">
   <section class="card">
     <label for="title">Title</label>
     <input id="title" name="title" required value="{{ form.title }}">
@@ -80,6 +80,11 @@
     </div>
     <label for="source_url">Source link <span class="muted">(optional)</span></label>
     <input id="source_url" name="source_url" value="{{ form.source_url }}" inputmode="url">
+  </section>
+
+  <section class="card">
+    <label for="image">Photo <span class="muted">(optional; replaces the current one)</span></label>
+    <input id="image" name="image" type="file" accept="image/*">
   </section>
 
   <div class="form-actions">

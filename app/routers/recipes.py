@@ -11,13 +11,15 @@ from __future__ import annotations
 import contextlib
 import sqlite3
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import JSONResponse, RedirectResponse
-from starlette.datastructures import FormData
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from starlette.datastructures import FormData, UploadFile
 
 from app.auth import current_user, require_csrf
+from app.config import get_settings
 from app.deps import get_db
 from app.services import quantity, recipes
 from app.services.users import User
@@ -26,6 +28,30 @@ from app.templating import render
 router = APIRouter(prefix="/recipes")
 
 _BLANK_ROWS = 6
+_ALLOWED_IMAGE_EXT = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
+_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+
+def _image_upload(form: FormData) -> UploadFile | None:
+    value = form.get("image")
+    return value if isinstance(value, UploadFile) else None
+
+
+async def _save_image(recipe_id: int, upload: UploadFile | None) -> str | None:
+    """Save an uploaded recipe photo under data/images/<recipe_id>/ and return its relative path."""
+    if upload is None or not upload.filename:
+        return None
+    ext = Path(upload.filename).suffix.lower()
+    if ext not in _ALLOWED_IMAGE_EXT:
+        return None
+    data = await upload.read()
+    if not data or len(data) > _MAX_IMAGE_BYTES:
+        return None
+    images_dir = get_settings().images_dir
+    (images_dir / str(recipe_id)).mkdir(parents=True, exist_ok=True)
+    relative = f"{recipe_id}/image{ext}"
+    (images_dir / relative).write_bytes(data)
+    return relative
 
 
 # --------------------------------------------------------------------------------------
@@ -221,17 +247,21 @@ async def create(
     user: User = Depends(current_user),
     _: None = Depends(require_csrf),
 ) -> Response:
-    data = _parse_form(await request.form())
-    try:
-        recipe_id = recipes.create_recipe(db, data, created_by=user.id)
-    except ValueError as exc:
-        return _render_form(
-            request, user, action="/recipes/new", model=_model_from_input(data),
-            heading="New recipe", error=str(exc), status_code=400,
-        )
-    detail = recipes.get_recipe(db, recipe_id)
-    assert detail is not None
-    return RedirectResponse(f"/recipes/{detail.slug}", status_code=303)
+    async with request.form() as form:
+        data = _parse_form(form)
+        try:
+            recipe_id = recipes.create_recipe(db, data, created_by=user.id)
+        except ValueError as exc:
+            return _render_form(
+                request, user, action="/recipes/new", model=_model_from_input(data),
+                heading="New recipe", error=str(exc), status_code=400,
+            )
+        image_path = await _save_image(recipe_id, _image_upload(form))
+        if image_path:
+            recipes.set_image(db, recipe_id, image_path)
+        detail = recipes.get_recipe(db, recipe_id)
+        assert detail is not None
+        return RedirectResponse(f"/recipes/{detail.slug}", status_code=303)
 
 
 def _safe_servings(raw: str | None, base: str) -> str:
@@ -313,6 +343,21 @@ def export_markdown(
     return Response(recipes.to_markdown(detail), media_type="text/markdown; charset=utf-8")
 
 
+@router.get("/{slug}/image")
+def recipe_image(
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is None or not detail.image_path:
+        return Response(status_code=404)
+    path = get_settings().images_dir / detail.image_path
+    if not path.is_file():
+        return Response(status_code=404)
+    return FileResponse(path)
+
+
 @router.get("/{slug}/edit")
 def edit_form(
     request: Request,
@@ -340,14 +385,18 @@ async def update(
     detail = recipes.get_recipe_by_slug(db, slug)
     if detail is None:
         return RedirectResponse("/inbox", status_code=303)
-    data = _parse_form(await request.form())
-    try:
-        recipes.update_recipe(db, detail.id, data, saved_by=user.id)
-    except ValueError as exc:
-        return _render_form(
-            request, user, action=f"/recipes/{slug}/edit", model=_model_from_input(data),
-            heading=f"Edit: {detail.title}", error=str(exc), status_code=400,
-        )
+    async with request.form() as form:
+        data = _parse_form(form)
+        try:
+            recipes.update_recipe(db, detail.id, data, saved_by=user.id)
+        except ValueError as exc:
+            return _render_form(
+                request, user, action=f"/recipes/{slug}/edit", model=_model_from_input(data),
+                heading=f"Edit: {detail.title}", error=str(exc), status_code=400,
+            )
+        image_path = await _save_image(detail.id, _image_upload(form))
+        if image_path:
+            recipes.set_image(db, detail.id, image_path)
     return RedirectResponse(f"/recipes/{slug}", status_code=303)
 
 
