@@ -1,0 +1,31 @@
+[Unit]
+Description=RecipeCollater web (FastAPI/uvicorn, LAN-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=recipecollater
+Group=recipecollater
+# Non-secret runtime config + the root-owned secrets file (0600, keys never in the repo).
+EnvironmentFile=/etc/recipecollater/env
+# `current` symlinks to the active versioned release (see deploy/UPDATES.md).
+WorkingDirectory=/opt/recipecollater/current
+# Bind port 80 without running as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ExecStart=/opt/recipecollater/current/.venv/bin/uvicorn app.main:app \
+    --host 0.0.0.0 --port 80 --workers 1 --no-access-log
+Restart=always
+RestartSec=2
+# Leak backstop (architecture §2).
+MemoryMax=512M
+# Hardening — the app only needs its own data dir.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/recipecollater
+StateDirectory=recipecollater
+
+[Install]
+WantedBy=multi-user.target

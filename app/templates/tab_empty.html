@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ tab_title }} · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>{{ tab_title }}</h1>
+</header>
+<section class="empty-state" aria-live="polite">
+  <div class="empty-emoji" aria-hidden="true">🍳</div>
+  <p class="empty-blurb">{{ tab_blurb }}</p>
+  <p class="empty-note">You're on the Phase&nbsp;0 foundation build — the app shell,
+    accounts, and device pairing work; recipe features come next.</p>
+</section>
+{% endblock %}

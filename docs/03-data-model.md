@@ -48,11 +48,15 @@ CREATE TABLE device_sessions (
 
 -- Long-lived Bearer tokens for the iOS Shortcut / scripts (Mealie pattern).
 -- Browser identity and ingest identity are deliberately separate.
+-- `scope` (added during Phase 0 implementation to enforce requirements §2 /
+-- architecture §5) restricts an ingest token to submitting ingestion jobs and nothing
+-- else. Only 'ingest' exists today; future scopes extend the CHECK deliberately.
 CREATE TABLE api_tokens (
   id            INTEGER PRIMARY KEY,
   token_hash    TEXT NOT NULL UNIQUE,
   user_id       INTEGER NOT NULL REFERENCES users(id),
   label         TEXT NOT NULL,               -- "Aaron iPhone Shortcut"
+  scope         TEXT NOT NULL DEFAULT 'ingest' CHECK (scope IN ('ingest')),
   created_at    TEXT NOT NULL,
   last_used_at  TEXT,
   revoked_at    TEXT

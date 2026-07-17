@@ -1,0 +1,29 @@
+[Unit]
+Description=RecipeCollater worker (Huey, background jobs + nightly backup)
+After=network-online.target recipecollater-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=recipecollater
+Group=recipecollater
+EnvironmentFile=/etc/recipecollater/env
+WorkingDirectory=/opt/recipecollater/current
+# One worker, thread mode. Heavy ingestion stages (later phases) spawn a short-lived
+# subprocess per job so imported-library RAM is returned to the OS after each burst.
+ExecStart=/opt/recipecollater/current/.venv/bin/huey_consumer app.tasks.huey -w 1 -k thread
+# Run background work at low priority so it never starves the web process on the N95.
+Nice=10
+IOSchedulingClass=idle
+Restart=always
+RestartSec=2
+MemoryMax=512M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/recipecollater
+StateDirectory=recipecollater
+
+[Install]
+WantedBy=multi-user.target

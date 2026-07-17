@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Devices · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Devices &amp; access</h1>
+  <p class="muted">Invite household devices, create Shortcut ingest tokens, and revoke
+    anything that's lost.</p>
+</header>
+
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
+
+{% if invite %}
+<section class="card reveal" aria-live="polite">
+  <h2>Pairing details for {{ invite.user.name }}{% if invite.device_name %} · {{ invite.device_name }}{% endif %}</h2>
+  <p class="muted">Shown once. The link and the code each pair one device and expire at
+    {{ invite.expires_at }} UTC.</p>
+  <label>Pairing link (open on the new device)</label>
+  <code class="secret">{{ invite.magic_link_url }}</code>
+  <label>Or type this code on the new device</label>
+  <code class="secret secret-code">{{ invite.pairing_code }}</code>
+</section>
+{% endif %}
+
+{% if new_token %}
+<section class="card reveal" aria-live="polite">
+  <h2>Ingest token for {{ new_token.user.name }} — “{{ new_token.label }}”</h2>
+  <p class="muted"><strong>Copy this now — it is shown only once.</strong> Paste it into
+    the Apple Shortcut. It can submit recipes to ingest and nothing else.</p>
+  <code class="secret">{{ new_token.raw }}</code>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Household</h2>
+  <ul class="chip-list">
+    {% for u in users %}
+    <li class="chip">{{ u.name }}{% if u.is_admin %} <span class="chip-tag">admin</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="/admin/users" class="inline-form">
+    <input name="name" placeholder="Add a person" required aria-label="New user name">
+    <label class="check"><input type="checkbox" name="is_admin" value="true"> admin</label>
+    <button type="submit">Add</button>
+  </form>
+</section>
+
+<div class="two-col">
+  <section class="card">
+    <h2>Invite a device</h2>
+    <form method="post" action="/admin/devices/invite" class="stack">
+      <label for="invite_user">Person</label>
+      <select id="invite_user" name="user_id" required>
+        {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+      </select>
+      <label for="invite_device">Device name <span class="muted">(optional)</span></label>
+      <input id="invite_device" name="device_name" placeholder="e.g. Sam's iPhone">
+      <button type="submit" class="btn-primary">Generate pairing link &amp; code</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Create ingest token</h2>
+    <form method="post" action="/admin/devices/token" class="stack">
+      <label for="token_user">Person</label>
+      <select id="token_user" name="user_id" required>
+        {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+      </select>
+      <label for="token_label">Label</label>
+      <input id="token_label" name="label" placeholder="e.g. Aaron iPhone Shortcut" required>
+      <button type="submit" class="btn-primary">Create ingest token</button>
+    </form>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Paired devices</h2>
+  {% if sessions %}
+  <table class="data">
+    <thead><tr><th>Device</th><th>User</th><th>Last seen</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr class="{% if s.revoked_at %}is-revoked{% endif %}">
+        <td>{{ s.device_name }}</td>
+        <td>{{ (users | selectattr('id', 'equalto', s.user_id) | map(attribute='name') | first) or '—' }}</td>
+        <td>{{ s.last_seen_at or '—' }}</td>
+        <td>{% if s.revoked_at %}revoked{% else %}active{% endif %}</td>
+        <td>
+          {% if not s.revoked_at %}
+          <form method="post" action="/admin/devices/session/{{ s.id }}/revoke">
+            <button type="submit" class="btn-danger">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No devices paired yet.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Ingest tokens</h2>
+  {% if tokens %}
+  <table class="data">
+    <thead><tr><th>Label</th><th>User</th><th>Scope</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for t in tokens %}
+      <tr class="{% if t.revoked_at %}is-revoked{% endif %}">
+        <td>{{ t.label }}</td>
+        <td>{{ (users | selectattr('id', 'equalto', t.user_id) | map(attribute='name') | first) or '—' }}</td>
+        <td>{{ t.scope }}</td>
+        <td>{{ t.last_used_at or 'never' }}</td>
+        <td>{% if t.revoked_at %}revoked{% else %}active{% endif %}</td>
+        <td>
+          {% if not t.revoked_at %}
+          <form method="post" action="/admin/devices/token/{{ t.id }}/revoke">
+            <button type="submit" class="btn-danger">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No ingest tokens yet.</p>{% endif %}
+</section>
+{% endblock %}

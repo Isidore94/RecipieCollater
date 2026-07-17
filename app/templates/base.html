@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}RecipeCollater{% endblock %}</title>
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#b4532a">
+  <!-- Home-screen app over plain HTTP (no service worker in the default setup). -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="RecipeCollater">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.svg">
+  <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    (function () {
+      try {
+        var m = document.cookie.match(/(?:^|;\s*)rc_theme=([^;]+)/);
+        if (m) document.documentElement.setAttribute('data-theme', decodeURIComponent(m[1]));
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body hx-headers='{"X-RC-CSRF": "1"}'>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  {% if user %}
+  <div class="app-shell">
+    <nav class="rail" aria-label="Primary">
+      <div class="rail-brand">🍳 <span>RecipeCollater</span></div>
+      <ul class="rail-list">
+        {% for item in nav_items %}
+        <li>
+          <a href="{{ item.href }}"
+             class="rail-link{% if active_nav == item.key %} is-active{% endif %}"
+             {% if active_nav == item.key %}aria-current="page"{% endif %}>
+            <span class="rail-icon" aria-hidden="true" data-icon="{{ item.icon }}"></span>
+            <span class="rail-label">{{ item.label }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="rail-foot">
+        {% if user.is_admin %}<a class="rail-mini" href="/admin/devices">Devices</a>{% endif %}
+        <form method="post" action="/theme" class="theme-toggle">
+          <label class="visually-hidden" for="theme-select">Theme</label>
+          <select id="theme-select" name="theme" onchange="this.form.submit()">
+            <option value="auto"{% if theme == 'auto' %} selected{% endif %}>Auto</option>
+            <option value="light"{% if theme == 'light' %} selected{% endif %}>Light</option>
+            <option value="dark"{% if theme == 'dark' %} selected{% endif %}>Dark</option>
+          </select>
+        </form>
+        <span class="rail-user">{{ user.name }}</span>
+      </div>
+    </nav>
+
+    <main id="main" class="main">
+      {% block content %}{% endblock %}
+    </main>
+
+    <nav class="tabbar" aria-label="Primary mobile">
+      {% for item in nav_items %}
+      <a href="{{ item.href }}"
+         class="tab{% if active_nav == item.key %} is-active{% endif %}"
+         {% if active_nav == item.key %}aria-current="page"{% endif %}>
+        <span class="tab-icon" aria-hidden="true" data-icon="{{ item.icon }}"></span>
+        <span class="tab-label">{{ item.label }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+  </div>
+  {% else %}
+  <main id="main" class="plain">
+    {% block plain_content %}{% endblock %}
+  </main>
+  {% endif %}
+
+  <script src="/static/vendor/htmx.min.js" defer></script>
+  <script src="/static/vendor/alpine.min.js" defer></script>
+</body>
+</html>

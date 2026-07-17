@@ -1,0 +1,14 @@
+{
+  "name": "RecipeCollater",
+  "short_name": "Recipes",
+  "description": "Your household recipe cookbook, pantry, and meal planner.",
+  "start_url": "/inbox",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbf7f0",
+  "theme_color": "#b4532a",
+  "icons": [
+    { "src": "/static/icons/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/static/icons/apple-touch-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
