@@ -201,3 +201,8 @@ button:hover { filter: brightness(1.05); }
   .main { padding: 0 !important; }
   .card { border: none !important; box-shadow: none !important; padding: 4px 0 !important; }
 }
+.library-nav { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.library-nav a { padding: 8px 14px; text-decoration: none; color: var(--ink-soft); border-bottom: 2px solid transparent; }
+.library-nav a.is-active { color: var(--ink); border-bottom-color: var(--brand); font-weight: 600; }
+.library-search { display: flex; gap: 8px; margin-bottom: 16px; }
+.library-search input { flex: 1; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }

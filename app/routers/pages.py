@@ -46,34 +46,53 @@ def _render_tab(request: Request, user: User, key: str) -> Response:
 
 
 def _render_library(
-    request: Request, db: sqlite3.Connection, user: User, status: str, title: str
+    request: Request,
+    db: sqlite3.Connection,
+    user: User,
+    status: str,
+    title: str,
+    query: str | None,
 ) -> Response:
     return render(
         request,
         "recipes/browse.html",
-        active_nav=status,
+        active_nav=status if status in ("inbox", "cookbook") else None,
         user=user,
         tab_title=title,
-        recipes=recipe_service.list_recipes(db, status=status),
+        status=status,
+        query=query or "",
+        recipes=recipe_service.list_recipes(db, status=status, query=query),
     )
 
 
 @router.get("/inbox")
 def inbox(
     request: Request,
+    q: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
-    return _render_library(request, db, user, "inbox", "Test Recipes")
+    return _render_library(request, db, user, "inbox", "Test Recipes", q)
 
 
 @router.get("/cookbook")
 def cookbook(
     request: Request,
+    q: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
-    return _render_library(request, db, user, "cookbook", "Cookbook")
+    return _render_library(request, db, user, "cookbook", "Cookbook", q)
+
+
+@router.get("/archive")
+def archive(
+    request: Request,
+    q: str | None = None,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    return _render_library(request, db, user, "archived", "Archive", q)
 
 
 @router.get("/pantry")

@@ -6,6 +6,19 @@
   <a href="/recipes/new" class="btn-primary">+ New recipe</a>
 </header>
 
+<nav class="library-nav" aria-label="Library">
+  <a href="/inbox"{% if status == 'inbox' %} class="is-active"{% endif %}>Inbox</a>
+  <a href="/cookbook"{% if status == 'cookbook' %} class="is-active"{% endif %}>Cookbook</a>
+  <a href="/archive"{% if status == 'archived' %} class="is-active"{% endif %}>Archive</a>
+</nav>
+
+<form method="get" class="library-search" role="search">
+  <input type="search" name="q" value="{{ query }}"
+         placeholder="Search titles, ingredients, tags&hellip;" aria-label="Search recipes">
+  <button type="submit" class="btn-secondary">Search</button>
+  {% if query %}<a href="?" class="btn-secondary">Clear</a>{% endif %}
+</form>
+
 {% if recipes %}
 <ul class="recipe-cards">
   {% for r in recipes %}
@@ -17,6 +30,9 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="muted">Nothing here yet. <a href="/recipes/new">Add your first recipe.</a></p>
+<p class="muted">
+  {% if query %}No matches for &ldquo;{{ query }}&rdquo;.
+  {% else %}Nothing here yet. <a href="/recipes/new">Add your first recipe.</a>{% endif %}
+</p>
 {% endif %}
 {% endblock %}
