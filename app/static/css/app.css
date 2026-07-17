@@ -225,3 +225,13 @@ button:hover { filter: brightness(1.05); }
 .ingest-job-status { font-weight: 600; color: var(--ink); }
 .ingest-job.is-failed .ingest-job-status { color: var(--err-ink); }
 .ingest-job-error { flex-basis: 100%; color: var(--err-ink); font-size: 12px; }
+
+/* "Share from your phone" setup page. */
+.shortcut-steps { padding-left: 20px; line-height: 1.6; }
+.shortcut-steps li { margin: 6px 0; }
+.shortcut-steps pre { margin: 6px 0; }
+.shortcut-token { width: 100%; padding: 10px 12px; border: 1px solid var(--brand); border-radius: 8px; background: var(--paper); color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.token-reveal { margin: 10px 0 14px; padding: 12px; border: 1px solid var(--ok-ink); border-radius: 8px; background: var(--ok-bg); }
+pre { overflow-x: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+pre code { font-size: 13px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

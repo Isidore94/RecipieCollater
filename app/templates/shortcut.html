@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Share from your phone · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Share from your phone</h1>
+</header>
+
+<p class="muted">
+  Set up an Apple Shortcut once, then share any recipe page or YouTube video straight into your
+  inbox from the iOS share sheet. It works the same on an iPhone, iPad, or a Mac.
+</p>
+
+<section class="card">
+  <h2>1. Create a sharing token</h2>
+  <p class="muted">The Shortcut uses this secret to sign in. Create one per device and keep it private.</p>
+
+  {% if new_token %}
+  <div class="token-reveal">
+    <p><strong>Copy this now</strong> — it won't be shown again.</p>
+    <input class="shortcut-token" type="text" readonly value="{{ new_token }}"
+           aria-label="Your new sharing token"
+           onclick="this.select()">
+    <p class="muted">Label: {{ new_label }}</p>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/shortcut/token" class="ingest-row">
+    <input type="text" name="label" value="iPhone" aria-label="Device name" class="ingest-input">
+    <button type="submit" class="btn-primary">Create token</button>
+  </form>
+
+  {% if my_tokens %}
+  <p class="muted" style="margin-top:12px;">Active tokens: {% for t in my_tokens %}<span class="chip-tag">{{ t.label }}</span> {% endfor %}</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>2. Build the Shortcut</h2>
+  <ol class="shortcut-steps">
+    <li>Open the <strong>Shortcuts</strong> app and tap <strong>+</strong> to create a new shortcut.</li>
+    <li>In the shortcut's settings, turn on <strong>Show in Share Sheet</strong> and accept <strong>URLs</strong>.</li>
+    <li>Add a <strong>Get Contents of URL</strong> action and point it at:
+      <pre><code>{{ ingest_url }}</code></pre>
+    </li>
+    <li>Set <strong>Method</strong> to <code>POST</code>.</li>
+    <li>Under <strong>Headers</strong>, add <code>Authorization</code> with the value:
+      <pre><code>Bearer YOUR_TOKEN</code></pre>
+    </li>
+    <li>Set <strong>Request Body</strong> to <strong>JSON</strong> with one field <code>url</code>, whose value is the
+      Shortcut Input (the shared link).</li>
+    <li>Save it as “Send to RecipeCollater”. Now share any recipe page or YouTube video and pick it.</li>
+  </ol>
+</section>
+
+<section class="card">
+  <h2>3. Sites that block automated fetching (optional)</h2>
+  <p class="muted">
+    A few recipe sites reject server requests. For those, capture the page's HTML in Safari and send it
+    along, so the recipe is read from what your phone already loaded.
+  </p>
+  <ol class="shortcut-steps">
+    <li>In the Shortcut, add <strong>Run JavaScript on Web Page</strong> before the request and return
+      <code>document.documentElement.outerHTML</code>.</li>
+    <li>In the JSON body, add a second field <code>html</code> set to that JavaScript result (keep <code>url</code> too).</li>
+  </ol>
+  <p class="muted">The server still de-duplicates by URL, so sending HTML never creates a second copy.</p>
+</section>
+{% endblock %}

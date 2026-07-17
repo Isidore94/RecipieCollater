@@ -86,6 +86,16 @@ def list_tokens(conn: sqlite3.Connection) -> list[ApiToken]:
     return [_row(r) for r in rows]
 
 
+def list_tokens_for_user(conn: sqlite3.Connection, user_id: int) -> list[ApiToken]:
+    """A user's own active (non-revoked) ingest tokens, newest first."""
+    rows = conn.execute(
+        "SELECT * FROM api_tokens WHERE user_id = ? AND revoked_at IS NULL "
+        "ORDER BY created_at DESC",
+        (user_id,),
+    ).fetchall()
+    return [_row(r) for r in rows]
+
+
 def revoke_token(conn: sqlite3.Connection, token_id: int) -> bool:
     cur = conn.execute(
         "UPDATE api_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",

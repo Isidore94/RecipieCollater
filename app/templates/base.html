@@ -58,6 +58,7 @@
         {% endfor %}
       </ul>
       <div class="rail-foot">
+        <a class="rail-mini" href="/shortcut">Add to phone</a>
         {% if user.is_admin %}<a class="rail-mini" href="/admin/devices">Devices</a>{% endif %}
         <div class="theme-toggle">
           <label class="visually-hidden" for="theme-select-desktop">Theme</label>
@@ -74,6 +75,7 @@
 
     <main id="main" class="main">
       <div class="mobile-tools">
+        <a href="/shortcut">Add to phone</a>
         {% if user.is_admin %}<a href="/admin/devices">Devices</a>{% endif %}
         <span>{{ user.name }}</span>
         <label class="visually-hidden" for="theme-select-mobile">Theme</label>
