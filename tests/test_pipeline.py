@@ -82,6 +82,27 @@ def test_run_job_creates_recipe_with_provenance(migrated_db: sqlite3.Connection)
     assert prov["current_extraction_run_id"] is not None
 
 
+def test_run_job_normalizes_ingredients_for_scaling(migrated_db: sqlite3.Connection) -> None:
+    from app.services.units import seed_core_units
+
+    seed_core_units(migrated_db)  # migrations don't seed units; the app does that at startup
+    job = _enqueue_with_fixture(migrated_db)
+    pipeline.run_job(migrated_db, job)
+
+    done = ingest.get_job(migrated_db, job.id)
+    assert done is not None and done.recipe_id is not None
+    recipe = recipes.get_recipe(migrated_db, done.recipe_id)
+    assert recipe is not None
+
+    by_food = {i.food_name: i for i in recipe.ingredients if i.food_name}
+    assert by_food["olive oil"].quantity_text == "2"
+    assert by_food["olive oil"].unit_name == "tablespoon"
+
+    # The whole point: a structured amount now scales (4 servings -> 8 doubles it).
+    scaled = [s.display for s in recipes.scale_ingredients(recipe, "8")]
+    assert any("4 tablespoons olive oil" in line for line in scaled)
+
+
 def test_run_job_without_recipe_marks_failed(migrated_db: sqlite3.Connection) -> None:
     plain = "<html><head><title>Blog</title></head><body>no recipe here</body></html>"
     job, _ = ingest.enqueue_job(migrated_db, "https://example.test/blog", html=plain)

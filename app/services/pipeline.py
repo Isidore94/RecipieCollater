@@ -20,13 +20,21 @@ from app.ai import usage as ai_usage
 from app.config import get_settings
 from app.extraction import SCHEMA_VERSION, ExtractedRecipe
 from app.security import now_iso
-from app.services import fetch, images, ingest, recipes, web_extract, youtube
+from app.services import fetch, images, ingest, ingredients, recipes, web_extract, youtube
 
 
 def to_recipe_input(
-    extracted: ExtractedRecipe, *, source_type: str, source_url: str | None = None
+    conn: sqlite3.Connection,
+    extracted: ExtractedRecipe,
+    *,
+    source_type: str,
+    source_url: str | None = None,
 ) -> recipes.RecipeInput:
-    """Map the provider-neutral ExtractedRecipe onto the Phase-1 RecipeInput."""
+    """Map the provider-neutral ExtractedRecipe onto the Phase-1 RecipeInput.
+
+    Each raw ingredient line is normalized against the unit ontology so measured amounts become
+    scalable; anything that can't be parsed is kept as verbatim text (app.services.ingredients).
+    """
     return recipes.RecipeInput(
         title=extracted.title,
         description=extracted.description,
@@ -38,15 +46,7 @@ def to_recipe_input(
         source_url=source_url,
         source_name=extracted.source_name,
         ingredients=[
-            recipes.IngredientInput(
-                original_text=item.original_text,
-                section=item.section,
-                quantity_text=item.quantity_text,
-                unit=item.unit,
-                food=item.food,
-                note=item.note,
-            )
-            for item in extracted.ingredients
+            ingredients.normalize_ingredient(conn, item) for item in extracted.ingredients
         ],
         steps=[
             recipes.StepInput(
@@ -80,7 +80,7 @@ def apply_extraction(
         recipe_id = int(existing["id"])
     else:
         recipe_id = recipes.create_recipe(
-            conn, to_recipe_input(extracted, source_type=source_type, source_url=job.url),
+            conn, to_recipe_input(conn, extracted, source_type=source_type, source_url=job.url),
             created_by=job.submitted_by,
         )
 
