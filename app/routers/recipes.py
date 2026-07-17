@@ -8,16 +8,18 @@ paths, so a rejected submission keeps what the user typed.
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
+from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.datastructures import FormData
 
 from app.auth import current_user, require_csrf
 from app.deps import get_db
-from app.services import recipes
+from app.services import quantity, recipes
 from app.services.users import User
 from app.templating import render
 
@@ -232,17 +234,83 @@ async def create(
     return RedirectResponse(f"/recipes/{detail.slug}", status_code=303)
 
 
+def _safe_servings(raw: str | None, base: str) -> str:
+    if not raw or not raw.strip():
+        return base
+    try:
+        value = quantity.parse_quantity(raw)
+    except ValueError:
+        return base
+    return raw.strip() if value > 0 else base
+
+
+def _presets(base: str) -> list[str]:
+    values = {2, 4, 6, 8}
+    with contextlib.suppress(ValueError):
+        values.add(int(quantity.parse_quantity(base)))
+    return [str(v) for v in sorted(values)]
+
+
 @router.get("/{slug}")
 def view(
     request: Request,
     slug: str,
+    servings: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
     detail = recipes.get_recipe_by_slug(db, slug)
     if detail is None:
         return RedirectResponse("/inbox", status_code=303)
-    return render(request, "recipes/view.html", user=user, recipe=detail)
+    target = _safe_servings(servings, detail.base_servings)
+    return render(
+        request, "recipes/view.html", user=user, recipe=detail,
+        scaled=recipes.scale_ingredients(detail, target), servings=target,
+        base_servings=detail.base_servings, presets=_presets(detail.base_servings),
+    )
+
+
+@router.get("/{slug}/ingredients")
+def ingredients_fragment(
+    request: Request,
+    slug: str,
+    servings: str | None = None,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is None:
+        return Response(status_code=404)
+    target = _safe_servings(servings, detail.base_servings)
+    return render(
+        request, "recipes/_ingredients.html", user=user,
+        scaled=recipes.scale_ingredients(detail, target), servings=target,
+        base_servings=detail.base_servings,
+    )
+
+
+@router.get("/{slug}/export.json")
+def export_json(
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is None:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+    return JSONResponse(asdict(detail))
+
+
+@router.get("/{slug}/export.md")
+def export_markdown(
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is None:
+        return Response(status_code=404)
+    return Response(recipes.to_markdown(detail), media_type="text/markdown; charset=utf-8")
 
 
 @router.get("/{slug}/edit")

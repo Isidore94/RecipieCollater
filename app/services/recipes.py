@@ -14,6 +14,7 @@ import json
 import re
 import sqlite3
 from dataclasses import asdict, dataclass, field
+from decimal import Decimal
 
 from app.security import now_iso
 from app.services import quantity, units
@@ -86,6 +87,7 @@ class IngredientView:
     quantity_text: str | None
     unit_id: int | None
     unit_name: str | None
+    unit_plural: str | None
     food_id: int | None
     food_name: str | None
     note: str | None
@@ -358,7 +360,7 @@ def delete_recipe(conn: sqlite3.Connection, recipe_id: int) -> bool:
 def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail:
     recipe_id = int(row["id"])
     ing_rows = conn.execute(
-        """SELECT ri.*, u.name AS unit_name, fo.name AS food_name
+        """SELECT ri.*, u.name AS unit_name, u.plural_name AS unit_plural, fo.name AS food_name
            FROM recipe_ingredients ri
            LEFT JOIN units u ON u.id = ri.unit_id
            LEFT JOIN foods fo ON fo.id = ri.food_id
@@ -369,7 +371,8 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
         IngredientView(
             id=int(r["id"]), section=r["section"], original_text=r["original_text"],
             quantity_text=r["quantity_text"], unit_id=r["unit_id"], unit_name=r["unit_name"],
-            food_id=r["food_id"], food_name=r["food_name"], note=r["note"],
+            unit_plural=r["unit_plural"], food_id=r["food_id"], food_name=r["food_name"],
+            note=r["note"],
             scaling_mode=r["scaling_mode"], package_quantity_text=r["package_quantity_text"],
             package_unit_id=r["package_unit_id"],
         )
@@ -449,3 +452,78 @@ def list_recipes(
             params.append(status)
         sql += " ORDER BY updated_at DESC, id DESC"
     return [_summary(r) for r in conn.execute(sql, params).fetchall()]
+
+
+# --------------------------------------------------------------------------------------
+# Ephemeral serving scaler (server-authoritative; never writes)
+# --------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ScaledIngredient:
+    section: str | None
+    display: str
+    scaling_mode: str
+
+
+def scale_factor(base_servings: str, target_servings: str) -> Decimal:
+    base = quantity.parse_quantity(base_servings)
+    target = quantity.parse_quantity(target_servings)
+    if base <= 0:
+        return Decimal(1)
+    return target / base
+
+
+def _scaled_display(ing: IngredientView, factor: Decimal) -> str:
+    # No amount, an unscaled view, fixed, and to-taste lines keep the original wording.
+    if ing.quantity_text is None or ing.unit_name is None:
+        return ing.original_text
+    if factor == 1 or ing.scaling_mode in ("fixed", "to_taste"):
+        return ing.original_text
+    amount = quantity.parse_quantity(ing.quantity_text)
+    package = (
+        quantity.parse_quantity(ing.package_quantity_text) if ing.package_quantity_text else None
+    )
+    scaled = quantity.scale(amount, factor=factor, mode=ing.scaling_mode, package=package)
+    if scaled is None:
+        return ing.original_text
+    unit_label = ing.unit_plural if (scaled > 1 and ing.unit_plural) else ing.unit_name
+    parts = [quantity.format_quantity(scaled), unit_label]
+    if ing.food_name:
+        parts.append(ing.food_name)
+    text = " ".join(parts)
+    return f"{text}, {ing.note}" if ing.note else text
+
+
+def scale_ingredients(detail: RecipeDetail, target_servings: str) -> list[ScaledIngredient]:
+    """Recompute each ingredient's display line at target servings. Ephemeral; never writes."""
+    factor = scale_factor(detail.base_servings, target_servings)
+    return [
+        ScaledIngredient(
+            section=ing.section,
+            display=_scaled_display(ing, factor),
+            scaling_mode=ing.scaling_mode,
+        )
+        for ing in detail.ingredients
+    ]
+
+
+def to_markdown(detail: RecipeDetail) -> str:
+    """Render a recipe as portable Markdown (export; CONVENTIONS: data stays portable)."""
+    lines = [f"# {detail.title}", ""]
+    if detail.tldr:
+        lines += [detail.tldr, ""]
+    lines += ["## Ingredients", ""]
+    current_section: str | None = None
+    for ing in detail.ingredients:
+        if ing.section and ing.section != current_section:
+            lines.append(f"**{ing.section}**")
+            current_section = ing.section
+        lines.append(f"- {ing.original_text}")
+    if detail.steps:
+        lines += ["", "## Steps", ""]
+        for index, step in enumerate(detail.steps, start=1):
+            lines.append(f"{index}. {step.instruction}")
+    if detail.tags:
+        lines += ["", f"_Tags: {', '.join(detail.tags)}_"]
+    return "\n".join(lines) + "\n"

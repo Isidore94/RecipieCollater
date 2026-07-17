@@ -1,0 +1,17 @@
+<p class="scale-note">
+  Ingredients{% if servings != base_servings %} &mdash; <strong>scaled to {{ servings }}</strong>
+  <span class="muted">(base {{ base_servings }})</span>{% endif %}
+</p>
+{% set section = namespace(current=None) %}
+<ul class="ingredient-list">
+  {% for ing in scaled %}
+    {% if ing.section and ing.section != section.current %}
+    <li class="ingredient-section">{{ ing.section }}</li>
+    {% set section.current = ing.section %}
+    {% endif %}
+    <li>{{ ing.display }}{% if ing.scaling_mode not in ('linear', 'to_taste') %}
+      <span class="muted">({{ ing.scaling_mode }})</span>{% endif %}</li>
+  {% else %}
+    <li class="muted">No ingredients yet.</li>
+  {% endfor %}
+</ul>

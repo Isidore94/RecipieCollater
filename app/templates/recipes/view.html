@@ -15,22 +15,24 @@
 {% if recipe.description %}<p>{{ recipe.description }}</p>{% endif %}
 
 <section class="card">
-  <h2>Ingredients</h2>
-  {% set section = namespace(current=None) %}
-  <ul class="ingredient-list">
-    {% for ing in recipe.ingredients %}
-      {% if ing.section and ing.section != section.current %}
-      <li class="ingredient-section">{{ ing.section }}</li>
-      {% set section.current = ing.section %}
-      {% endif %}
-      <li>
-        {{ ing.original_text }}
-        {% if ing.scaling_mode != 'linear' %}<span class="muted">({{ ing.scaling_mode }})</span>{% endif %}
-      </li>
-    {% else %}
-      <li class="muted">No ingredients yet.</li>
+  <div class="scaler no-print">
+    <span class="muted">Servings:</span>
+    {% for p in presets %}
+    <a class="serving-btn{% if p == servings %} is-active{% endif %}"
+       href="/recipes/{{ recipe.slug }}?servings={{ p }}"
+       hx-get="/recipes/{{ recipe.slug }}/ingredients?servings={{ p }}"
+       hx-target="#ingredient-list" hx-swap="innerHTML">{{ p }}</a>
     {% endfor %}
-  </ul>
+    <form method="get" action="/recipes/{{ recipe.slug }}" class="scaler-custom"
+          hx-get="/recipes/{{ recipe.slug }}/ingredients"
+          hx-target="#ingredient-list" hx-swap="innerHTML">
+      <input name="servings" value="{{ servings }}" inputmode="decimal" aria-label="Servings" size="3">
+      <button type="submit">Scale</button>
+    </form>
+  </div>
+  <div id="ingredient-list">
+    {% include "recipes/_ingredients.html" %}
+  </div>
 </section>
 
 {% if recipe.steps %}
@@ -59,6 +61,9 @@
 <section class="card">
   <div class="form-actions">
     <a href="/recipes/{{ recipe.slug }}/edit" class="btn-secondary">Edit</a>
+    <a href="/recipes/{{ recipe.slug }}/export.md" class="btn-secondary">Export .md</a>
+    <a href="/recipes/{{ recipe.slug }}/export.json" class="btn-secondary">Export .json</a>
+    <button type="button" class="btn-secondary no-print" onclick="window.print()">Print</button>
     {% if recipe.status != 'cookbook' %}
     <form method="post" action="/recipes/{{ recipe.slug }}/status" class="inline-form">
       <input type="hidden" name="status" value="cookbook">

@@ -190,3 +190,14 @@ button:hover { filter: brightness(1.05); }
 @media (max-width: 640px) {
   .form-grid, .form-grid.times, .ing-row { grid-template-columns: 1fr; }
 }
+.scaler { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.serving-btn { display: inline-block; min-width: 34px; text-align: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--ink); background: var(--paper); }
+.serving-btn.is-active { background: var(--brand); color: #fff; border-color: var(--brand); }
+.scaler-custom { display: inline-flex; gap: 6px; margin-left: 4px; }
+.scaler-custom input { width: 60px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.scale-note { font-weight: 600; margin: 0 0 8px; }
+@media print {
+  .no-print, .rail, .tabbar, .mobile-tools, .scaler, .form-actions { display: none !important; }
+  .main { padding: 0 !important; }
+  .card { border: none !important; box-shadow: none !important; padding: 4px 0 !important; }
+}
