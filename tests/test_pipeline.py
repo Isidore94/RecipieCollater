@@ -9,10 +9,11 @@ from typing import Any
 
 import pytest
 
+from app import config
 from app.ai import usage as ai_usage
 from app.ai.base import AIExtraction
 from app.extraction import ExtractedIngredient, ExtractedRecipe, ExtractedStep
-from app.services import ingest, pipeline, recipes
+from app.services import ingest, pipeline, recipes, youtube
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "schema_org_recipe.html"
 
@@ -96,15 +97,6 @@ def test_run_job_is_replay_safe(migrated_db: sqlite3.Connection) -> None:
     assert migrated_db.execute("SELECT COUNT(*) FROM recipes").fetchone()[0] == 1
 
 
-def test_youtube_job_is_deferred(migrated_db: sqlite3.Connection) -> None:
-    job, _ = ingest.enqueue_job(migrated_db, "https://www.youtube.com/watch?v=abc123")
-    pipeline.run_job(migrated_db, job)
-    done = ingest.get_job(migrated_db, job.id)
-    assert done is not None
-    assert done.status == "failed"
-    assert done.error_category == "unsupported"
-
-
 def test_pipeline_falls_back_to_ai(
     migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -162,3 +154,42 @@ def test_pipeline_ai_blocked_by_budget(
         "SELECT status FROM ai_usage_log WHERE job_id = ?", (job.id,)
     ).fetchone()
     assert blocked["status"] == "blocked"
+
+
+def test_pipeline_youtube_extracts_via_ai(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RC_ANTHROPIC_API_KEY", "test-key")  # enables the YouTube path
+    config.reset_settings_cache()
+    job, _ = ingest.enqueue_job(migrated_db, "https://www.youtube.com/watch?v=abc123")
+    data = youtube.YoutubeData(
+        video_id="abc123", title="One-Pot Chicken", description="2 cups rice...",
+        uploader="Chef", thumbnail_url=None, duration_seconds=615, captions=None,
+    )
+    monkeypatch.setattr("app.services.youtube.fetch", lambda url: data)
+    monkeypatch.setattr("app.ai.get_provider", lambda settings: _FakeExtractor(_AI_RECIPE))
+
+    pipeline.run_job(migrated_db, job)
+
+    done = ingest.get_job(migrated_db, job.id)
+    assert done is not None and done.status == "done"
+    recipe = recipes.get_recipe(migrated_db, done.recipe_id or 0)
+    assert recipe is not None and recipe.source_type == "youtube"
+    run = migrated_db.execute(
+        "SELECT extractor FROM extraction_runs WHERE recipe_id = ?", (done.recipe_id,)
+    ).fetchone()
+    assert run["extractor"] == "youtube"
+    usage = migrated_db.execute(
+        "SELECT operation FROM ai_usage_log WHERE job_id = ?", (job.id,)
+    ).fetchone()
+    assert usage["operation"] == "extract_youtube"
+
+
+def test_pipeline_youtube_needs_ai_key(migrated_db: sqlite3.Connection) -> None:
+    # No API key configured -> the YouTube path can't run (it always needs an LLM).
+    job, _ = ingest.enqueue_job(migrated_db, "https://www.youtube.com/watch?v=xyz789")
+    pipeline.run_job(migrated_db, job)
+    done = ingest.get_job(migrated_db, job.id)
+    assert done is not None
+    assert done.status == "failed"
+    assert done.error_category == "youtube_needs_ai"

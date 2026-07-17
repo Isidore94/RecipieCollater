@@ -19,9 +19,11 @@ _TOOL_NAME = "save_recipe"
 _MAX_INPUT_CHARS = 60_000  # recipe pages are small once reduced to text; keep the prompt bounded
 _MAX_OUTPUT_TOKENS = 4096
 _SYSTEM = (
-    "You extract a single cooking recipe from the provided web page text. "
-    "Use only what the page states - never invent ingredients, steps, times, or yields. "
-    "If a field is absent, omit it. Copy each ingredient line verbatim into original_text."
+    "You extract a single cooking recipe from the provided text, which may be a recipe web page "
+    "or a cooking video's title, description, and transcript. "
+    "Use only what the text states - never invent ingredients, steps, times, or yields. "
+    "If a field is absent, omit it. Copy each ingredient line verbatim into original_text. "
+    "If the text contains no recipe, return a title with empty ingredients and steps."
 )
 
 

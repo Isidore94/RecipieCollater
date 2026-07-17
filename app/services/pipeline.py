@@ -16,12 +16,11 @@ from __future__ import annotations
 import sqlite3
 
 from app import ai
-from app.ai import AIExtraction
 from app.ai import usage as ai_usage
 from app.config import get_settings
 from app.extraction import SCHEMA_VERSION, ExtractedRecipe
 from app.security import now_iso
-from app.services import fetch, ingest, recipes, web_extract
+from app.services import fetch, ingest, recipes, web_extract, youtube
 
 
 def to_recipe_input(
@@ -125,11 +124,7 @@ def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
         return
 
     if ingest.youtube_video_id(job.normalized_url):
-        # TODO(P2-4): YouTube ingestion (yt-dlp metadata + captions).
-        ingest.set_status(
-            conn, job.id, "failed", error_category="unsupported",
-            error_message="YouTube ingestion is coming in the next update.",
-        )
+        _run_youtube(conn, job)
         return
 
     try:
@@ -147,19 +142,44 @@ def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
         apply_extraction(conn, job, extracted, extractor="recipe_scrapers", confidence="high")
         return
 
-    ai_extraction = _ai_extract(conn, job, html)
-    if ai_extraction is not None:
-        ingest.set_status(conn, job.id, "normalizing")
-        apply_extraction(
-            conn, job, ai_extraction.recipe, extractor="llm_web",
-            provider=ai_extraction.provider, model=ai_extraction.model, confidence="medium",
-        )
+    if _ai_extract_and_apply(conn, job, _page_text(html), extractor="llm_web", source_type="web"):
         return
 
     ingest.set_status(
         conn, job.id, "failed", error_category="no_recipe",
         error_message="No recipe could be extracted from that page.",
     )
+
+
+def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
+    """Ingest a YouTube video: description-first, captions as fallback, then LLM extraction."""
+    if not get_settings().ai_enabled:
+        ingest.set_status(
+            conn, job.id, "failed", error_category="youtube_needs_ai",
+            error_message="Add an Anthropic API key to import recipes from YouTube.",
+        )
+        return
+
+    ingest.set_status(conn, job.id, "fetching")
+    try:
+        data = youtube.fetch(job.normalized_url)
+    except youtube.YoutubeError as exc:
+        ingest.set_status(
+            conn, job.id, "failed", error_category="youtube_fetch", error_message=str(exc)[:400]
+        )
+        return
+    ingest.store_artifact(conn, job.id, "youtube_metadata", data.to_json().encode("utf-8"))
+
+    ingest.set_status(conn, job.id, "extracting")
+    applied = _ai_extract_and_apply(
+        conn, job, data.prompt_text(),
+        extractor="youtube", source_type="youtube", operation="extract_youtube",
+    )
+    if not applied:
+        ingest.set_status(
+            conn, job.id, "failed", error_category="no_recipe",
+            error_message="Couldn't find a recipe in that video's description or captions.",
+        )
 
 
 def _page_text(html: str) -> str:
@@ -172,29 +192,48 @@ def _page_text(html: str) -> str:
     return soup.get_text(" ", strip=True)
 
 
-def _ai_extract(conn: sqlite3.Connection, job: ingest.IngestJob, html: str) -> AIExtraction | None:
-    """LLM fallback when schema.org found nothing: budget-gated, always logged to ai_usage_log."""
+def _ai_extract_and_apply(
+    conn: sqlite3.Connection,
+    job: ingest.IngestJob,
+    content: str,
+    *,
+    extractor: str,
+    source_type: str,
+    operation: str = "extract_web",
+) -> bool:
+    """Budget-gated LLM extraction that applies the recipe on success; always logs to ai_usage_log.
+
+    Returns True iff a complete recipe was extracted and saved. Shared by the web fallback and the
+    YouTube path so spend accounting and provenance stay identical across sources.
+    """
     settings = get_settings()
     provider = ai.get_provider(settings)
     if provider is None:
-        return None
+        return False
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider="anthropic", model=settings.ai_model, operation="extract_web",
+            conn, provider="anthropic", model=settings.ai_model, operation=operation,
             job_id=job.id, status="blocked", error="daily or monthly AI spend cap reached",
         )
-        return None
+        return False
     try:
-        result = provider.extract(_page_text(html), source_url=job.normalized_url)
+        result = provider.extract(content, source_url=job.normalized_url)
     except ai.AIError as exc:
         ai_usage.log_usage(
-            conn, provider="anthropic", model=settings.ai_model, operation="extract_web",
+            conn, provider="anthropic", model=settings.ai_model, operation=operation,
             job_id=job.id, status="error", error=str(exc)[:500],
         )
-        return None
+        return False
     ai_usage.log_usage(
-        conn, provider=result.provider, model=result.model, operation="extract_web",
+        conn, provider=result.provider, model=result.model, operation=operation,
         job_id=job.id, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
         cost_micros=result.cost_micros, status="ok",
     )
-    return result if result.recipe.is_complete() else None
+    if not result.recipe.is_complete():
+        return False
+    ingest.set_status(conn, job.id, "normalizing")
+    apply_extraction(
+        conn, job, result.recipe, extractor=extractor,
+        provider=result.provider, model=result.model, confidence="medium", source_type=source_type,
+    )
+    return True
