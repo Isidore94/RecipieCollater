@@ -19,7 +19,7 @@ RecipeCollater is a family recipe platform on a home N95 mini PC. Anyone shares 
 | D7 | Auth = named users + 400-day device-session cookies via magic-link/QR + separate Bearer ingest tokens; no passwords | Immich/HA-proven; survives iOS PWA storage isolation via the 17.2+ cookie copy |
 | D8 | Pantry: user-defined locations, graduated quantity modes, cooking as the consumption event, stock-take mode, AI reconciliation | Grocy's documented failure modes are all consumption-side |
 | D9 | Shopping list is the app's one client-side island (outbox + LWW sync); everything else server-rendered | In-store dead spots are real; full sync engines are disproportionate |
-| D10 | Real domain + Caddy DNS-01 TLS on LAN + Tailscale subnet router; never port-forwarded | HTTPS is a hard requirement (PWA/share-target/cookies); public exposure is unacceptable for a hobby codebase |
+| D10 | **$0 infrastructure, LAN-only**: plain HTTP at `recipes.local` (DHCP reservation + mDNS), uvicorn direct on port 80, no domain/certs/proxy/VPN; never port-forwarded | Owner requirement. Features needing a secure context get free fallbacks (silent-video screen-wake, copy-list-as-text); mkcert/Tailscale documented as optional free upgrades |
 | D11 | AI writes only via proposal cards the user accepts | Trust: the assistant never silently mutates family data |
 | D12 | Raw extraction payloads stored forever; re-extract without re-fetch; JSON/markdown export | Data portability + prompts improve over time |
 
@@ -32,8 +32,8 @@ RecipeCollater is a family recipe platform on a home N95 mini PC. Anyone shares 
 
 ## Open questions (deliberately deferred, owner input wanted)
 
-1. **Domain name** — needs a ~$10/yr purchase (e.g. via Cloudflare) before Phase 3's PWA work; pick the hostname (e.g. `recipes.<family>.com`).
-2. **Big-event thinking budget** — whether Sonnet with extended thinking or a plain call suffices for event menus; decide in Phase 5 with real examples.
-3. **Nutrition** — schema carries `fdc_id` hooks; feature intentionally out of v1. Revisit if anyone actually wants it.
-4. **TikTok/Instagram ingestion** — requires Whisper ASR (no caption API); revisit post-v1, possibly with a faster box or an ASR API.
-5. **Barcode scanning** — polish, not core; the AI fuzzy matcher covers restock ergonomics first. Revisit after a month of pantry use.
+1. **Big-event thinking budget** — whether Sonnet with extended thinking or a plain call suffices for event menus; decide in Phase 5 with real examples.
+2. **Nutrition** — schema carries `fdc_id` hooks; feature intentionally out of v1. Revisit if anyone actually wants it.
+3. **TikTok/Instagram ingestion** — requires Whisper ASR (no caption API); revisit post-v1, possibly with a faster box or an ASR API.
+4. **Barcode scanning** — polish, not core; the AI fuzzy matcher covers restock ergonomics first; also needs the optional HTTPS upgrade (camera API). Revisit after a month of pantry use.
+5. **mkcert HTTPS upgrade** — free, one-time per device; only worth doing if the family misses the native wake-lock API, offline list re-opening, or Android share. Decide after living with v1.

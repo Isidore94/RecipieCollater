@@ -10,8 +10,8 @@ A self-hosted family recipe platform for a home mini PC. Share a YouTube cooking
 - **Recipe sheets that cook with you**: TLDR method summary, serving scaler with correct fraction math, per-step video seek, tap-to-start timers, cook mode with screen wake-lock, after-cook capture (real time-to-make, what you actually used, rating).
 - **A pantry that survives real life**: user-defined locations (kitchen cupboards, upstairs pantry fridge, downstairs pantry, downstairs freezer), graduated quantities (counts / full-half-low / have-out), cooking as the consumption event, 5-minute stock-take mode.
 - **Planning**: week board, per-entry servings, saved menus, shopping lists with correct cross-recipe aggregation and aisle grouping, in-store offline tolerance, big-event mode with prep timelines.
-- **AI throughout**: extraction, TLDRs, "what can I make in 30 minutes from what we have?", plan-my-week proposals you accept or edit, conversational pantry updates. (~$3–8/month in API costs at family volume.)
-- **Featherweight**: single FastAPI process + SQLite + server-rendered htmx UI on an Intel N95 — target <250 MB RSS idle, ~0% idle CPU, <1s page loads on LAN.
+- **AI throughout**: extraction, TLDRs, "what can I make in 30 minutes from what we have?", plan-my-week proposals you accept or edit, conversational pantry updates.
+- **Featherweight and free to run**: single FastAPI process + SQLite + server-rendered htmx UI on an Intel N95 — target <200 MB RSS idle, ~0% idle CPU, <1s page loads on LAN. **$0 infrastructure** (no domain, certs, or cloud services); the only recurring cost is the Claude API (~$3–8/month at family volume).
 
 ## Documentation map
 
@@ -30,4 +30,4 @@ A self-hosted family recipe platform for a home mini PC. Share a YouTube cooking
 
 ## Target environment
 
-Intel N95 mini PC (4 cores, 16 GB), Linux, home LAN. Family access from iPhones and PCs; remote access via Tailscale. Python 3.12+, SQLite, no Docker, no Redis, no Postgres, no Node toolchain.
+Intel N95 mini PC (4 cores), Linux, Ethernet-connected on the home LAN. Family access from iPhones and PCs on the same Wi-Fi at `http://recipes.local` — LAN-only by design, never exposed to the internet. Python 3.12+, SQLite, no Docker, no Redis, no Postgres, no Node toolchain, no domain or certificates.

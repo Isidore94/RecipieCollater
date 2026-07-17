@@ -23,9 +23,9 @@ Hard constraints this imposes:
 
 **Ship in v1, not backlog**: a second Shortcut variant that runs JavaScript-in-Safari to capture the rendered page HTML and POSTs `{"url", "html"}` — this defeats every bot-wall for free because the fetch happened in the user's real browser session (Mealie's newer shortcut does this). The design panel's family-UX judge flagged a failed share-from-Safari as the single highest-friction moment the family will hit; don't defer the fix.
 
-### 1.2 Android — PWA Web Share Target
+### 1.2 Android — PWA Web Share Target (dormant — optional HTTPS upgrade required)
 
-Installed PWA (Chrome, HTTPS with a trusted cert required) registers via the manifest:
+The household is iPhone + PC, and the zero-cost LAN setup runs plain HTTP, so this path ships **disabled by default**: Android's share target requires an installed PWA served over trusted HTTPS. Android users on the LAN still have the paste box like any browser. If Android + the free mkcert upgrade (see `02-architecture.md` §9) ever land, the installed PWA (Chrome) registers via the manifest:
 
 ```json
 "share_target": {

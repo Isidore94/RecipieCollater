@@ -2,6 +2,8 @@
 
 Phased so that **every phase ends with something the family actually uses**. The builder agent (Claude Opus/Sonnet) should complete phases in order; each phase's exit criteria are testable. Keep a `CHANGELOG.md` from phase 1.
 
+**Cost constraint (owner requirement): $0 infrastructure.** No domain, no certificates, no cloud services, no subscriptions — the only recurring cost is Claude API usage (~$3–8/month). LAN-only: plain HTTP at `http://recipes.local` (DHCP reservation + Avahi mDNS). Optional free upgrades (mkcert HTTPS, Tailscale) are documented in `deploy/` but never on the roadmap's critical path.
+
 ## Phase 0 — Skeleton & plumbing (foundation, no features)
 
 - Repo layout, `pyproject.toml` (uv-managed venv, Python pinned 3.12), ruff + pytest wiring, minimal CI.
@@ -35,11 +37,12 @@ Phased so that **every phase ends with something the family actually uses**. The
 
 ## Phase 3 — Cooking experience (why the family keeps it)
 
-- Cook mode: full-screen steps, wake lock (with iOS fallbacks), tap-duration timers, ingredient checklist, embedded YouTube player with timestamp seek.
+- Cook mode: full-screen steps, screen-wake via the silent-video technique (works on plain HTTP; native wakeLock tried opportunistically), tap-duration timers, ingredient checklist, embedded YouTube player with timestamp seek.
 - After-cook capture: rating, actual time → `our_minutes`, per-ingredient actually-used, notes; promotion gate wiring.
 - Cook log timeline on recipe sheets; "haven't made in a while" sort.
 - Recipe Q&A drawer (Haiku, recipe-scoped).
-- PWA: manifest, service worker (app-shell precache, network-first pages), A2HS instructions page, Android install prompt.
+- Home-screen app: manifest + apple-touch-icon + A2HS instructions page (works over plain HTTP). Service worker code written but self-disabling outside secure contexts.
+- LAN setup: Avahi `recipes.local`, DHCP-reservation guide, port-80 systemd capability.
 - **Exit criteria**: cook a real dinner phone-in-kitchen end-to-end; screen stays awake; timer fires; after-cook flow captures corrections and promotes the recipe.
 
 ## Phase 4 — Pantry & shopping
@@ -48,7 +51,7 @@ Phased so that **every phase ends with something the family actually uses**. The
 - Recipe⇄pantry matching ("have 7/9", "cook from what we have" filter).
 - Shopping list: generation (plan − pantry + low staples), aggregation math, aisle grouping, manual adds, provenance labels.
 - In-store island: **write the sync-protocol spec (op shapes, LWW rules, tombstones, staleness cutoff) BEFORE generating any JS** — it's the one subsystem where an unspecified agent improvises divergently across sessions. Then: Alpine store + localStorage outbox + idempotent `POST /api/shopping/sync`, a pytest matrix over the sync endpoint (concurrent devices, replays, stale ops), and a defined degrade-to-online-only failure mode (never data loss). Post-shop "restock pantry" bulk flow.
-- Android `share_target` (now that the PWA is installed HTTPS).
+- "Copy list as text" export on the shopping page (the free paper-backup for in-store use).
 - **Exit criteria**: weekly shop runs off the app in the store, including one dead-signal aisle; pantry survives a month of casual use without a full re-inventory.
 
 ## Phase 5 — Meal planning & AI assistant
@@ -64,9 +67,9 @@ Phased so that **every phase ends with something the family actually uses**. The
 - Nightly `VACUUM INTO` backups to a different physical device + rotation + restore doc (tested!); nightly JSON/markdown export of the cookbook; optional Litestream.
 - Admin dashboard: job health, AI spend, yt-dlp version, backup status, DB size.
 - Photo import (Claude vision). Semantic search (fastembed + sqlite-vec) if FTS5 feels limiting.
-- Caddy + domain + Tailscale subnet-router setup docs; onboarding guide for family.
-- Performance pass against budgets (FCP <1s LAN, reads <100ms); Lighthouse PWA audit.
-- **Backlog (post-v1)**: scale-by-anchor-ingredient, sub-recipes, collections, nutrition via FDC ids, TikTok/Instagram ingestion (needs Whisper — revisit hardware), barcode scanning, Home Assistant hooks, multi-image recipes.
+- Family onboarding guide; optional-upgrades appendix in `deploy/` (mkcert HTTPS for wake-lock API/SW/Android share; Tailscale for remote access) — documented, not installed.
+- Performance pass against budgets (FCP <1s LAN, reads <100ms); Lighthouse performance audit.
+- **Backlog (post-v1)**: scale-by-anchor-ingredient, sub-recipes, collections, nutrition via FDC ids, TikTok/Instagram ingestion (needs Whisper — revisit hardware), barcode scanning (needs the HTTPS upgrade for camera access), Android `share_target` (ditto), Home Assistant hooks, multi-image recipes.
 
 ## Testing conventions
 
@@ -77,7 +80,8 @@ Phased so that **every phase ends with something the family actually uses**. The
 
 | Budget | Target |
 |---|---|
-| Idle RSS (web + worker + Caddy) | < 250 MB total |
+| Infrastructure cost | $0 — Claude API is the only recurring cost |
+| Idle RSS (web + worker) | < 200 MB total |
 | Idle CPU | ~0% (no polling loops server-side; Huey periodic tasks only) |
 | First contentful paint, phone on LAN | < 1s |
 | Read endpoints | < 100 ms |

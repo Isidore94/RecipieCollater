@@ -8,9 +8,9 @@
 | Frontend | **Server-rendered Jinja2 + htmx + Alpine.js** (+ one client-side island for the shopping list) | Fast on LAN, no build toolchain, no hydration bugs, the most reliably LLM-buildable frontend pattern; page weight <150 KB |
 | Datastore | **SQLite** (WAL) — sole store, incl. FTS5 search and later sqlite-vec | Mealie officially recommends SQLite to ~20 users; zero ops; trivial backup |
 | Background jobs | **Huey + SqliteHuey**, one worker process | Durable queue + cron-style periodic tasks, no Redis/Celery |
-| Deployment | **Bare systemd units** (web, worker) behind **Caddy** | dockerd adds ~100 MB RSS and ~2 W idle wakeups on a ~5 W box; systemd gives restart/journald/resource caps for free |
-| TLS & naming | Cheap real domain → A record to the N95's reserved LAN IP → **Caddy DNS-01 Let's Encrypt** | One green-lock URL on LAN and away; required for PWA install, Android share target, camera APIs, Secure cookies |
-| Remote access | **Tailscale**, N95 as subnet router; **no port forwarding, ever** | Free plan covers 6 users; app never faces the public internet |
+| Deployment | **Bare systemd units** (web, worker); uvicorn serves directly, no reverse proxy | dockerd adds ~100 MB RSS and ~2 W idle wakeups on a ~5 W box; systemd gives restart/journald/resource caps for free; nothing to proxy on a trusted LAN |
+| Networking | **Plain HTTP on the LAN, $0**: DHCP-reserved IP + mDNS `recipes.local` (Avahi) | LAN-only by design; no domain, no certificates, no cloud dependency. Free HTTPS/remote upgrade paths documented but optional (§9) |
+| Remote access | **None** — the app is used at home only; **no port forwarding, ever** | Owner's explicit choice; Tailscale (free tier) is the documented upgrade path if this ever changes |
 | Auth | Named users, **device-session cookie** (400-day, HttpOnly, revocable rows) via magic-link/QR onboarding; separate long-lived **Bearer tokens** for ingest | No passwords for the family; lost phone = revoke one row; Immich/Home Assistant-proven pattern |
 | AI | **Claude API only** (Haiku extract / Sonnet chat), structured outputs, SSE streaming | Local LLM confirmed non-viable on N95 (~1 tok/s with context); API cost ≈ $3–8/month |
 | Python env | **uv** + `pyproject.toml`, dependencies pinned | Reproducible, fast, no Docker needed |
@@ -21,17 +21,19 @@ An architecture panel (three independent proposals — minimal-footprint, modern
 
 ```
 systemd
-├── recipecollater-web.service      # uvicorn, 1 worker  (~60–90 MB RSS)
-│     FastAPI: pages (Jinja2+htmx), /api/*, SSE chat relay, static files
-├── recipecollater-worker.service   # huey_consumer, 1–2 threads (~50–80 MB)
-│     ingest jobs, image processing, LLM calls, periodic tasks
-│     (nightly backup, weekly yt-dlp update, embedding refresh)
-└── caddy.service                   # TLS termination, HTTP/2, static caching (~30 MB)
+├── recipecollater-web.service      # uvicorn on port 80, 1 worker  (~60–90 MB RSS)
+│     FastAPI: pages (Jinja2+htmx), /api/*, SSE chat relay,
+│     static files (StaticFiles + far-future cache headers)
+└── recipecollater-worker.service   # huey_consumer  (~50–80 MB)
+      ingest jobs, image processing, LLM calls, periodic tasks
+      (nightly backup + export, weekly yt-dlp update)
 
 data/recipecollater.db  ← shared by web + worker (WAL; local disk only)
 ```
 
-- Total idle budget: **< 250 MB RSS, ~0% CPU** (no server-side polling; htmx polls only while an ingest job is in flight in someone's open tab).
+Port 80 via `AmbientCapabilities=CAP_NET_BIND_SERVICE` in the unit file so the family types `http://recipes.local` with no port suffix. No reverse proxy — there is nothing for one to do here.
+
+- Total idle budget: **< 200 MB RSS, ~0% CPU** (no server-side polling; htmx polls only while an ingest job is in flight in someone's open tab).
 - Burst behavior: ingest jobs run in the worker at nice priority; the web process never blocks on them. LLM latency is Anthropic's, not ours.
 - Lazy-import heavy libs (yt-dlp, PIL, ingredient-parser) inside worker tasks so the web process stays slim — this is precisely how Mealie's FastAPI app ballooned to 400 MB and ours won't. **Stated as a hard rule in `CONVENTIONS.md`.**
 - **Subprocess-per-job for heavy work**: Huey tasks spawn a short-lived `job_runner.py` subprocess for yt-dlp/Pillow/CRF stages. A thread-mode consumer never returns imported-lib RAM to the OS — subprocesses guarantee full release after each burst and isolate a hung extractor from the long-lived worker.
@@ -58,7 +60,7 @@ recipecollater/
 │   ├── templates/            # Jinja2; partials/ for htmx fragments
 │   └── static/               # css, js (htmx, alpine, shopping-island.js), icons
 ├── seed/                     # foods.json, units.json, conversions.json, aliases.json
-├── deploy/                   # systemd units, Caddyfile, install.sh, backup/restore docs
+├── deploy/                   # systemd units, install.sh, Avahi/LAN setup, backup/restore docs, optional-upgrades appendix
 ├── shortcuts/                # Apple Shortcut definition + setup guide
 ├── tests/                    # unit + golden fixtures + Playwright smoke
 └── docs/                     # these documents
@@ -82,8 +84,8 @@ Migration runner: refuses out-of-order files, and takes a `VACUUM INTO` snapshot
 
 ## 5. Security posture
 
-- Never exposed to the public internet: LAN + Tailscale only. Caddy binds the LAN interface; no router port-forwards.
-- Exactly one persistent HttpOnly Secure SameSite=Lax cookie (WebKit 272325 discipline). All tokens stored as SHA-256 hashes; opaque, revocable per device from the admin page.
+- Never exposed to the public internet: the app binds the LAN interface only; no router port-forwards, ever. The threat model is "trusted home network" — auth exists for attribution and lost-phone revocation, not to repel attackers.
+- Exactly one persistent HttpOnly SameSite=Lax cookie (WebKit 272325 discipline; the `Secure` flag is added only if the optional HTTPS upgrade is installed). All tokens stored as SHA-256 hashes; opaque, revocable per device from the admin page.
 - Ingest endpoints validate/normalize URLs (http/https only, no internal-network SSRF); fetches capped 15s/5 MB.
 - `ANTHROPIC_API_KEY` in `EnvironmentFile=/etc/recipecollater/env` (root-owned, 0600) — never in the repo or the browser.
 - CSRF: SameSite=Lax + custom-header check on state-changing htmx routes (one line, belt and braces).
@@ -91,11 +93,11 @@ Migration runner: refuses out-of-order files, and takes a `VACUUM INTO` snapshot
 
 ## 6. The one client-side island
 
-Everything is server-rendered except the **in-store shopping list**, which must survive dead spots: an Alpine store renders from `localStorage` snapshot ⊕ pending-ops outbox; flushes on mutation, `online`, `visibilitychange→visible`, `pageshow`, and a 15 s visible-interval (`sendBeacon` last-gasp on hide). No Background Sync API (unsupported on iOS), no Workbox, no service-worker caching of `/api` responses (the two-sources-of-truth bug that broke Mealie's offline list). Cook mode gets the same treatment *lite*: current step + timers persist to `localStorage` so an iOS PWA reload (backgrounded apps are killed in seconds) restores exactly where you were.
+Everything is server-rendered except the **shopping list**, which must tolerate leaving the house with the list open: an Alpine store renders from `localStorage` snapshot ⊕ pending-ops outbox; flushes on mutation, `online`, `visibilitychange→visible`, `pageshow`, and a 15 s visible-interval (`sendBeacon` last-gasp on hide). Open the list at home, check things off in the store with zero connectivity, and it reconciles automatically when the phone rejoins the home Wi-Fi. No Background Sync API (unsupported on iOS), no Workbox, no service-worker caching of `/api` responses (the two-sources-of-truth bug that broke Mealie's offline list). `localStorage` works fine over plain HTTP; only *re-opening a dead tab with no connectivity* needs the optional HTTPS upgrade (service workers require a secure context) — "copy list as text" covers that gap for free. Cook mode gets the same treatment *lite*: current step + timers persist to `localStorage` so a page reload restores exactly where you were.
 
 ## 7. Backups & recovery
 
-- Nightly Huey task: `VACUUM INTO` snapshot, keep 14 daily + 8 weekly. The snapshot target must be a **different physical device** (USB disk/NAS) — a second partition on the same SSD does not bound the disk-death failure mode.
+- Nightly Huey task: `VACUUM INTO` snapshot, keep 14 daily + 8 weekly. Point the snapshot target at a **different physical device** — any spare USB stick plugged into the N95 does the job for $0; a second partition on the same SSD does not bound the disk-death failure mode.
 - **Nightly export**: every cookbook recipe as plain JSON+markdown files (dead-man's portability guarantee, a second durability layer independent of SQLite itself).
 - Optional Litestream for continuous off-box WAL replication.
 - `deploy/RESTORE.md` documents the drill; admin page shows last-backup age with a red banner past 48 h.
@@ -105,3 +107,24 @@ Everything is server-rendered except the **in-store shopping list**, which must 
 - structlog → journald (`journalctl -u recipecollater-web`).
 - Admin dashboard: job queue health, last-N failures with tracebacks, AI month-to-date spend, yt-dlp version + last self-update, DB size, backup age.
 - No Prometheus/Grafana — the dashboard is the monitoring.
+
+## 9. Zero-cost networking (and what plain HTTP costs in features)
+
+**Default setup ($0, LAN-only):**
+1. DHCP reservation for the N95 in the router (stable IP).
+2. Avahi advertises `recipes.local` (mDNS — native on iPhone/iPad/Mac, works on Windows 10+; the IP always works as a fallback). Optionally add a router local-DNS entry.
+3. Family devices bookmark / Add-to-Home-Screen `http://recipes.local`.
+4. iOS Shortcuts POST to the same HTTP address (works fine from Shortcuts; the one-time Local Network permission prompt must be allowed).
+
+**What insecure context (plain HTTP) disables, and the free answers:**
+
+| Browser feature needing HTTPS | Impact | Free fallback |
+|---|---|---|
+| `navigator.wakeLock` | Cook-mode screen dimming | The silent-looping-video trick (NoSleep pattern) works over HTTP on iOS Safari — ship it as the default wake path, try the real API opportunistically |
+| Service worker | No app-shell precache; a killed tab can't reopen offline | Shopping island's `localStorage` outbox still works while the page lives; "copy list as text" before leaving; nothing else in the app needs offline |
+| Android PWA install + `share_target` | No Android share sheet | Household is iPhone + PC — dormant. Paste box works on any Android browser regardless |
+| `Secure` cookies, camera APIs | Cosmetic here / barcode backlog | Cookie ships without `Secure` on HTTP; barcode scanning was backlog anyway |
+
+**Optional free upgrades, documented in `deploy/` but never required:**
+- **mkcert local CA** (free): one-time root-CA install per device → green-lock HTTPS on the LAN → unlocks everything in the table above.
+- **Tailscale free tier**: remote access + a real `ts.net` Let's Encrypt cert via `tailscale cert`, if away-from-home use is ever wanted. No domain purchase in either path.

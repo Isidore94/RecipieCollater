@@ -13,7 +13,7 @@ The product must be **equally good at three jobs**:
 
 ## 2. Users & Access
 
-- **Household members** on the home LAN (and optionally remotely via Tailscale). Small trusted group; no public internet exposure.
+- **Household members** on the home LAN only — the app is used at home, on the same Wi-Fi as the Ethernet-connected mini PC. Small trusted group; no public internet exposure; no remote access in scope (a free Tailscale upgrade path exists if that ever changes).
 - Mixed devices: iPhones (share-sheet ingest via Apple Shortcuts, browsing, cook mode), desktop PCs (paste-link ingest, browsing, bulk editing).
 - Auth: lightweight. A shared ingest token for the Shortcut endpoint; simple named profiles (no passwords required on LAN) so ratings/notes can be attributed. Avoid heavyweight account systems.
 
@@ -89,7 +89,7 @@ A first-class assistant (Claude API) with access to the cookbook and pantry as t
 - **Fast**: server on LAN, page interactions should feel instant (<100 ms server responses for reads); no heavyweight client framework payloads on every page.
 - **Responsive & beautiful**: one web app, mobile-first layouts that scale up to desktop; installable as a PWA (home-screen icon, standalone chrome). Dark mode. It should look like a product you'd pay for, not an admin panel.
 - **Data is sacred**: SQLite with WAL + automated backups (local snapshot rotation + optional off-box copy). Recipes and cook logs must never be lost. Export everything (JSON + printable/markdown).
-- **Simple ops**: one service (plus optional reverse proxy), deployable via Docker Compose or a single systemd unit; auto-start on boot; painless updates.
+- **Simple ops**: two systemd units, auto-start on boot, painless updates. **Zero infrastructure cost**: no domain, no certificates, no cloud services — the only recurring cost is the Claude API (~$3–8/month).
 - **No cloud dependency for core browsing**: if the internet is down, browsing/cooking/pantry still work; only ingestion and AI chat need the network.
 
 ## 5. Explicitly Out of Scope (for now)
