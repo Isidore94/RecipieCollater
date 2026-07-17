@@ -50,7 +50,8 @@ Condensed from a deep research pass (July 2026) across self-hosted recipe manage
 - Haiku 4.5 $1/$5 per MTok (extraction ≈ $0.01–0.03/recipe); Sonnet 4.6 $3/$15 (chat ≈ $0.02–0.05/turn with caching). Family total ≈ **$3–8/month**. Batches API 50% off for backfills.
 - Structured outputs (`messages.parse()` + Pydantic) replace prompt-engineered JSON; `additionalProperties: false` required; no numeric constraints in schema.
 - Prompt caching: prefix-exact, min 4096 tokens (Haiku)/2048 (Sonnet); order [stable system+tools][data snapshot][conversation].
-- Anthropic has no embeddings API (recommends Voyage; voyage-3.5-lite $0.02/1M, first 200M tokens free).
+- Anthropic has no embeddings API (recommends Voyage; voyage-3.5-lite $0.02/1M, first 200M tokens free). **OpenAI `text-embedding-3-small` ($0.02/1M) is the first-party embeddings answer once an OpenAI key is present** — a concrete reason the dual-provider design earns its keep.
+- **Dual-provider is a validated pattern, not a novelty**: Mealie and Tandoor both route AI through a single client with a configurable provider/base-URL and per-feature enable flags. Both Anthropic and OpenAI expose structured outputs (strict json_schema), streaming, and tool/function calling; the shapes differ, so an adapter with per-provider golden-file tests is the safe way to normalize them.
 
 **Seed data**
 - TandoorRecipes/open-tandoor-data: 391 FDC-linked foods + 163 sourced per-food conversions + 14 dimension-typed units — a ready-made miniature of our ontology (ODbL/DBCL).
@@ -62,7 +63,7 @@ Condensed from a deep research pass (July 2026) across self-hosted recipe manage
 1. **Per-step video timestamps** with embedded player tap-to-seek in cook mode (Preplo).
 2. **Tap-a-duration-in-step-text → named timer**; multiple concurrent timers (Paprika/Crouton).
 3. **After-cook capture flow** as the inbox→cookbook promotion gate (composite of the most-requested missing features across Paprika/Samsung Food).
-4. **Cook-through pantry deduction** — cooking is the only consumption event (the one pattern families sustain).
+4. **Automatic cook-through pantry deduction** — marking a recipe cooked auto-deducts its ingredients (Grocy "consume recipe" / Paprika auto-subtract); cooking is the only consumption event, and the research is explicit that *this specific* pattern — not per-withdrawal logging — is the one families sustain. Editable defaults + reversible so it stays trustworthy.
 5. **Graduated pantry granularity** (exact/gauge/binary) instead of forced quantities.
 6. **Conversational pantry updates** via AI ("used half the rice, out of eggs") — automation is the documented fix for inventory decay.
 7. **"Use it up" suggestions** ranked by expiring stock (Grocy's Due Score).

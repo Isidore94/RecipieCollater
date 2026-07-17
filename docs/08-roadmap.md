@@ -27,13 +27,14 @@ Phased so that **every phase ends with something the family actually uses**. The
 ## Phase 2 — Ingestion (the bot comes alive) ★ the magic moment
 
 - `POST /api/ingest` (202 + job), ingest_jobs lifecycle, inbox processing states (htmx polling), retry, duplicate detection.
-- Web pipeline: httpx→curl_cffi fetch, recipe-scrapers fast path, Claude fallback, OpenGraph stub; `raw_extraction` stored; re-extract button.
-- YouTube pipeline: yt-dlp metadata+comments, transcript fetch, single Claude structuring call, thumbnail capture, per-step `video_seconds`.
+- **AI provider abstraction** (`app/ai/`): the two-implementation adapter (Anthropic + OpenAI) with task routing, cross-provider fallback, usage logging, and per-provider spend caps — built here because extraction is the first AI use. Designed for two providers from day one even if only one key is set; **golden-file tests per provider** lock the structured-output serializations.
+- Web pipeline: httpx→curl_cffi fetch, recipe-scrapers fast path, LLM fallback (via the adapter), OpenGraph stub; `raw_extraction` stored; re-extract button.
+- YouTube pipeline: yt-dlp metadata+comments, transcript fetch, single structuring call (via the adapter), thumbnail capture, per-step `video_seconds`.
 - Ingredient normalization chain (ingredient-parser-nlp → matcher → batched LLM repair → pending-food quarantine chips).
 - Apple Shortcuts (documented recipe + iCloud link template with Import Questions), **including the Safari HTML-capture variant** for bot-walled sites; paste box; bookmarklet.
 - Heavy pipeline stages (yt-dlp, image processing, CRF parsing) run in short-lived subprocesses spawned by Huey tasks (full RAM release, hang isolation).
-- Weekly yt-dlp self-update task; AI usage logging + monthly cap.
-- **Exit criteria**: sharing a YouTube video from an iPhone yields a correct, pretty recipe sheet in <60s with zero further input; a schema.org site imports in <5s without an LLM call.
+- Weekly yt-dlp self-update task; AI usage logging + monthly cap; Settings page shows per-provider spend and lets the owner pick which provider/model runs each task.
+- **Exit criteria**: sharing a YouTube video from an iPhone yields a correct, pretty recipe sheet in <60s with zero further input; a schema.org site imports in <5s without an LLM call; extraction works with *either* an Anthropic-only or OpenAI-only key, and falls over cleanly when one provider is forced to error.
 
 ## Phase 3 — Cooking experience (why the family keeps it)
 
@@ -48,11 +49,13 @@ Phased so that **every phase ends with something the family actually uses**. The
 ## Phase 4 — Pantry & shopping
 
 - Locations CRUD (inline-creatable), pantry item CRUD with graduated quantity modes, stock-take mode, staples & thresholds.
+- **Remove / used-up / spoiled** action on every item (swipe or ⋯ menu) writing `pantry_adjustments`; only `spoiled` surfaced to the AI.
+- **Automatic cook-through deduction** (`06-…` §2.1): marking a recipe cooked deducts ingredients (canonical-unit math on exact items, one-tap step-downs for gauge/binary, skips approx/unmatched), auto-apply by default with a reversible summary (batch Undo via `batch_id`), a global auto/review toggle, and per-recipe editable "don't deduct" + pantry-item-mapping defaults that the recipe remembers. Property-test the deduction/conversion math (round-trips, zero-crossing, unit bridges).
 - Recipe⇄pantry matching ("have 7/9", "cook from what we have" filter).
 - Shopping list: generation (plan − pantry + low staples), aggregation math, aisle grouping, manual adds, provenance labels.
 - In-store island: **write the sync-protocol spec (op shapes, LWW rules, tombstones, staleness cutoff) BEFORE generating any JS** — it's the one subsystem where an unspecified agent improvises divergently across sessions. Then: Alpine store + localStorage outbox + idempotent `POST /api/shopping/sync`, a pytest matrix over the sync endpoint (concurrent devices, replays, stale ops), and a defined degrade-to-online-only failure mode (never data loss). Post-shop "restock pantry" bulk flow.
 - "Copy list as text" export on the shopping page (the free paper-backup for in-store use).
-- **Exit criteria**: weekly shop runs off the app in the store, including one dead-signal aisle; pantry survives a month of casual use without a full re-inventory.
+- **Exit criteria**: weekly shop runs off the app in the store, including one dead-signal aisle; cooking a recipe leaves the pantry correct automatically with a working one-tap Undo; a spoiled item is removed in one gesture; pantry survives a month of casual use without a full re-inventory.
 
 ## Phase 5 — Meal planning & AI assistant
 

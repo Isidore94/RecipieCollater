@@ -62,7 +62,8 @@ Every recipe has:
 - **Ease of use is the make-or-break requirement.** Stock tracking fails when it's a chore. Design principles:
   - Adding an item is one search-with-autocomplete + one tap on a location.
   - Quantities are optional and fuzzy by default (`plenty / some / low / out` is a valid mode) with exact counts available where they matter (cans, boxes).
-  - **Cook-through deduction**: after cooking a recipe, one screen suggests pantry decrements from "what I actually used" — confirm/adjust in bulk, never forced.
+  - **Automatic cook-through deduction**: marking a recipe cooked automatically deducts its ingredients from the pantry (using "what I actually used" if captured, else the scaled recipe amount). It applies silently by default and shows a reversible summary — the bot's per-ingredient defaults are all user-editable and remembered per recipe, and there's a global "review before applying" option for anyone who wants the confirm step.
+  - **Remove / used-up / spoiled**: any item can be taken out of the pantry in one gesture (things go bad, get finished off-recipe, or were miscounted), with an optional reason. This is the escape valve that keeps the approximate pantry honest without a chore.
   - Shopping list integration: `out`/below-threshold staples flow onto the shopping list automatically; checking items off the shopping list offers to add them back into pantry locations.
 - **Pantry-aware recipe matching**: every recipe shows a "you have X of Y ingredients" indicator; a "cook from what we have" browse mode.
 
@@ -75,13 +76,13 @@ Every recipe has:
 
 ### 3.6 AI Integration
 
-A first-class assistant (Claude API) with access to the cookbook and pantry as tools/context:
+A first-class assistant with access to the cookbook and pantry as tools/context, backed by **either Anthropic (Claude) or OpenAI — the owner supplies one or both keys** and picks which provider/model runs each task; with both configured, each is the other's automatic fallback:
 - **Extraction**: video/webpage → structured recipe JSON (the ingest bot).
 - **TLDR generation** and time estimation at ingest.
 - **Chat**: "What can I make in under 30 minutes with what we have?", "Build me a meal plan for next week, two vegetarian nights", "What should I make for 8 guests Saturday — impressive but mostly make-ahead?"
 - **Actions from chat**: the assistant can *propose* structured artifacts (a meal plan, a shopping list, a scaled menu) that the user accepts with one tap — never silently mutate data.
 - **Recipe Q&A while cooking**: "can I substitute crème fraîche?", asked from within a recipe's cook mode with the recipe as context.
-- Cost posture: cheap fast model for extraction/TLDR; smarter model for planning chat. Expected usage is low (a family), so monthly API cost should be trivial — but track it.
+- Cost posture: cheap fast model for extraction/TLDR; smarter model for planning chat; optional first-party embeddings (OpenAI) for semantic search. Expected usage is low (a family), so monthly API cost should be trivial — but track it per provider, with a spend cap.
 
 ## 4. Non-Functional Requirements
 
@@ -89,7 +90,7 @@ A first-class assistant (Claude API) with access to the cookbook and pantry as t
 - **Fast**: server on LAN, page interactions should feel instant (<100 ms server responses for reads); no heavyweight client framework payloads on every page.
 - **Responsive & beautiful**: one web app, mobile-first layouts that scale up to desktop; installable as a PWA (home-screen icon, standalone chrome). Dark mode. It should look like a product you'd pay for, not an admin panel.
 - **Data is sacred**: SQLite with WAL + automated backups (local snapshot rotation + optional off-box copy). Recipes and cook logs must never be lost. Export everything (JSON + printable/markdown).
-- **Simple ops**: two systemd units, auto-start on boot, painless updates. **Zero infrastructure cost**: no domain, no certificates, no cloud services — the only recurring cost is the Claude API (~$3–8/month).
+- **Simple ops**: two systemd units, auto-start on boot, painless updates. **Zero infrastructure cost**: no domain, no certificates, no cloud services — the only recurring cost is AI API usage (Anthropic and/or OpenAI, ~$3–8/month).
 - **No cloud dependency for core browsing**: if the internet is down, browsing/cooking/pantry still work; only ingestion and AI chat need the network.
 
 ## 5. Explicitly Out of Scope (for now)

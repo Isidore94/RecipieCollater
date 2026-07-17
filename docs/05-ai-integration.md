@@ -1,28 +1,62 @@
 # RecipeCollater — AI Integration
 
-AI is a first-class feature, not a bolt-on: it powers ingestion (extraction, TLDR, normalization), the meal-planning assistant, and conversational pantry updates. Everything runs through the Claude API — **no local LLM** (measured llama.cpp on the N95-equivalent N100: a 1.5B model degrades to ~1 tok/s with modest context; a 10K-token transcript extraction would take tens of minutes). Local compute is used only for embeddings, later.
+AI is a first-class feature, not a bolt-on: it powers ingestion (extraction, TLDR, normalization), the meal-planning assistant, and conversational pantry updates. Everything runs through a hosted API — **no local LLM** (measured llama.cpp on the N95-equivalent N100: a 1.5B model degrades to ~1 tok/s with modest context; a 10K-token transcript extraction would take tens of minutes). Local compute is used only for embeddings, and only optionally.
 
-## 1. Model split & cost posture
+## 1. Two providers behind one interface
 
-| Task | Model | Why |
+The app supports **both Anthropic (Claude) and OpenAI**, chosen per task in settings. Either key alone is enough to run everything; with both configured, each becomes the other's automatic fallback. This is the Mealie/Tandoor pattern (a single client with a configurable provider + per-feature flags), and it buys three things: resilience when one provider has an outage or you hit its spend cap, freedom to put the cheapest capable model on each task, and a first-party **embeddings** option (Anthropic has no embeddings API; OpenAI's `text-embedding-3-small` fills that gap for semantic search — see §5).
+
+### Provider abstraction (`app/ai/`)
+
+A thin interface with two implementations wrapping each vendor's native SDK — **not** a lowest-common-denominator hack. The three capabilities the app needs all exist on both providers, but their shapes differ and the adapter normalizes them:
+
+| Capability | Anthropic | OpenAI | Normalized to |
+|---|---|---|---|
+| Structured extraction | `messages.parse()` + Pydantic / `output_config.format` json_schema | `responses`/`chat.completions` with `response_format` json_schema, `strict: true` | `extract(schema, prompt) -> validated Pydantic object` |
+| Streaming chat + tools | `messages.stream()`, tool-use blocks, SDK tool runner | streaming `responses` with function calling | `stream_chat(messages, tools) -> event stream` |
+| Embeddings | *(none — falls back to OpenAI or local)* | `embeddings.create()` | `embed(texts) -> list[vector]` |
+
+Both structured-output paths require `additionalProperties: false` on every object and reject numeric min/max constraints — so the same Pydantic schema serializes to both, and quantity validation stays in app code either way. Tool/function-call JSON shapes differ; the adapter maps them to one internal `ToolCall` type. **Golden-file tests per provider** guard the two serializations (this is the one place a dual-provider design can silently drift — see the model/effort note in the build plan).
+
+### Task routing (settings, not code)
+
+Config maps each task → `provider/model`, with an optional fallback:
+
+```
+[ai.keys]
+anthropic = "sk-ant-..."      # either or both
+openai    = "sk-..."
+
+[ai.routing]                  # provider/model  (+ optional fallback)
+extract   = "anthropic/claude-haiku-4-5"      fallback "openai/gpt-..."
+tldr      = "anthropic/claude-haiku-4-5"
+repair    = "anthropic/claude-haiku-4-5"
+chat      = "anthropic/claude-sonnet-4-6"     fallback "openai/gpt-..."
+embed     = "openai/text-embedding-3-small"   # or "local/all-MiniLM-L6-v2" or "off"
+```
+
+Model IDs and pricing are **config, not code** — verify current IDs/prices at build time (OpenAI's especially, since this plan didn't research them fresh); the app must not hardcode a model string anywhere. Default routing favors Claude for extraction and reasoning (best structured-output reliability in the research) and OpenAI for embeddings; a user with only one key gets that provider for everything embeddings-capable and local/off embeddings otherwise.
+
+### Cost posture & guardrails
+
+| Task | Default model | Why |
 |---|---|---|
-| Recipe extraction, TLDR, ingredient repair | Claude Haiku (current: `claude-haiku-4-5`, $1/$5 per MTok) | Cheap, fast, 200K context swallows any transcript |
-| Meal-planning chat / big-event planning | Claude Sonnet (current: `claude-sonnet-4-6` or Sonnet 5, $3/$15) | Needs actual reasoning over pantry + cookbook |
-| One-off backfills (re-extract/re-embed everything) | Batches API | 50% off, 24h async |
+| Recipe extraction, TLDR, ingredient repair | Claude Haiku (`claude-haiku-4-5`, $1/$5 per MTok) | Cheap, fast, 200K context swallows any transcript |
+| Meal-planning chat / big-event planning | Claude Sonnet (`claude-sonnet-4-6` or Sonnet 5, $3/$15) | Needs real reasoning over pantry + cookbook |
+| Embeddings (optional) | OpenAI `text-embedding-3-small` ($0.02/1M) | First-party vectors; Anthropic has none |
+| One-off backfills | provider Batch API | ~50% off, async |
 
-Realistic family usage (≈30 extractions + 100 chat turns/month): **$3–8/month**. Extraction ≈ $0.01–0.03/recipe even with a 15K-token transcript.
-
-Guardrails (Tandoor's AI pattern, worth copying):
-- Every call logged to `ai_usage_log` (purpose, model, tokens, est. cost).
-- Configurable monthly spend cap; when exceeded, ingestion falls back to schema.org-only parsing and chat politely declines.
-- Settings page shows month-to-date spend.
-- Model IDs live in config, not code — models improve; swapping should be a settings edit.
+Realistic family usage (≈30 extractions + 100 chat turns/month): **$3–8/month**, whichever provider mix. Extraction ≈ $0.01–0.03/recipe even with a 15K-token transcript. Guardrails (Tandoor's pattern):
+- Every call logged to `ai_usage_log` (provider, model, purpose, tokens, est. cost).
+- Configurable monthly spend cap **per provider**; when exceeded, route falls to the other provider if configured, else ingestion drops to schema.org-only parsing and chat politely declines.
+- Settings page shows month-to-date spend per provider.
+- Per-feature and per-provider enable flags (Mealie's `*_ENABLE_*` switches).
 
 ## 2. Extraction (see `04-ingestion-pipeline.md`)
 
-- **Structured outputs** (`client.messages.parse()` with Pydantic models / `output_config.format` json_schema) — guaranteed schema-valid JSON. Schema rules: `additionalProperties: false` everywhere; no numeric min/max in the schema (validate quantities in app code).
-- Temperature 0. Check `stop_reason` for `max_tokens` (truncated) and `refusal`.
-- The SDK auto-retries 429/5xx — no custom retry code.
+- **Structured outputs** via the provider abstraction's `extract(schema, prompt)` — guaranteed schema-valid JSON on either provider (Claude `messages.parse()` / OpenAI `response_format` strict json_schema). Schema rules that satisfy both: `additionalProperties: false` everywhere; no numeric min/max in the schema (validate quantities in app code).
+- Temperature 0. Handle truncation/refusal stop reasons uniformly in the adapter.
+- Both SDKs auto-retry 429/5xx — no custom retry code; the adapter adds the cross-provider fallback on hard failure or spend-cap trip.
 
 ## 3. Meal-planning assistant
 
@@ -57,7 +91,7 @@ Assistant responses may include structured proposal blocks (a meal plan, a shopp
 
 ### Streaming
 
-SSE relay: browser POSTs the chat message → FastAPI `StreamingResponse(media_type="text/event-stream")` forwards `text_delta` chunks from `client.messages.stream()` → browser reads via `fetch()` + ReadableStream (EventSource is GET-only). SSE over WebSocket deliberately: unidirectional, auto-reconnect, plain HTTP, trivial on LAN. API key never leaves the server.
+SSE relay: browser POSTs the chat message → FastAPI `StreamingResponse(media_type="text/event-stream")` forwards text-delta chunks from the provider's stream (Claude `messages.stream()` or OpenAI streaming responses, normalized by the adapter to a single delta event) → browser reads via `fetch()` + ReadableStream (EventSource is GET-only). SSE over WebSocket deliberately: unidirectional, auto-reconnect, plain HTTP, trivial on LAN. API keys never leave the server.
 
 ### Prompt-caching gotchas (encode in the implementation)
 
@@ -73,10 +107,13 @@ SSE relay: browser POSTs the chat message → FastAPI `StreamingResponse(media_t
 
 ## 5. Semantic search (phase 3+)
 
-- **fastembed** (Qdrant's ONNX runtime lib — no PyTorch; ~150–300 MB RSS only while embedding, $0 and offline) running `all-MiniLM-L6-v2` (384-dim).
-- Vectors in **sqlite-vec** `vec0` table; brute-force KNN is sub-millisecond at family scale. Pin the pre-1.0 version; store model name with vectors.
+Three embedding sources, selected by the `embed` route:
+- **OpenAI `text-embedding-3-small`** ($0.02/1M, 1536-dim) — the natural choice once an OpenAI key is present; near-free at this scale.
+- **Local `all-MiniLM-L6-v2`** via **fastembed** (Qdrant's ONNX runtime lib — no PyTorch; ~150–300 MB RSS only while embedding, $0 and offline, 384-dim) — the zero-key, zero-cost path.
+- **`off`** — FTS5 keyword search only.
+- Vectors in **sqlite-vec** `vec0` table; brute-force KNN is sub-millisecond at family scale. Pin the pre-1.0 version; **store the embedding model name with each vector** so a provider/model swap triggers a clean re-embed (dimensions differ: 1536 vs 384).
 - Embed `title + tldr + ingredient names + tags`; re-embed on edit via Huey.
-- Honest scoping: FTS5 keyword search is probably sufficient below ~500 recipes — ship vectors only when "vibes" search ("something cozy and warming") is actually missed. Alternative: Voyage API embeddings (Anthropic's recommended provider) — first 200M tokens free.
+- Honest scoping: FTS5 is probably sufficient below ~500 recipes — ship vectors only when "vibes" search ("something cozy and warming") is actually missed.
 
 ## 6. Failure & offline behavior
 

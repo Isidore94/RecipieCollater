@@ -174,7 +174,9 @@ CREATE TABLE recipe_ingredients (
   food_id        INTEGER REFERENCES foods(id),
   note           TEXT,                      -- 'finely chopped'
   scalable       INTEGER NOT NULL DEFAULT 1,     -- 0 for 'to taste', 'a splash', oil-for-frying
+  deduct_from_pantry INTEGER NOT NULL DEFAULT 1, -- cook-through deduction default; auto-set 0 for approx/non-scalable, user-editable & remembered per recipe
   step_id        INTEGER REFERENCES recipe_steps(id),  -- optional: which step uses it (stable ID, never positional)
+  pantry_item_hint INTEGER REFERENCES pantry_items(id), -- remembered mapping for ambiguous foods ('chicken' → 'chicken thighs')
   parse_confidence REAL                     -- from ingredient-parser-nlp; low values flagged in editor
 );
 
@@ -250,8 +252,27 @@ CREATE TABLE pantry_items (
   is_staple        INTEGER NOT NULL DEFAULT 0,    -- always want on hand
   min_quantity     REAL,                    -- exact-mode staples: below this → shopping list
   expires_on       TEXT,                    -- optional, mostly for freezer/fridge
+  step_down_on_cook INTEGER NOT NULL DEFAULT 0,  -- gauge/binary: opt-in to auto-step-down when cooked
   updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
   updated_by       INTEGER REFERENCES users(id)
+);
+
+-- Append-only history behind pantry_items: every change with a reason and source.
+-- Makes cook-deduction Undo atomic and answers "why did the flour drop?".
+-- Lightweight log, NOT Grocy's mandatory double-entry ledger — pantry_items holds current state.
+CREATE TABLE pantry_adjustments (
+  id            INTEGER PRIMARY KEY,
+  pantry_item_id INTEGER REFERENCES pantry_items(id) ON DELETE SET NULL,
+  food_id       INTEGER REFERENCES foods(id),      -- kept even if the item row is later deleted
+  delta_quantity REAL,                    -- signed, in the item's unit (exact mode); NULL for gauge/binary
+  from_gauge    TEXT, to_gauge TEXT,      -- gauge/binary transitions, for undo
+  reason        TEXT NOT NULL CHECK (reason IN
+                  ('cook','manual_remove','spoiled','restock','stock_take','correction')),
+  source        TEXT,                     -- 'cook' rows carry the batch context below
+  cook_log_id   INTEGER REFERENCES cook_log(id) ON DELETE CASCADE,  -- set for reason='cook'
+  batch_id      TEXT,                     -- groups one cook's deductions for one-tap Undo
+  user_id       INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
 
@@ -259,7 +280,9 @@ Rules:
 - Adding an item = autocomplete on `foods` + one tap on a location. Locations/foods/units creatable inline (Grocy's master-data detours are its #1 UI complaint).
 - `out` gauge or `quantity < min_quantity` on a staple ⇒ auto-candidate for the shopping list.
 - "Stock-take mode": walk one location, every item shows big tap targets (full/half/low/out or +/-), two taps max per item.
-- Pantry-aware matching: recipe ⇄ pantry via `food_id`; per-recipe-ingredient opt-out flag isn't needed because `approx`/`scalable=0` items (spices, oil) are excluded from "can I make this" scoring by default.
+- **Remove / spoilage**: a quick action on any item sets exact→0 (or deletes) / gauge→`out`, writing a `pantry_adjustments` row with reason `manual_remove` or `spoiled`. Only `spoiled` is surfaced to the AI (waste patterns); the rest are silent.
+- **Cook-through deduction** (`06-…` §2.1): marking a recipe cooked writes a `batch_id`-grouped set of `pantry_adjustments` (reason `cook`), decrementing exact items by the canonical-unit-converted "actually used" (or scaled) amount, offering gauge/binary items as one-tap step-downs, and skipping `approx`/`scalable=0` and unmatched ingredients. Auto-apply by default; the whole batch is reversible via its `batch_id`. Per-recipe-ingredient "don't deduct" defaults are stored on `recipe_ingredients` (see below).
+- Pantry-aware matching: recipe ⇄ pantry via `food_id`; per-recipe-ingredient opt-out flag isn't needed for *matching* because `approx`/`scalable=0` items (spices, oil) are excluded from "can I make this" scoring by default.
 
 ## 7. Shopping list
 
@@ -340,14 +363,30 @@ CREATE TABLE ai_messages (
 -- Every API call logged for cost visibility + a monthly cap guardrail (Tandoor's AI guardrail pattern).
 CREATE TABLE ai_usage_log (
   id            INTEGER PRIMARY KEY,
-  purpose       TEXT NOT NULL,              -- 'extract', 'tldr', 'chat', 'meal_plan', 'repair_ingredients'
+  provider      TEXT NOT NULL,              -- 'anthropic' | 'openai'
+  purpose       TEXT NOT NULL,              -- 'extract','tldr','chat','meal_plan','repair','embed'
   model         TEXT NOT NULL,
   input_tokens  INTEGER, output_tokens INTEGER,
   cache_read_tokens INTEGER,
   est_cost_usd  REAL,
+  fell_back     INTEGER NOT NULL DEFAULT 0, -- 1 if this call was a cross-provider fallback
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
+
+## 10a. Settings (user-facing app config)
+
+```sql
+-- Simple key/value store for user-facing toggles surfaced on the Settings page.
+-- Secrets (ANTHROPIC_API_KEY, OPENAI_API_KEY) live in the root-owned env file, NOT here.
+CREATE TABLE settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,                 -- JSON-encoded
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+Seeded keys include: `pantry.auto_deduct_mode` (`auto` | `review`, default `auto`), `pantry.gauge_step_down_default` (bool), `ai.routing` (per-task provider/model map, §1 of `05-…`), `ai.spend_cap_usd` per provider, `ai.enabled_features`, `shopping.aisle_order`. Non-secret AI routing can live here (editable in the UI) while keys stay in the env file — the app reads routing from `settings` with the TOML/env as the bootstrap default.
 
 ## 11. Search
 

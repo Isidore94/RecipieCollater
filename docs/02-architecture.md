@@ -12,7 +12,7 @@
 | Networking | **Plain HTTP on the LAN, $0**: DHCP-reserved IP + mDNS `recipes.local` (Avahi) | LAN-only by design; no domain, no certificates, no cloud dependency. Free HTTPS/remote upgrade paths documented but optional (§9) |
 | Remote access | **None** — the app is used at home only; **no port forwarding, ever** | Owner's explicit choice; Tailscale (free tier) is the documented upgrade path if this ever changes |
 | Auth | Named users, **device-session cookie** (400-day, HttpOnly, revocable rows) via magic-link/QR onboarding; separate long-lived **Bearer tokens** for ingest | No passwords for the family; lost phone = revoke one row; Immich/Home Assistant-proven pattern |
-| AI | **Claude API only** (Haiku extract / Sonnet chat), structured outputs, SSE streaming | Local LLM confirmed non-viable on N95 (~1 tok/s with context); API cost ≈ $3–8/month |
+| AI | **Anthropic + OpenAI, pluggable per task** behind one adapter (default Haiku extract / Sonnet chat; OpenAI embeddings); structured outputs, SSE streaming, cross-provider fallback | Local LLM confirmed non-viable on N95 (~1 tok/s with context); two keys = resilience + first-party embeddings; API cost ≈ $3–8/month |
 | Python env | **uv** + `pyproject.toml`, dependencies pinned | Reproducible, fast, no Docker needed |
 
 An architecture panel (three independent proposals — minimal-footprint, modern-PWA, and agent-buildable — scored by three single-lens judges) settled this 2–1: two designers independently produced this exact FastAPI+htmx+SQLite shape, and the N95-performance and buildability judges both picked it. The family-UX judge preferred the SvelteKit PWA alternative for its richer in-hand feel; its winning ideas are grafted in rather than adopted wholesale: the instant client-side scaler preview, View-Transitions page morphs, the designed stock-take screen, and v1 Shortcut HTML-capture. Its disqualifying detail on this box: better-sqlite3's synchronous writes block Node's whole event loop under writer contention — a family-wide stall the single-language design can't have.
@@ -53,9 +53,11 @@ recipecollater/
 │   ├── auth.py               # cookie/session/token dependencies
 │   ├── models.py             # Pydantic models (incl. extraction schemas)
 │   ├── routers/              # recipes, inbox, pantry, shopping, plan, chat, ingest, admin, share
-│   ├── services/             # scaler, matcher, aggregation, exporter  (pure functions, unit-tested)
+│   ├── services/             # scaler, matcher, aggregation, deduction, exporter  (pure functions, unit-tested)
 │   ├── ingest/               # fetch.py, web.py, youtube.py, normalize.py, images.py
-│   ├── ai/                   # client.py (usage logging, spend cap), extract.py, assistant.py (tools)
+│   ├── ai/                   # provider.py (adapter interface), anthropic.py, openai.py,
+│   │                         # router.py (task→provider, fallback, usage log, spend cap),
+│   │                         # extract.py, assistant.py (tools), embed.py
 │   ├── tasks.py              # Huey task definitions
 │   ├── templates/            # Jinja2; partials/ for htmx fragments
 │   └── static/               # css, js (htmx, alpine, shopping-island.js), icons
@@ -87,7 +89,7 @@ Migration runner: refuses out-of-order files, and takes a `VACUUM INTO` snapshot
 - Never exposed to the public internet: the app binds the LAN interface only; no router port-forwards, ever. The threat model is "trusted home network" — auth exists for attribution and lost-phone revocation, not to repel attackers.
 - Exactly one persistent HttpOnly SameSite=Lax cookie (WebKit 272325 discipline; the `Secure` flag is added only if the optional HTTPS upgrade is installed). All tokens stored as SHA-256 hashes; opaque, revocable per device from the admin page.
 - Ingest endpoints validate/normalize URLs (http/https only, no internal-network SSRF); fetches capped 15s/5 MB.
-- `ANTHROPIC_API_KEY` in `EnvironmentFile=/etc/recipecollater/env` (root-owned, 0600) — never in the repo or the browser.
+- `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` in `EnvironmentFile=/etc/recipecollater/env` (root-owned, 0600) — never in the repo or the browser. Either alone runs the app; both enable cross-provider fallback and first-party embeddings. Non-secret task routing lives in the `settings` table (editable in the UI); keys never do.
 - CSRF: SameSite=Lax + custom-header check on state-changing htmx routes (one line, belt and braces).
 - Backups tested by restoring: a backup that's never been restored is a hope, not a backup.
 
