@@ -21,6 +21,7 @@ dependencies = [
     "recipe-scrapers==15.11.0",
     "anthropic==0.117.0",
     "yt-dlp==2026.7.4",
+    "pillow==12.3.0",
 ]
 
 [dependency-groups]

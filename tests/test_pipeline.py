@@ -24,6 +24,12 @@ _AI_RECIPE = ExtractedRecipe(
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_image_download(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep pipeline tests offline: never actually fetch a recipe/thumbnail image."""
+    monkeypatch.setattr("app.services.images.store_image_from_url", lambda recipe_id, url: None)
+
+
 class _FakeExtractor:
     provider = "anthropic"
     model = "claude-sonnet-5"
@@ -193,3 +199,19 @@ def test_pipeline_youtube_needs_ai_key(migrated_db: sqlite3.Connection) -> None:
     assert done is not None
     assert done.status == "failed"
     assert done.error_category == "youtube_needs_ai"
+
+
+def test_pipeline_attaches_extracted_image(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # When the image download succeeds, the recipe gets its photo (fixture has an og:image).
+    monkeypatch.setattr(
+        "app.services.images.store_image_from_url", lambda recipe_id, url: f"{recipe_id}/image.webp"
+    )
+    job = _enqueue_with_fixture(migrated_db)
+    pipeline.run_job(migrated_db, job)
+    done = ingest.get_job(migrated_db, job.id)
+    assert done is not None and done.recipe_id is not None
+    recipe = recipes.get_recipe(migrated_db, done.recipe_id)
+    assert recipe is not None
+    assert recipe.image_path == f"{done.recipe_id}/image.webp"

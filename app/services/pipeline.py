@@ -20,7 +20,7 @@ from app.ai import usage as ai_usage
 from app.config import get_settings
 from app.extraction import SCHEMA_VERSION, ExtractedRecipe
 from app.security import now_iso
-from app.services import fetch, ingest, recipes, web_extract, youtube
+from app.services import fetch, images, ingest, recipes, web_extract, youtube
 
 
 def to_recipe_input(
@@ -102,8 +102,21 @@ def apply_extraction(
         (job.normalized_url, video_id, run_id, now_iso(), recipe_id),
     )
     conn.commit()
+    _maybe_set_image(conn, recipe_id, extracted.image_url)
     ingest.set_status(conn, job.id, "done", recipe_id=recipe_id)
     return recipe_id
+
+
+def _maybe_set_image(conn: sqlite3.Connection, recipe_id: int, url: str | None) -> None:
+    """Download and attach a recipe photo, best-effort; never blocks a recipe from saving."""
+    if not url:
+        return
+    detail = recipes.get_recipe(conn, recipe_id)
+    if detail is None or detail.image_path:  # keep an image the user already set
+        return
+    relative = images.store_image_from_url(recipe_id, url)
+    if relative:
+        recipes.set_image(conn, recipe_id, relative)
 
 
 def _obtain_html(conn: sqlite3.Connection, job: ingest.IngestJob) -> str:
@@ -180,6 +193,10 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
             conn, job.id, "failed", error_category="no_recipe",
             error_message="Couldn't find a recipe in that video's description or captions.",
         )
+        return
+    refreshed = ingest.get_job(conn, job.id)
+    if refreshed and refreshed.recipe_id:  # use the video thumbnail as the recipe photo
+        _maybe_set_image(conn, refreshed.recipe_id, data.thumbnail_url)
 
 
 def _page_text(html: str) -> str:
