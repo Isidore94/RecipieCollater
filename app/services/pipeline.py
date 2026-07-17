@@ -15,6 +15,10 @@ from __future__ import annotations
 
 import sqlite3
 
+from app import ai
+from app.ai import AIExtraction
+from app.ai import usage as ai_usage
+from app.config import get_settings
 from app.extraction import SCHEMA_VERSION, ExtractedRecipe
 from app.security import now_iso
 from app.services import fetch, ingest, recipes, web_extract
@@ -138,13 +142,59 @@ def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
 
     ingest.set_status(conn, job.id, "extracting")
     extracted = web_extract.extract_from_html(html, job.normalized_url)
-    if extracted is None or not extracted.is_complete():
-        # TODO(P2-3): fall back to LLM extraction before giving up.
-        ingest.set_status(
-            conn, job.id, "failed", error_category="no_recipe",
-            error_message="No structured recipe was found on that page. AI extraction is coming.",
+    if extracted is not None and extracted.is_complete():
+        ingest.set_status(conn, job.id, "normalizing")
+        apply_extraction(conn, job, extracted, extractor="recipe_scrapers", confidence="high")
+        return
+
+    ai_extraction = _ai_extract(conn, job, html)
+    if ai_extraction is not None:
+        ingest.set_status(conn, job.id, "normalizing")
+        apply_extraction(
+            conn, job, ai_extraction.recipe, extractor="llm_web",
+            provider=ai_extraction.provider, model=ai_extraction.model, confidence="medium",
         )
         return
 
-    ingest.set_status(conn, job.id, "normalizing")
-    apply_extraction(conn, job, extracted, extractor="recipe_scrapers", confidence="high")
+    ingest.set_status(
+        conn, job.id, "failed", error_category="no_recipe",
+        error_message="No recipe could be extracted from that page.",
+    )
+
+
+def _page_text(html: str) -> str:
+    """Reduce HTML to visible text for the LLM prompt (scripts/styles stripped)."""
+    from bs4 import BeautifulSoup  # lazy: bs4 comes with recipe-scrapers (CONVENTIONS 4)
+
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript", "template"]):
+        tag.decompose()
+    return soup.get_text(" ", strip=True)
+
+
+def _ai_extract(conn: sqlite3.Connection, job: ingest.IngestJob, html: str) -> AIExtraction | None:
+    """LLM fallback when schema.org found nothing: budget-gated, always logged to ai_usage_log."""
+    settings = get_settings()
+    provider = ai.get_provider(settings)
+    if provider is None:
+        return None
+    if not ai_usage.within_budget(conn, settings):
+        ai_usage.log_usage(
+            conn, provider="anthropic", model=settings.ai_model, operation="extract_web",
+            job_id=job.id, status="blocked", error="daily or monthly AI spend cap reached",
+        )
+        return None
+    try:
+        result = provider.extract(_page_text(html), source_url=job.normalized_url)
+    except ai.AIError as exc:
+        ai_usage.log_usage(
+            conn, provider="anthropic", model=settings.ai_model, operation="extract_web",
+            job_id=job.id, status="error", error=str(exc)[:500],
+        )
+        return None
+    ai_usage.log_usage(
+        conn, provider=result.provider, model=result.model, operation="extract_web",
+        job_id=job.id, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros, status="ok",
+    )
+    return result if result.recipe.is_complete() else None

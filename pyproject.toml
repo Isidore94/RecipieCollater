@@ -19,6 +19,7 @@ dependencies = [
     "pydantic==2.13.4",
     "httpx==0.28.1",
     "recipe-scrapers==15.11.0",
+    "anthropic==0.117.0",
 ]
 
 [dependency-groups]
