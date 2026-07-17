@@ -125,6 +125,8 @@ class RecipeDetail:
     source_url: str | None
     source_name: str | None
     image_path: str | None
+    rating: int | None
+    notes: str | None
     created_at: str
     updated_at: str
     ingredients: tuple[IngredientView, ...]
@@ -353,6 +355,25 @@ def delete_recipe(conn: sqlite3.Connection, recipe_id: int) -> bool:
     return cur.rowcount > 0
 
 
+def set_rating(conn: sqlite3.Connection, recipe_id: int, rating: int | None) -> None:
+    """Set a 1-5 star rating; 0 or None clears it. Out-of-range values are clamped."""
+    value = None if not rating else max(1, min(5, int(rating)))
+    conn.execute(
+        "UPDATE recipes SET rating = ?, updated_at = ? WHERE id = ?",
+        (value, now_iso(), recipe_id),
+    )
+    conn.commit()
+
+
+def set_notes(conn: sqlite3.Connection, recipe_id: int, notes: str | None) -> None:
+    """Store the cook's free-text notes for this recipe (blank clears them)."""
+    conn.execute(
+        "UPDATE recipes SET notes = ?, updated_at = ? WHERE id = ?",
+        (_clean(notes), now_iso(), recipe_id),
+    )
+    conn.commit()
+
+
 def set_image(conn: sqlite3.Connection, recipe_id: int, image_path: str) -> None:
     conn.execute(
         "UPDATE recipes SET image_path = ?, updated_at = ? WHERE id = ?",
@@ -411,6 +432,7 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
         active_minutes=row["active_minutes"], elapsed_minutes=row["elapsed_minutes"],
         source_type=row["source_type"], source_url=row["source_url"],
         source_name=row["source_name"], image_path=row["image_path"],
+        rating=row["rating"], notes=row["notes"],
         created_at=row["created_at"], updated_at=row["updated_at"],
         ingredients=ingredients, steps=steps, tags=tags,
     )

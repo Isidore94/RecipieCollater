@@ -416,6 +416,35 @@ async def change_status(
     return RedirectResponse(f"/recipes/{slug}", status_code=303)
 
 
+@router.post("/{slug}/rating")
+async def rate(
+    request: Request,
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is not None:
+        with contextlib.suppress(ValueError):
+            recipes.set_rating(db, detail.id, int(_text(await request.form(), "rating") or 0))
+    return RedirectResponse(f"/recipes/{slug}", status_code=303)
+
+
+@router.post("/{slug}/notes")
+async def save_notes(
+    request: Request,
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is not None:
+        recipes.set_notes(db, detail.id, _text(await request.form(), "notes"))
+    return RedirectResponse(f"/recipes/{slug}", status_code=303)
+
+
 @router.post("/{slug}/delete")
 async def delete(
     request: Request,

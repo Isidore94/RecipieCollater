@@ -18,6 +18,19 @@
 {% if recipe.tldr %}<p class="tldr">{{ recipe.tldr }}</p>{% endif %}
 {% if recipe.description %}<p>{{ recipe.description }}</p>{% endif %}
 
+<form method="post" action="/recipes/{{ recipe.slug }}/rating" class="star-rating no-print"
+      aria-label="Rate this recipe">
+  {% for n in [1, 2, 3, 4, 5] %}
+  <button type="submit" name="rating" value="{{ n }}"
+          class="star{% if recipe.rating and n <= recipe.rating %} is-filled{% endif %}"
+          title="{{ n }} star{{ 's' if n > 1 else '' }}"
+          aria-label="{{ n }} star{{ 's' if n > 1 else '' }}">&#9733;</button>
+  {% endfor %}
+  {% if recipe.rating %}
+  <button type="submit" name="rating" value="0" class="star-clear" title="Clear rating">clear</button>
+  {% endif %}
+</form>
+
 <section class="card">
   <div class="scaler no-print">
     <span class="muted">Servings:</span>
@@ -62,7 +75,18 @@
 </p>
 {% endif %}
 
-<section class="card">
+<section class="card notes-card">
+  <h2>My notes</h2>
+  <form method="post" action="/recipes/{{ recipe.slug }}/notes">
+    <textarea name="notes" rows="4" class="notes-input"
+              placeholder="Notes for next time - tweaks, timing, what to double or skip&hellip;">{{ recipe.notes or '' }}</textarea>
+    <div class="form-actions">
+      <button type="submit" class="btn-secondary">Save notes</button>
+    </div>
+  </form>
+</section>
+
+<section class="card no-print">
   <div class="form-actions">
     <a href="/recipes/{{ recipe.slug }}/edit" class="btn-secondary">Edit</a>
     <a href="/recipes/{{ recipe.slug }}/export.md" class="btn-secondary">Export .md</a>
