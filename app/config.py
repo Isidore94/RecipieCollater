@@ -8,6 +8,7 @@ only; they never appear in the repo, database, or logs.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
@@ -16,8 +17,36 @@ from urllib.parse import urlsplit
 
 from app.version import release_id
 
-# Repository root (…/recipecollater). Used to locate migrations, templates, static, seed.
-PACKAGE_DIR = Path(__file__).resolve().parent
+
+def _frozen() -> bool:
+    """True when running from a PyInstaller-built executable (the Windows .exe build)."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def _resource_dir() -> Path:
+    """Directory holding bundled app resources (templates, static, migrations).
+
+    Under PyInstaller the app package is unpacked to a temp dir (sys._MEIPASS); in a normal
+    install it is just this file's directory.
+    """
+    if _frozen():
+        return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "app"
+    return Path(__file__).resolve().parent
+
+
+def _default_data_dir() -> Path:
+    """Where the databases/images/backups live by default.
+
+    In the .exe build the app package lives in a temp dir that is wiped between runs, so data must
+    persist *beside the executable* instead. In dev it is <repo>/data.
+    """
+    if _frozen():
+        return Path(sys.executable).resolve().parent / "data"
+    return Path(__file__).resolve().parent.parent / "data"
+
+
+# Directory holding bundled resources (templates, static, migrations). Frozen-aware.
+PACKAGE_DIR = _resource_dir()
 REPO_ROOT = PACKAGE_DIR.parent
 
 
@@ -112,7 +141,7 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    data_dir = Path(os.environ.get("RC_DATA_DIR", str(REPO_ROOT / "data"))).resolve()
+    data_dir = Path(os.environ.get("RC_DATA_DIR", str(_default_data_dir()))).resolve()
     app_base_url = os.environ.get("APP_BASE_URL", "http://recipes.local").rstrip("/")
     base_host = urlsplit(app_base_url).hostname or "recipes.local"
     configured_hosts = os.environ.get("RC_ALLOWED_HOSTS", "")
