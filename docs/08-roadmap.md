@@ -1,106 +1,133 @@
 # RecipeCollater — Build Roadmap
 
-Phased so that **every phase ends with something the family actually uses**. The builder agent (Claude Opus/Sonnet) should complete phases in order; each phase's exit criteria are testable. Keep a `CHANGELOG.md` from phase 1.
+Build in vertical slices so every phase ends with something the household can use and test. Do not start phase N+1 while phase N's exit criteria are red. Keep `CHANGELOG.md`, architectural decision records, and schema/prompt versions from the first implementation commit.
 
-**Cost constraint (owner requirement): $0 infrastructure.** No domain, no certificates, no cloud services, no subscriptions — the only recurring cost is AI API usage (~$3–8/month). LAN-only: plain HTTP at `http://recipes.local` (DHCP reservation + Avahi mDNS). Optional free upgrades (mkcert HTTPS, Tailscale) are documented in `deploy/` but never on the roadmap's critical path.
+**Owner constraints:** $0 hosting infrastructure; no domain, public exposure, certificates, cloud database, Redis, or container runtime. Default access is plain HTTP at `http://recipes.local` via DHCP reservation + Avahi/router DNS. Optional AI APIs are the only recurring cost. Optional mkcert/Tailscale upgrades are documented but never on the critical path.
 
-## Build-model & effort guidance
+## Coding-agent guidance
 
-No model produces a flawless build on its own — "no mistakes" comes from **a strong model on the hard parts + the verification gates this roadmap already specifies**. Concretely:
+This plan is agent-neutral. Use the strongest available reasoning/coding model for architecture-sensitive work and a faster model for mechanical templates/CRUD only when the verification gates remain identical. No model choice substitutes for tests or review.
 
-- **Default: Claude Opus 4.8 at high reasoning effort** for the whole build — it's the strongest coding model, and a from-scratch multi-subsystem app rewards architectural coherence held in one head. (Opus fast mode is fine for iterating; it doesn't downgrade the model.)
-- **Max effort (or Claude 5 / Fable-class if available) on the six flaw-prone subsystems**, where a subtle bug hides and silently corrupts data or trust:
-  1. the **AI provider adapter + fallback** (normalizing two vendors' structured-output/tool shapes; the per-provider golden-file tests);
-  2. **unit-conversion / scaling / pantry-deduction math** (canonical g/ml, fraction rendering, zero-crossing, count↔mass bridges);
-  3. the **shopping-list sync protocol** (LWW, UUID adds, tombstones, staleness cutoff, the outbox JS);
-  4. **auth** (device-session cookies, magic-link, one-cookie iOS discipline);
-  5. **schema + migration runner** (the foundation; mistakes propagate);
-  6. **ingest edge cases** (yt-dlp fallbacks, thin extractions, curl_cffi bot-walls).
-- **Sonnet at medium effort is a fine cost/speed swap for the mechanical bulk** — Jinja templates, styling, straightforward CRUD routes, the settings and week-board UIs.
-- **The actual "no-flaws" levers are the gates, not the model**: never advance a phase while its exit criteria are red; write the tests this roadmap names (property tests for scaler/aggregation/deduction math, golden-file tests per AI provider, the two-device sync test, the write-contention test, offline extraction fixtures); keep `CONVENTIONS.md` authoritative to stop multi-session drift; and run a `/code-review` + `/verify` pass at the end of every phase before moving on.
+Use maximum care on:
 
-## Phase 0 — Skeleton & plumbing (foundation, no features)
+1. exact quantity/unit/scaling/shopping/pantry math;
+2. schema and migrations;
+3. ingestion idempotency, artifacts, retries, and SSRF;
+4. provider adapters, strict structured output, tool/proposal boundaries, and remote-data privacy;
+5. auth, scoped tokens, cookies, and CSRF;
+6. backup/restore and staged update/rollback;
+7. any future offline synchronization protocol.
 
-- Repo layout, `pyproject.toml` (uv-managed venv, Python pinned 3.12), ruff + pytest wiring, minimal CI.
-- `CONVENTIONS.md`: the drift-proofing rules for a multi-session AI builder (lazy-import rule, no-ORM SQL style, short worker transactions, one-cookie discipline, dependency pin/float split). Write it first; it governs every later phase.
-- FastAPI app factory, Jinja2 + htmx base layout (nav shell, dark mode), static pipeline (Tailwind standalone CLI or vanilla CSS).
-- SQLite connection factory with pragmas; numbered-SQL migration runner (refuses out-of-order files; `VACUUM INTO` snapshot before every apply); `schema_migrations` table. Huey queue in its own `queue.db`.
-- Migration 001: full schema from `03-data-model.md`.
-- Seed loader: units, unit aliases, foods, food aliases, conversions from `seed/` JSON.
-- Huey worker (SqliteHuey) + systemd unit files (`recipecollater-web.service`, `recipecollater-worker.service`) + install script.
-- Auth: users, device sessions (cookie dependency), api tokens, magic-link + pairing-code flows, admin Devices page.
-- **Exit criteria**: app boots on the N95, family devices onboarded via QR, empty tabs render, `pytest` green.
+Before each phase:
 
-## Phase 1 — Recipes & manual entry (the cookbook exists)
+- Read the relevant plan documents and record any implementation-driven spec correction in the same commit.
+- Keep routers thin and business logic pure/testable.
+- Do not silently broaden scope because a library or model makes an extra feature easy.
+- Run a fresh review/verification pass before declaring the phase complete.
 
-- Recipe CRUD: editor (ingredients with inline food/unit creation, steps, sections, image upload), WEBP pipeline.
-- Recipe sheet: full display incl. TLDR block, tier badges, tags, serving scaler (server-side math, kitchen fractions, non-scalable passthrough, original-amounts toggle).
-- Inbox/Cookbook/Archive statuses + promotion actions; cookbook browse with FTS5 search + filters (tier, tags, max time).
-- Recipe export (JSON + markdown/print view).
-- **Exit criteria**: a manually entered pasta recipe scales 4→6 correctly ("1½ cups" not "1.5000"), searches instantly, prints cleanly.
+## Phase 0 — Deployable foundation
 
-## Phase 2 — Ingestion (the bot comes alive) ★ the magic moment
+- Repository layout, `pyproject.toml`, Python pin, ruff, pytest, type checking, and minimal CI.
+- Root `CONVENTIONS.md`: exact-math boundary, no ORM, short transactions, lazy heavy imports, one-cookie discipline, scoped tokens, htmx fragment conventions, artifact immutability, provider privacy, dependency pin/update policy, and Markdown docs as the contract.
+- FastAPI factory, Jinja/htmx shell, responsive navigation, dark mode, `/healthz`, structured logging, and static assets.
+- SQLite connection factory/pragmas and ordered migration runner. Migration 001 contains only phase-0 tables; later tables arrive with their owning phase. Test fresh install and upgrade from the previous snapshot.
+- Huey + separate `queue.db`, worker lifecycle, systemd units, Avahi/DHCP guide.
+- Named users, device sessions, pairing flow, and separate scoped ingest tokens.
+- Versioned-release install/update/rollback skeleton: build new uv environment, offline tests, DB-copy migration rehearsal, temporary-port health check, atomic release switch. Never mutate the live environment with `pip install -U`.
+- Backup framework and manifest format established even before recipe data exists.
+- **Exit criteria:** clean install on the N95; onboard one iPhone and one PC; restart survives reboot; `/healthz` passes; migration/rollback rehearsal and an empty backup/restore smoke test pass; idle budgets measured.
 
-- `POST /api/ingest` (202 + job), ingest_jobs lifecycle, inbox processing states (htmx polling), retry, duplicate detection.
-- **AI provider abstraction** (`app/ai/`): the two-implementation adapter (Anthropic + OpenAI) with task routing, cross-provider fallback, usage logging, and per-provider spend caps — built here because extraction is the first AI use. Designed for two providers from day one even if only one key is set; **golden-file tests per provider** lock the structured-output serializations.
-- Web pipeline: httpx→curl_cffi fetch, recipe-scrapers fast path, LLM fallback (via the adapter), OpenGraph stub; `raw_extraction` stored; re-extract button.
-- YouTube pipeline: yt-dlp metadata+comments, transcript fetch, single structuring call (via the adapter), thumbnail capture, per-step `video_seconds`.
-- Ingredient normalization chain (ingredient-parser-nlp → matcher → batched LLM repair → pending-food quarantine chips).
-- Apple Shortcuts (documented recipe + iCloud link template with Import Questions), **including the Safari HTML-capture variant** for bot-walled sites; paste box; bookmarklet.
-- Heavy pipeline stages (yt-dlp, image processing, CRF parsing) run in short-lived subprocesses spawned by Huey tasks (full RAM release, hang isolation).
-- Weekly yt-dlp self-update task; AI usage logging + monthly cap; Settings page shows per-provider spend and lets the owner pick which provider/model runs each task.
-- **Exit criteria**: sharing a YouTube video from an iPhone yields a correct, pretty recipe sheet in <60s with zero further input; a schema.org site imports in <5s without an LLM call; extraction works with *either* an Anthropic-only or OpenAI-only key, and falls over cleanly when one provider is forced to error.
+## Phase 1 — Manual cookbook vertical slice
 
-## Phase 3 — Cooking experience (why the family keeps it)
+- Phase-owned migrations for units, foods, aliases/conversions, recipes, ingredients, steps, many-to-many step links, tags, revisions, and FTS5.
+- Exact quantity service: decimal-string boundary, Python `Decimal`, canonical integer mg/µL/milli-each, generalized food bridges, fraction rendering, and property tests.
+- Manual recipe CRUD with ingredient groups, divided ingredients, per-ingredient scaling modes (`linear`, `fixed`, `to_taste`, `round_to_package`), image upload, and safe Markdown rendering.
+- Recipe sheet with TLDR, active vs elapsed time, ephemeral serving scaler, tier/tags, source field, print view, JSON/Markdown export, and responsive phone/desktop UI.
+- Inbox/Cookbook/Archive status and FTS/filter browsing. No AI or pantry dependency.
+- Image/original files included in backup manifests and restore tests.
+- **Exit criteria:** manually enter a real pasta recipe, scale 4→6 exactly, render kitchen fractions, preserve fixed/to-taste/package behavior, find it instantly, cook from the iPhone view, export it, and restore it with images from backup.
 
-- Cook mode: full-screen steps, screen-wake via the silent-video technique (works on plain HTTP; native wakeLock tried opportunistically), tap-duration timers, ingredient checklist, embedded YouTube player with timestamp seek.
-- After-cook capture: rating, actual time → `our_minutes`, per-ingredient actually-used, notes; promotion gate wiring.
-- Cook log timeline on recipe sheets; "haven't made in a while" sort.
-- Recipe Q&A drawer (Haiku, recipe-scoped).
-- Home-screen app: manifest + apple-touch-icon + A2HS instructions page (works over plain HTTP). Service worker code written but self-disabling outside secure contexts.
-- LAN setup: Avahi `recipes.local`, DHCP-reservation guide, port-80 systemd capability.
-- **Exit criteria**: cook a real dinner phone-in-kitchen end-to-end; screen stays awake; timer fires; after-cook flow captures corrections and promotes the recipe.
+## Phase 2 — Reliable ingestion and both AI providers
 
-## Phase 4 — Pantry & shopping
+- Phase-owned migrations for ingest jobs, immutable artifacts, extraction runs, current accepted run, and normalized URL/idempotency fields.
+- `POST /api/ingest` returns 202 in <2 seconds; stage heartbeat, bounded retries, categorized errors, crash recovery, and concurrent duplicate protection.
+- URL normalization and complete SSRF defense across DNS resolution and redirects; size/time/decompression limits.
+- Web pipeline: deterministic JSON-LD/`recipe-scrapers` fast path, readable-text fallback, provider-neutral structured extraction, OpenGraph stub.
+- AI capability interface with independently tested Anthropic and OpenAI adapters. OpenAI uses Responses `text.format`, strict tools where applicable, and `store: false`. One provider/model is selected per task; no automatic cross-provider fallback.
+- Prompt/schema/extractor versioning, usage/error logging, dated price metadata, per-call output limits, and per-provider monthly caps.
+- YouTube pipeline: lightweight metadata + captions/chapters first; comments only when inputs are thin; controlled yt-dlp version check/update path; thumbnail capture; timestamps.
+- Ingredient normalization: local parser → exact/alias/fuzzy match → one batched configured-provider repair → pending-food quarantine.
+- Apple Shortcuts generated from `APP_BASE_URL`, including Safari HTML capture; desktop paste box/bookmarklet.
+- Re-extract creates a comparison draft and never overwrites family edits.
+- **Exit criteria:** schema.org import in <5 seconds without AI; iPhone YouTube share produces a reviewable recipe in <60 seconds; each provider works alone in contract tests; a forced provider failure is visible/retryable; worker crashes at every stage do not duplicate recipes; SSRF suite passes.
 
-- Locations CRUD (inline-creatable), pantry item CRUD with graduated quantity modes, stock-take mode, staples & thresholds.
-- **Remove / used-up / spoiled** action on every item (swipe or ⋯ menu) writing `pantry_adjustments`; only `spoiled` surfaced to the AI.
-- **Automatic cook-through deduction** (`06-…` §2.1): marking a recipe cooked deducts ingredients (canonical-unit math on exact items, one-tap step-downs for gauge/binary, skips approx/unmatched), auto-apply by default with a reversible summary (batch Undo via `batch_id`), a global auto/review toggle, and per-recipe editable "don't deduct" + pantry-item-mapping defaults that the recipe remembers. Property-test the deduction/conversion math (round-trips, zero-crossing, unit bridges).
-- Recipe⇄pantry matching ("have 7/9", "cook from what we have" filter).
-- Shopping list: generation (plan − pantry + low staples), aggregation math, aisle grouping, manual adds, provenance labels.
-- In-store island: **write the sync-protocol spec (op shapes, LWW rules, tombstones, staleness cutoff) BEFORE generating any JS** — it's the one subsystem where an unspecified agent improvises divergently across sessions. Then: Alpine store + localStorage outbox + idempotent `POST /api/shopping/sync`, a pytest matrix over the sync endpoint (concurrent devices, replays, stale ops), and a defined degrade-to-online-only failure mode (never data loss). Post-shop "restock pantry" bulk flow.
-- "Copy list as text" export on the shopping page (the free paper-backup for in-store use).
-- **Exit criteria**: weekly shop runs off the app in the store, including one dead-signal aisle; cooking a recipe leaves the pantry correct automatically with a working one-tap Undo; a spoiled item is removed in one gesture; pantry survives a month of casual use without a full re-inventory.
+## Phase 3 — Cooking and household history
 
-## Phase 5 — Meal planning & AI assistant
+- Phase-owned migrations for cook logs and immutable per-cook ingredient snapshots.
+- Cook mode: large step view, ingredient checklist, multiple timers, local current-step/timer recovery, per-step video seek, and safe screen-wake fallback over HTTP.
+- After-cook capture: rating, active + elapsed actual time, servings, actual quantities, and notes.
+- Inbox promotion/archive decision and cook-log timeline; "haven't made in a while" sort.
+- Recipe-scoped Q&A through the configured fast provider; advice cannot mutate the recipe.
+- Manifest/icon/A2HS onboarding without claiming service-worker/offline support on default HTTP.
+- **Exit criteria:** cook a real dinner end-to-end on an actual iPhone; refresh restores current step/timers; after-cook data and promotion are correct; a real Safari/A2HS/Shortcut test passes in addition to automation.
 
-- Week board (drag-drop/tap-assign), note entries, per-entry servings, saved menus, plan→shopping-list generation, iCal export.
-- Chat assistant: SSE streaming, prompt-cached pantry+cookbook context, strict tools, proposal cards (meal plan / shopping list / pantry updates with accept-edit-dismiss).
-- Conversational pantry updates; "use it up" rail.
-- Big-event mode: menu proposal, N-scaling, combined list, prep timeline.
-- **Exit criteria**: "plan next week's dinners" produces an accepted plan + shopping list in one short chat; "what can I make in 30 minutes" answers from real pantry state.
+## Phase 4 — Pantry and practical shopping
 
-## Phase 6 — Polish & resilience
+- Phase-owned migrations for locations, pantry items, exact/gauge/binary modes, adjustment history, recipe mapping/trust state, shopping lists/items/source rows.
+- Pantry CRUD, inline location creation, stock-take mode, staples/thresholds, one-gesture used-up/spoiled/correction, and restock flow.
+- Review-first cook deductions: only confirmed compatible mappings qualify; exact canonical math; ambiguous/approximate/alternative lines are skipped or reviewed; confirmed decisions remembered; optional auto-apply per trusted recipe; edits revoke affected trust; Undo writes compensating adjustments.
+- Pantry-aware recipe matching and "use it up" ranking.
+- Deterministic shopping generation/aggregation that preserves manual lines/check state and shows provenance.
+- Mobile home-Wi-Fi list plus **Take shopping list with me**: copy, share, print/text/JSON, and documented Apple Shortcut/native-list export.
+- No custom offline outbox/sync in v1.
+- **Exit criteria:** ten real recipes complete a first-cook review; repeated trusted cooks require no unnecessary confirmation; wrong mappings never auto-deduct; Undo/history work; pantry remains useful through a month of casual use; one weekly shop succeeds through native/text export.
 
-- Nightly `VACUUM INTO` backups to a different physical device + rotation + restore doc (tested!); nightly JSON/markdown export of the cookbook; optional Litestream.
-- Admin dashboard: job health, AI spend, yt-dlp version, backup status, DB size.
-- Photo import (Claude vision). Semantic search (fastembed + sqlite-vec) if FTS5 feels limiting.
-- Family onboarding guide; optional-upgrades appendix in `deploy/` (mkcert HTTPS for wake-lock API/SW/Android share; Tailscale for remote access) — documented, not installed.
-- Performance pass against budgets (FCP <1s LAN, reads <100ms); Lighthouse performance audit.
-- **Backlog (post-v1)**: scale-by-anchor-ingredient, sub-recipes, collections, nutrition via FDC ids, TikTok/Instagram ingestion (needs Whisper — revisit hardware), barcode scanning (needs the HTTPS upgrade for camera access), Android `share_target` (ditto), Home Assistant hooks, multi-image recipes.
+## Phase 5 — Meal planning and assistant
 
-## Testing conventions
+- Phase-owned migrations for meal plans, saved menus, household preferences, AI conversations, versioned proposals, and usage records.
+- Structured household constraints: allergies/exclusions (hard), dislikes/diet/equipment/time/leftover/tier preferences (soft).
+- Week board, recipe/note/leftover entries, per-entry servings, saved menus, deterministic plan→shopping generation, and iCal export.
+- Assistant uses deterministic hard filtering and a compact candidate set before model reasoning; full details are fetched through strict read-only tools.
+- Versioned proposal cards for meal plans, pantry updates, and event menus. Acceptance revalidates current data and uses deterministic services in one idempotent transaction.
+- Big-event mode: per-ingredient scaling behavior, max batch size, oven/burner/equipment capacity, make-ahead/holding/storage metadata, deterministic combined list, and AI-drafted timeline validated against recipe steps/capacity.
+- **Exit criteria:** "plan next week's dinners" respects a deliberately conflicting hard allergy and soft preference, produces an accepted plan + correct shopping list, and remains deterministic on quantities; a company meal exposes an intentional oven-capacity conflict rather than producing an impossible schedule.
 
-- pytest + httpx TestClient; golden-file tests for the extraction schema (recorded yt-dlp/scraper fixtures — never hit the network in tests); property tests for scaler & aggregation math (round-trips, fraction rendering); a **write-contention test** (simultaneous ingest + shopping sync must not stall the web process); Playwright smoke for cook mode/wake-lock and the shopping island (Chromium is fine; note real iOS quirks are hand-tested).
-- Every LLM call mockable; CI runs fully offline.
+## Phase 6 — Resilience and evidence-driven polish
 
-## What "lightweight at idle" means, measurably
+- Complete backup sets: `VACUUM INTO` DB + images/originals + artifacts + manifest/checksums to a separate physical device; 14 daily + 8 weekly; `PRAGMA integrity_check`; automated restore smoke test; bare-machine restore document.
+- Nightly JSON/Markdown cookbook export.
+- Admin dashboard: queue health, categorized failures, selected provider/model capabilities, spend/caps, yt-dlp installed/latest-known version, DB/data size, last healthy backup, last restore test.
+- Performance and accessibility pass against budgets; real iPhone + desktop regression checklist.
+- Photo import through the selected vision-capable provider.
+- Only if evidence justifies them: semantic search (fixed 384 dimensions), optional trusted HTTPS, or Tailscale.
+- **Exit criteria:** restore onto a clean test directory and browse/cook with images; failed staged update rolls back safely; budgets and accessibility gates pass.
+
+## Post-v1 proposals requiring a new decision
+
+- **Automatic cross-provider fallback:** only after tool-loop/idempotency/double-spend tests define safe transition points.
+- **Custom offline shopping sync:** only after native/text export proves inadequate; write the operation/conflict/tombstone/staleness protocol and two-device matrix before JS.
+- **Semantic search:** only after logged FTS5 misses justify ONNX/sqlite-vec complexity.
+- Scale-by-anchor ingredient, sub-recipes, collections, nutrition/FDC, TikTok/Instagram ingestion, barcode scanning, Android share target, Home Assistant hooks, and multi-image recipes.
+
+## Verification conventions
+
+- pytest + HTTP client tests; property tests for exact quantity conversion, scaling, package rounding, aggregation, and deduction/undo.
+- Golden provider contract tests with recorded payloads; all CI model calls mocked/offline.
+- Recorded ingestion fixtures; never depend on live websites/YouTube in CI.
+- Migration tests from fresh and every retained release snapshot.
+- Write-contention test: worker activity cannot stall recipe reads or pantry/shopping writes beyond the response budget.
+- Playwright for core browser flows plus mandatory hand testing on real iOS Safari/A2HS/Shortcuts at phase exits.
+- Backup success means verified complete manifest + integrity check + successful restore smoke test, not merely file creation.
+
+## Measurable budgets
 
 | Budget | Target |
 |---|---|
-| Infrastructure cost | $0 — Claude API is the only recurring cost |
-| Idle RSS (web + worker) | < 200 MB total |
-| Idle CPU | ~0% (no polling loops server-side; Huey periodic tasks only) |
-| First contentful paint, phone on LAN | < 1s |
-| Read endpoints | < 100 ms |
-| Ingest job (YouTube, transcript path) | < 60 s end-to-end |
+| Hosting infrastructure | $0; optional AI API usage only |
+| Idle RSS (web + worker) | <200 MB total target; investigate before accepting >250 MB |
+| Idle CPU | ~0%; no server-side polling loops |
+| First contentful paint, phone on LAN | <1 second |
+| Read endpoints | <100 ms p95 on the N95 at family-scale fixtures |
+| Ingest acknowledgment | <2 seconds |
+| YouTube transcript-path ingest | <60 seconds target, with visible stage/retry when upstream is slow |
+| Backup freshness | <48 hours and last restore smoke test <7 days |

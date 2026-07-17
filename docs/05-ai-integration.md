@@ -2,9 +2,9 @@
 
 AI is a first-class feature, not a bolt-on: it powers ingestion (extraction, TLDR, normalization), the meal-planning assistant, and conversational pantry updates. Everything runs through a hosted API — **no local LLM** (measured llama.cpp on the N95-equivalent N100: a 1.5B model degrades to ~1 tok/s with modest context; a 10K-token transcript extraction would take tens of minutes). Local compute is used only for embeddings, and only optionally.
 
-## 1. Two providers behind one interface
+## 1. Selectable providers behind one capability interface
 
-The app supports **both Anthropic (Claude) and OpenAI**, chosen per task in settings. Either key alone is enough to run everything; with both configured, each becomes the other's automatic fallback. This is the Mealie/Tandoor pattern (a single client with a configurable provider + per-feature flags), and it buys three things: resilience when one provider has an outage or you hit its spend cap, freedom to put the cheapest capable model on each task, and a first-party **embeddings** option (Anthropic has no embeddings API; OpenAI's `text-embedding-3-small` fills that gap for semantic search — see §5).
+The app supports **Anthropic (Claude) and OpenAI**, selected per task in settings. Either key can run extraction/chat when a capable model is configured; OpenAI additionally provides embeddings. V1 deliberately does **not** fail over automatically between providers. A timeout in a read-only extraction may safely be retried, but switching providers inside a streaming/tool loop risks duplicated calls, proposals, spend, and inconsistent conversation state. Automatic fallback is post-v1 and requires idempotency tests around every transition.
 
 ### Provider abstraction (`app/ai/`)
 
@@ -12,74 +12,74 @@ A thin interface with two implementations wrapping each vendor's native SDK — 
 
 | Capability | Anthropic | OpenAI | Normalized to |
 |---|---|---|---|
-| Structured extraction | `messages.parse()` + Pydantic / `output_config.format` json_schema | `responses`/`chat.completions` with `response_format` json_schema, `strict: true` | `extract(schema, prompt) -> validated Pydantic object` |
+| Structured extraction | Native structured-output API wrapped by adapter | **Responses API** with `text.format` strict JSON schema and `store: false` | `extract(schema, prompt) -> validated Pydantic object` |
 | Streaming chat + tools | `messages.stream()`, tool-use blocks, SDK tool runner | streaming `responses` with function calling | `stream_chat(messages, tools) -> event stream` |
-| Embeddings | *(none — falls back to OpenAI or local)* | `embeddings.create()` | `embed(texts) -> list[vector]` |
+| Embeddings | *(none—use OpenAI, local, or off)* | `embeddings.create(dimensions=384)` | `embed(texts) -> list[vector[384]]` |
 
-Both structured-output paths require `additionalProperties: false` on every object and reject numeric min/max constraints — so the same Pydantic schema serializes to both, and quantity validation stays in app code either way. Tool/function-call JSON shapes differ; the adapter maps them to one internal `ToolCall` type. **Golden-file tests per provider** guard the two serializations (this is the one place a dual-provider design can silently drift — see the model/effort note in the build plan).
+Provider wire shapes stay inside the adapters. The internal schema uses strings for decimal quantities and validates ranges in application code. Tool/function-call shapes map to one internal `ToolCall` type; tools are strict and read-only during generation. **Golden contract tests per provider** cover serialization, refusal, truncation, streaming events, usage accounting, and tool-call normalization.
 
 ### Task routing (settings, not code)
 
-Config maps each task → `provider/model`, with an optional fallback:
+Config maps each task to one `provider/model`:
 
 ```
 [ai.keys]
 anthropic = "sk-ant-..."      # either or both
 openai    = "sk-..."
 
-[ai.routing]                  # provider/model  (+ optional fallback)
-extract   = "anthropic/claude-haiku-4-5"      fallback "openai/gpt-..."
-tldr      = "anthropic/claude-haiku-4-5"
-repair    = "anthropic/claude-haiku-4-5"
-chat      = "anthropic/claude-sonnet-4-6"     fallback "openai/gpt-..."
-embed     = "openai/text-embedding-3-small"   # or "local/all-MiniLM-L6-v2" or "off"
+[ai.routing]
+extract = "anthropic/<verified-extraction-model>"
+tldr    = "anthropic/<verified-fast-model>"
+repair  = "anthropic/<verified-fast-model>"
+chat    = "openai/<verified-reasoning-model>"
+embed   = "openai/text-embedding-3-small"   # or "local/all-MiniLM-L6-v2" or "off"
 ```
 
-Model IDs and pricing are **config, not code** — verify current IDs/prices at build time (OpenAI's especially, since this plan didn't research them fresh); the app must not hardcode a model string anywhere. Default routing favors Claude for extraction and reasoning (best structured-output reliability in the research) and OpenAI for embeddings; a user with only one key gets that provider for everything embeddings-capable and local/off embeddings otherwise.
+Model IDs, capability metadata, context/output limits, and pricing are **versioned config, not scattered code**. Verify them at build/configuration time. The Settings UI offers only models known to support the requested capability, while an advanced override remains possible. A startup self-test validates configured extraction/chat models without spending more than a tiny bounded call.
 
 ### Cost posture & guardrails
 
-| Task | Default model | Why |
+| Task | Model class | Why |
 |---|---|---|
-| Recipe extraction, TLDR, ingredient repair | Claude Haiku (`claude-haiku-4-5`, $1/$5 per MTok) | Cheap, fast, 200K context swallows any transcript |
-| Meal-planning chat / big-event planning | Claude Sonnet (`claude-sonnet-4-6` or Sonnet 5, $3/$15) | Needs real reasoning over pantry + cookbook |
-| Embeddings (optional) | OpenAI `text-embedding-3-small` ($0.02/1M) | First-party vectors; Anthropic has none |
-| One-off backfills | provider Batch API | ~50% off, async |
+| Recipe extraction, TLDR, ingredient repair | Configured fast model with strict structured output | Low cost/latency and sufficient transcript context |
+| Meal-planning chat / big-event planning | Configured stronger reasoning model | Multi-constraint selection and scheduling need more reasoning |
+| Embeddings (optional, post-v1) | OpenAI `text-embedding-3-small` at 384 dimensions or local MiniLM | One fixed vector contract |
+| One-off backfills | Provider batch API where supported | Async/discount behavior verified at execution time |
 
-Realistic family usage (≈30 extractions + 100 chat turns/month): **$3–8/month**, whichever provider mix. Extraction ≈ $0.01–0.03/recipe even with a 15K-token transcript. Guardrails (Tandoor's pattern):
+Family usage should be inexpensive, but estimates are not guarantees and model prices change. Show a live estimate from versioned pricing config and label it with its last-verified date. Guardrails:
 - Every call logged to `ai_usage_log` (provider, model, purpose, tokens, est. cost).
-- Configurable monthly spend cap **per provider**; when exceeded, route falls to the other provider if configured, else ingestion drops to schema.org-only parsing and chat politely declines.
+- Configurable monthly spend cap **per provider** checked before calls, plus per-call `max_output_tokens`/equivalent limits. When exceeded, schema.org ingestion still works and AI-dependent work pauses with a clear retry/configure action.
 - Settings page shows month-to-date spend per provider.
 - Per-feature and per-provider enable flags (Mealie's `*_ENABLE_*` switches).
+- Usage logging happens on success and failure. Cost uses integer micro-USD, not binary floating point.
 
 ## 2. Extraction (see `04-ingestion-pipeline.md`)
 
-- **Structured outputs** via the provider abstraction's `extract(schema, prompt)` — guaranteed schema-valid JSON on either provider (Claude `messages.parse()` / OpenAI `response_format` strict json_schema). Schema rules that satisfy both: `additionalProperties: false` everywhere; no numeric min/max in the schema (validate quantities in app code).
-- Temperature 0. Handle truncation/refusal stop reasons uniformly in the adapter.
-- Both SDKs auto-retry 429/5xx — no custom retry code; the adapter adds the cross-provider fallback on hard failure or spend-cap trip.
+- **Structured outputs** via `extract(schema, prompt)`. OpenAI uses Responses `text.format` and `store: false`; Anthropic uses its native structured-output path. Parse to the same Pydantic object and run semantic validation afterward.
+- Use deterministic settings where supported. Handle truncation, refusal, timeout, and invalid semantic values uniformly.
+- Retry only idempotent calls with bounded exponential backoff and jitter. Respect provider retry hints. No automatic cross-provider retry in v1.
+- Store provider/model/request id, prompt/schema version, token use, and artifact hashes with every extraction run.
 
 ## 3. Meal-planning assistant
 
 ### Architecture: hybrid context + small tool set
 
-The family's data is small enough to *stuff the summary and tool the detail*:
+Use **deterministic retrieval first, model reasoning second**:
 
-- **Prompt-cached system block** contains:
-  - Stable instructions + tool definitions (breakpoint 1 — never changes, always a cache hit)
-  - **Pantry snapshot** (~1–2K tokens: every item with location, quantity/gauge, staple flag, expiry)
-  - **Cookbook index** (~40–60 tokens/recipe: id, title, tier, total & our-kitchen minutes, TLDR, key ingredients, last-cooked date, rating) (breakpoint 2 — invalidated only when pantry/cookbook change)
+- Stable instructions and tool definitions form the cacheable prefix where the provider supports it.
+- For ordinary questions, application code first applies hard filters (allergies/exclusions, time, equipment, tier, pantry coverage) and supplies a compact ranked candidate set rather than the entire cookbook.
+- Pantry summaries include only fields relevant to the question; exact rows remain available through tools.
 - **Tools** (strict mode, via the SDK tool runner — don't hand-roll the loop):
   - `get_recipe_details(recipe_id)` — full ingredients/steps for scaling math
   - `search_recipes(query, max_minutes?, tier?)` — FTS5 (later hybrid with vectors)
-  - `propose_meal_plan(entries)` — returns a structured plan the UI renders as an accept/edit card
-  - `propose_shopping_list(items)` — same pattern
-  - `update_pantry(changes)` — **only ever invoked after explicit user confirmation in the UI**
+  - `create_meal_plan_proposal(entries)` — validates recipe IDs/constraints and writes a pending proposal record, not the real plan
+  - `create_pantry_update_proposal(changes)` — pending proposal only
 
-Most queries ("what can I make in under 30 minutes with what we have?") answer in a single call with zero tool round-trips because the index + pantry are already in context. Tool descriptions written prescriptively ("Call this when the user asks...") — it measurably improves trigger rates.
+The model never calculates authoritative ingredient totals or mutates pantry/plan/shopping tables. On proposal acceptance, deterministic services re-validate current data, calculate quantities, and apply one idempotent transaction. A stale proposal is refreshed instead of forced through.
 
 ### The proposal pattern (AI never silently mutates data)
 
-Assistant responses may include structured proposal blocks (a meal plan, a shopping list, a scaled event menu). The UI renders them as cards with **Accept / Edit / Dismiss**. Accepting writes to the real tables and stamps the plan "AI-drafted, accepted by <user>". This keeps trust high and mistakes cheap.
+Assistant responses may create separate versioned proposal records (meal plan, pantry update, event menu). The UI renders **Accept / Edit / Dismiss**. The chat message contains presentation text, not embedded authoritative JSON. Acceptance records who/when/model and uses an idempotency key.
 
 ### Flagship prompts to design for
 
@@ -103,20 +103,27 @@ SSE relay: browser POSTs the chat message → FastAPI `StreamingResponse(media_t
 
 ## 4. Recipe Q&A in cook mode
 
-"Can I substitute crème fraîche?" asked from within a recipe: one Haiku call with the full recipe as context. Cheap, high-delight. Include the user's cook-log history for that recipe ("last time you noted it needed more salt").
+"Can I substitute crème fraîche?" uses the configured fast Q&A model with the full recipe and only relevant cook-log notes. The response is advice, never a silent recipe edit.
 
 ## 5. Semantic search (phase 3+)
 
 Three embedding sources, selected by the `embed` route:
-- **OpenAI `text-embedding-3-small`** ($0.02/1M, 1536-dim) — the natural choice once an OpenAI key is present; near-free at this scale.
+- **OpenAI `text-embedding-3-small` with `dimensions=384`** — matches the local vector contract.
 - **Local `all-MiniLM-L6-v2`** via **fastembed** (Qdrant's ONNX runtime lib — no PyTorch; ~150–300 MB RSS only while embedding, $0 and offline, 384-dim) — the zero-key, zero-cost path.
 - **`off`** — FTS5 keyword search only.
-- Vectors in **sqlite-vec** `vec0` table; brute-force KNN is sub-millisecond at family scale. Pin the pre-1.0 version; **store the embedding model name with each vector** so a provider/model swap triggers a clean re-embed (dimensions differ: 1536 vs 384).
+- Vectors use a fixed 384-dimensional sqlite-vec table. Store provider/model/dimension with each vector and rebuild atomically on a model change. Never mix incompatible dimensions in one table.
 - Embed `title + tldr + ingredient names + tags`; re-embed on edit via Huey.
-- Honest scoping: FTS5 is probably sufficient below ~500 recipes — ship vectors only when "vibes" search ("something cozy and warming") is actually missed.
+- Honest scoping: FTS5 is likely sufficient at family scale. Ship vectors only after logged real queries show meaningful misses such as "something cozy and warming."
 
 ## 6. Failure & offline behavior
 
 - No internet ⇒ browsing, cooking, pantry, shopping lists all work (no AI in the read path). Ingestion queues and retries; chat shows a friendly offline notice.
-- Anthropic outage ⇒ same degradation. schema.org fast-path ingestion still works fully.
-- All AI features individually toggleable in settings (Mealie's `OPENAI_ENABLE_*` pattern).
+- Selected provider outage ⇒ schema.org fast-path ingestion still works; AI-dependent jobs remain retryable and visible rather than silently switching provider.
+- All AI features and providers are individually toggleable in settings.
+
+## 7. Privacy and remote retention
+
+- API keys remain server-side in the root-owned environment file.
+- OpenAI Responses calls explicitly set `store: false`. Provider request bodies exclude authentication tokens, private operational logs, and unrelated household data.
+- Send the minimum recipe/pantry context needed for the task. Household allergies are necessary planning constraints; names, device labels, and storage locations usually are not.
+- Raw provider responses are not treated as the source of truth. Store only the validated result, request metadata, and enough redacted diagnostics to reproduce a failure from local artifacts.

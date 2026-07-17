@@ -15,7 +15,7 @@ The product must be **equally good at three jobs**:
 
 - **Household members** on the home LAN only — the app is used at home, on the same Wi-Fi as the Ethernet-connected mini PC. Small trusted group; no public internet exposure; no remote access in scope (a free Tailscale upgrade path exists if that ever changes).
 - Mixed devices: iPhones (share-sheet ingest via Apple Shortcuts, browsing, cook mode), desktop PCs (paste-link ingest, browsing, bulk editing).
-- Auth: lightweight. A shared ingest token for the Shortcut endpoint; simple named profiles (no passwords required on LAN) so ratings/notes can be attributed. Avoid heavyweight account systems.
+- Auth: lightweight. Named profiles (no passwords required on LAN) attribute ratings/notes. Each Shortcut/device receives a separate revocable **ingest-only scoped token**; no shared household token and no admin capability in an ingest token.
 
 ## 3. Core Features
 
@@ -30,9 +30,11 @@ The product must be **equally good at three jobs**:
 
 Ingestion requirements:
 - **Fire-and-forget:** the phone/PC gets an immediate "got it" acknowledgment; parsing happens in a background job. New recipes appear in the Test Recipes inbox when ready (with a processing state visible in the UI).
-- Every ingested recipe stores its **provenance**: source URL, source type, thumbnail, channel/site name, raw extracted text (so a recipe can be re-parsed later with better prompts without re-fetching).
+- Every ingested recipe stores its **provenance**: normalized source URL, source type, thumbnail, channel/site name, immutable raw artifacts, extractor version, AI provider/model, prompt/schema version, and extraction confidence.
+- Ingestion is **idempotent and crash-safe**. Resubmitting the same normalized URL or retrying a timed-out job cannot silently create a second recipe.
 - Failures are visible and retryable from the UI (e.g., video had no captions; site blocked scraping).
-- Duplicate detection: warn when ingesting a URL that already exists.
+- Duplicate detection warns and links to the existing recipe; an explicit "import another version" override is available.
+- **Re-extract never overwrites edits.** It creates a field-by-field comparison draft that the user can accept selectively.
 
 ### 3.2 Recipe Sheet (the heart of the product)
 
@@ -40,9 +42,9 @@ Every recipe has:
 - **Title, hero image/thumbnail, source link.**
 - **TLDR** — a 1–3 sentence plain-language summary of the whole method, e.g. for a pasta: *"Cut some aromatics, cook them down with some chilies, blend down some tomatoes, throw them in, reduce, then add butter and parmesan and serve with boiled pasta."* Auto-generated at ingest; user-editable.
 - **Ingredients** — each parsed into `quantity / unit / item / preparation note` (e.g. `2 | cloves | garlic | minced`), while always preserving the original text string as written.
-- **Steps** — numbered, concise, each step optionally linked to the ingredients it uses.
-- **Times** — prep / cook / total. Auto-estimated at ingest, **user-adjustable after actually cooking it** ("the video said 30 min, it really takes 50"). Keep both: claimed time and our-kitchen time.
-- **Servings + scaler** — recipes default to their stated yield (commonly 4). An interactive scaler (2/4/6/8/custom, including big-event numbers like 24) recomputes ingredient quantities live with sane math: fraction-friendly display (1½ cups, not 1.5000), unit-aware scaling, and flagged "to taste"/non-scaling items (salt, oil for frying). Scaled view is ephemeral by default; user can save a scaled copy.
+- **Steps** — numbered, concise, with a many-to-many link to the ingredients they use (including divided quantities used in several steps).
+- **Times** — claimed prep / cook / total plus **active effort vs elapsed time** and our-kitchen actuals. Auto-estimated at ingest, user-adjustable after cooking ("the video said 30 min, it really takes 50, but only 20 minutes are hands-on").
+- **Servings + scaler** — recipes default to their stated yield. An interactive scaler (2/4/6/8/custom, including big events) recomputes quantities with exact decimal math, fraction-friendly display, unit awareness, and per-ingredient behavior: `linear`, `fixed`, `to_taste`, or `round_to_package`. Scaled views are ephemeral; v1 does not clone near-duplicate "scaled copies".
 - **Tier** — `Meal Prep` (standard weekly staples) / `Family` (nice meals for us) / `Company` (the nicest meals I can make for guests). Plus free-form tags (cuisine, protein, course, equipment like "instant pot").
 - **"What I actually used"** — per-ingredient, per-cook notes on real quantities used (planned vs actual), feeding pantry deduction and future scaling wisdom.
 - **Cook log** — every time the recipe is made: date, who cooked, servings made, actual time, rating, free-text notes ("doubled the chilies, kids loved it"). This history is what makes it *our* cookbook.
@@ -62,25 +64,26 @@ Every recipe has:
 - **Ease of use is the make-or-break requirement.** Stock tracking fails when it's a chore. Design principles:
   - Adding an item is one search-with-autocomplete + one tap on a location.
   - Quantities are optional and fuzzy by default (`plenty / some / low / out` is a valid mode) with exact counts available where they matter (cans, boxes).
-  - **Automatic cook-through deduction**: marking a recipe cooked automatically deducts its ingredients from the pantry (using "what I actually used" if captured, else the scaled recipe amount). It applies silently by default and shows a reversible summary — the bot's per-ingredient defaults are all user-editable and remembered per recipe, and there's a global "review before applying" option for anyone who wants the confirm step.
+  - **Trust-building cook-through deduction**: the first cook of a recipe shows proposed deductions for review. Confirmed pantry mappings and opt-outs are remembered. Once a recipe is trusted, the user may enable auto-apply for that recipe; every batch remains summarized, editable, and reversible.
   - **Remove / used-up / spoiled**: any item can be taken out of the pantry in one gesture (things go bad, get finished off-recipe, or were miscounted), with an optional reason. This is the escape valve that keeps the approximate pantry honest without a chore.
   - Shopping list integration: `out`/below-threshold staples flow onto the shopping list automatically; checking items off the shopping list offers to add them back into pantry locations.
 - **Pantry-aware recipe matching**: every recipe shows a "you have X of Y ingredients" indicator; a "cook from what we have" browse mode.
 
 ### 3.5 Meal Planning & Shopping
 
-- **Weekly meal plan board** — assign recipes (or leftovers/eating-out placeholders) to days. Drag-drop on desktop, tap-assign on mobile.
+- **Weekly meal plan board** — assign recipes (or leftovers/eating-out placeholders) to days. Drag-drop on desktop, tap-assign on mobile. Structured household constraints include allergies/hard exclusions, dislikes, dietary preferences, available equipment, weekday time limits, and desired leftovers.
 - **AI-assisted plan building** (see 3.6) seeded from pantry contents, tier balance ("3 meal-prep + 1 family nice meal"), and time budgets per weekday.
-- **Shopping list** — generated from (meal plan ingredients) − (pantry on hand) + (low staples); aggregated across recipes ("3 recipes need onions → 5 onions total"); organized by store aisle/category; check-off UX on a phone in the store; manual add.
-- **Big-event mode** — plan a multi-dish menu for N guests: the AI proposes a menu (mix of Company-tier dishes), scales every recipe to N, builds a combined shopping list and a prep timeline ("day before: braise; morning-of: dessert").
+- **Shopping list** — generated from (meal plan ingredients) − (pantry on hand) + (low staples); deterministically aggregated across recipes; organized by aisle/category; manual add; one-tap copy/share and optional Apple Shortcut export to a native list. Custom offline reconciliation is post-v1.
+- **Big-event mode** — plan a multi-dish menu for N guests: the AI proposes recipe IDs and a schedule; application code scales quantities and builds the combined list. The plan accounts for batch limits, oven/burner capacity, make-ahead suitability, holding, and storage—not only linear serving arithmetic.
 
 ### 3.6 AI Integration
 
-A first-class assistant with access to the cookbook and pantry as tools/context, backed by **either Anthropic (Claude) or OpenAI — the owner supplies one or both keys** and picks which provider/model runs each task; with both configured, each is the other's automatic fallback:
+A first-class assistant with access to cookbook and pantry tools, backed by **Anthropic (Claude) and/or OpenAI**. The owner selects a provider/model per task. V1 does not automatically cross providers during a failed tool loop; fallback is enabled later only after both adapters pass identical contract and idempotency tests:
 - **Extraction**: video/webpage → structured recipe JSON (the ingest bot).
 - **TLDR generation** and time estimation at ingest.
 - **Chat**: "What can I make in under 30 minutes with what we have?", "Build me a meal plan for next week, two vegetarian nights", "What should I make for 8 guests Saturday — impressive but mostly make-ahead?"
 - **Actions from chat**: the assistant can *propose* structured artifacts (a meal plan, a shopping list, a scaled menu) that the user accepts with one tap — never silently mutate data.
+- **Deterministic authority**: the model selects and explains; application services own recipe filtering, quantity math, unit conversion, pantry deduction, shopping aggregation, and writes.
 - **Recipe Q&A while cooking**: "can I substitute crème fraîche?", asked from within a recipe's cook mode with the recipe as context.
 - Cost posture: cheap fast model for extraction/TLDR; smarter model for planning chat; optional first-party embeddings (OpenAI) for semantic search. Expected usage is low (a family), so monthly API cost should be trivial — but track it per provider, with a spend cap.
 
@@ -89,7 +92,7 @@ A first-class assistant with access to the cookbook and pantry as tools/context,
 - **Idle-light**: near-zero CPU at idle on the N95; total RSS well under ~500 MB idle. Burst CPU during ingest/AI calls is fine.
 - **Fast**: server on LAN, page interactions should feel instant (<100 ms server responses for reads); no heavyweight client framework payloads on every page.
 - **Responsive & beautiful**: one web app, mobile-first layouts that scale up to desktop; installable as a PWA (home-screen icon, standalone chrome). Dark mode. It should look like a product you'd pay for, not an admin panel.
-- **Data is sacred**: SQLite with WAL + automated backups (local snapshot rotation + optional off-box copy). Recipes and cook logs must never be lost. Export everything (JSON + printable/markdown).
+- **Data is sacred**: SQLite with WAL + automated backups to a separate physical device. Backups cover the database, uploaded originals, recipe images, and ingestion artifacts; integrity checks and a restore drill are mandatory. Export everything (JSON + printable/markdown).
 - **Simple ops**: two systemd units, auto-start on boot, painless updates. **Zero infrastructure cost**: no domain, no certificates, no cloud services — the only recurring cost is AI API usage (Anthropic and/or OpenAI, ~$3–8/month).
 - **No cloud dependency for core browsing**: if the internet is down, browsing/cooking/pantry still work; only ingestion and AI chat need the network.
 
@@ -99,6 +102,8 @@ A first-class assistant with access to the cookbook and pantry as tools/context,
 - Nutrition tracking / calorie math (schema leaves room; not a launch feature).
 - Grocery-store price integration / online grocery ordering.
 - Native iOS/Android apps — the PWA + Shortcuts covers it.
+- Custom multi-device offline shopping synchronization — start with native copy/share/export and add sync only if real use justifies it.
+- Semantic vector search before FTS5 has demonstrably failed real household queries.
 
 ## 6. Success Criteria
 

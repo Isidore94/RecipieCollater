@@ -28,29 +28,41 @@ Global: instant-search overlay (FTS5, keystroke-fast on LAN), "+" action (paste 
 ## 3. Key screens
 
 ### Recipe sheet (the heart)
-- Hero image, title, source badge (YouTube channel avatar / site favicon → links to origin), tier badge, rating stars, time row (claimed vs *our kitchen* time when set — shown as "45 min · ours: 60"), TLDR in a highlighted "in short" block.
-- **Serving scaler**: segmented 2 / 4 / 6 / 8 / custom, right above ingredients. Two layers: an **instant client-side preview** (a few lines of Alpine multiplying `data-qty`/`data-base-servings` attributes and rendering kitchen fractions — zero round trip, feels native) over the **authoritative server-rendered fragment** (htmx swap; the math lives in one tested Python function). Non-scalable lines render as written with a subtle "as needed" tag. "Show original amounts" toggle. "Save as scaled copy" under overflow menu.
+- Hero image, title, source badge, tier, rating, and a time row that distinguishes **active effort** from **elapsed time** and source claims from our-kitchen actuals (for example, "20 min active · 60 min elapsed · ours: 75"). TLDR sits in a highlighted "in short" block.
+- **Serving scaler**: segmented 2 / 4 / 6 / 8 / custom, right above ingredients. An instant client-side preview may render from server-supplied exact decimal attributes, but the authoritative fragment comes from one tested Python service. Lines visibly distinguish `linear`, `fixed`, `to taste`, and package-rounded behavior and explain any rounding. "Show original amounts" is included; v1 does not create scaled-copy duplicates.
 - **Ingredients list**: checkbox per line (mise-en-place state, local to device), quantity + unit + food + note; ingredient-group headers ("For the sauce"); low-confidence parses show a dotted underline inviting a one-tap fix; pending-food chips ask "is 'green onion' the same as scallion?".
 - **Steps**: numbered cards; durations inside step text are auto-linked → tap spawns a named timer; steps with `video_seconds` show a tiny play glyph → seeks the embedded player.
 - **Cook mode** button → full-screen step-by-step: one step per screen, huge type, swipe/tap to advance, persistent timer tray, ingredient amounts inline-expandable per step, embedded YouTube player collapsed at top for video recipes. **Screen wake**: the silent-looping-video technique (NoSleep pattern) is the default — it works over plain HTTP on iOS Safari; `navigator.wakeLock` is tried opportunistically in a try/catch (it needs a secure context, so it only activates if the optional HTTPS upgrade is installed) and re-acquired on `visibilitychange`.
-- **After-cook capture** (fires from "I made this" in cook mode or the sheet): rating, actual time (pre-filled with claimed, one slider), "what did you actually use?" quick-adjust list (pre-filled with scaled quantities), note field, then "update pantry?" bulk-confirm screen. This flow is also the **promotion gate**: for inbox recipes it ends with "Keep it? → Add to cookbook / Not for us (archive)".
+- **After-cook capture**: rating, actual active + elapsed time, "what did you actually use?" quick-adjust list, and notes. Pantry deductions appear as a compact review on the first cook; confirmed mappings are remembered and the user may enable auto-apply for this recipe next time. Any skipped/ambiguous lines are explicit. This flow is also the inbox promotion gate.
 - **Cook log** timeline at the bottom of the sheet: every make with who/when/rating/notes.
-- Ask-AI drawer: recipe-scoped Q&A (substitutions, technique).
+- Ask-AI drawer: recipe-scoped Q&A (substitutions, technique), clearly presented as advice rather than an automatic recipe edit.
 
 ### Inbox
-- Cards in arrival order with processing states (skeleton shimmer while extracting), extraction-confidence flags ("thin — needs review"), failure cards with retry, and duplicate warnings.
+- Cards in arrival order with stage/attempt state, extraction-confidence flags, categorized failure cards with retry, and duplicate warnings.
 - Swipe/buttons: **Promote** (opens after-cook capture or straight promote), **Edit**, **Archive**.
+- Re-extract opens a comparison view with current/proposed columns and per-field accept controls; it never overwrites the current recipe on click.
 
 ### Cookbook
 - Filter bar as horizontally scrollable chips on mobile; the "✨ what can I make now?" filter combines pantry match + max time.
 - Collections come later; tiers + tags carry v1 organization.
 
 ### Editor
-- Same form for manual entry and post-import fixes: drag-to-reorder steps/ingredients (SortableJS, the one small JS lib worth its bytes), inline food/unit creation, image upload/replace, raw-source viewer ("what the bot saw") with **Re-extract** button.
+- Same form for manual entry and post-import fixes: drag-to-reorder steps/ingredients, many-to-many step ingredient links (including divided amounts), per-ingredient scaling behavior, inline food/unit creation, image upload/replace, immutable raw-artifact viewer ("what the bot saw"), and **Re-extract to comparison**.
+
+### Pantry deduction review
+- Mobile-first checklist grouped as **will deduct / needs a choice / skipped**.
+- Each editable mapping shows recipe ingredient → pantry item/location, converted amount, and why it is or is not eligible for auto mode.
+- Confirming remembers mappings. "Trust this recipe next time" is explicit and revoked for affected lines when ingredient quantities, food, unit, or scaling behavior changes.
+- Applied summary always offers Undo; Undo writes a compensating history entry.
+
+### Shopping list
+- V1 web list is server-rendered with big checkboxes, aisle groups, provenance, manual add, and checked-items-at-bottom behavior while on home Wi-Fi.
+- A prominent **Take shopping list with me** action offers copy, system share, printable text, and the documented Apple Shortcut/native-list export.
+- Do not imply offline web sync. If later built, its UI must expose last-synced time and conflicts rather than pretending a stale local list is current.
 
 ## 4. Platform integration
 
-- **Home-screen app over plain HTTP**: iOS Add-to-Home-Screen works for any URL — the family gets an icon and standalone chrome via `apple-mobile-web-app-capable` + `apple-touch-icon` + manifest. Service workers require a secure context, so over the default HTTP setup there is **no SW caching** — acceptable because the server is on the same LAN (network-first *is* instant) and the shopping island carries its own localStorage state. If the optional mkcert HTTPS upgrade is installed, a minimal SW (app-shell precache, never `/api`) lights up automatically.
+- **Home-screen app over plain HTTP**: iOS Add-to-Home-Screen supplies an icon/standalone presentation. There is no service worker in the default setup. Shopping is exported to a native/text list before leaving; no UI promises that a killed web tab will work away from home. Optional trusted HTTPS may later enable a minimal app-shell service worker, never an API cache.
 - **iOS specifics**: A2HS instructions shown on the device-onboarding success page; identity lives in the HttpOnly cookie (survives A2HS via the iOS 17.2+ one-time cookie copy; pairing-code fallback screen for cookie-less launches); the ingest path is the Shortcut, not the PWA.
 - **Android** (dormant — household is iPhone+PC): paste box works in any browser today; install prompt + `share_target` activate only with the HTTPS upgrade (see ingestion doc).
 - **Desktop**: same responsive pages stretched to a grid + left rail; keyboard shortcuts (`/` search, `n` new) as low-cost polish.
@@ -61,3 +73,10 @@ Global: instant-search overlay (FTS5, keystroke-fast on LAN), "+" action (paste 
 - Images always WEBP at the right size (300px cards / 1024px sheet / 2048px zoom) with `loading="lazy"` and explicit dimensions (no layout shift).
 - Server responses <100 ms for reads (SQLite on NVMe/SSD at family scale is effectively instant; FTS5 queries are single-digit ms).
 - Mealie's cautionary tale: a heavy Vue SPA reached ~10s first load with only 88 recipes. Server-rendered HTML makes that failure mode impossible.
+
+## 6. Accessibility and real-device gates
+
+- WCAG-minded contrast, visible focus, semantic labels, reduced-motion support, and 44×44 px minimum touch targets on primary cook/pantry controls.
+- All core flows work with keyboard only and without drag-and-drop; drag is enhancement, never the sole interaction.
+- Phase exits require a real iPhone Safari/A2HS/Shortcut pass plus a desktop browser pass. Chromium automation does not validate iOS networking, cookie, wake, or home-screen behavior.
+- Recipe and pantry states are never conveyed by color alone.
