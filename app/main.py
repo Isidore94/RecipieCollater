@@ -23,7 +23,7 @@ from app.auth import (
 from app.config import PACKAGE_DIR, get_settings
 from app.db import connect, run_migrations
 from app.logging_config import configure_logging, get_logger
-from app.routers import admin, auth, health, onboarding, pages, recipes
+from app.routers import admin, auth, health, ingest_api, onboarding, pages, recipes
 from app.services.units import seed_core_units
 
 log = get_logger(__name__)
@@ -96,6 +96,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router)
+    app.include_router(ingest_api.router)
     app.include_router(onboarding.router)
     app.include_router(auth.router)
     app.include_router(admin.router)
