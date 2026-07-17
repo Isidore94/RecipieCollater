@@ -34,8 +34,11 @@ def _tables(conn: sqlite3.Connection) -> set[str]:
 
 def test_real_migration_001_is_only_phase0_tables(tmp_path: Path) -> None:
     """Migration 001 must contain ONLY Phase-0 tables (no speculative later-phase tables)."""
+    only_first = tmp_path / "m"
+    only_first.mkdir()
+    shutil.copy2(MIGRATIONS_DIR / "001_phase0_identity.sql", only_first)
     db_path = tmp_path / "app.db"
-    run_migrations(db_path, backup_dir=tmp_path / "bk")
+    run_migrations(db_path, only_first, backup_dir=tmp_path / "bk")
     conn = connect(db_path)
     try:
         tables = _tables(conn)
@@ -62,12 +65,12 @@ def test_real_migration_001_is_only_phase0_tables(tmp_path: Path) -> None:
 def test_fresh_install_and_idempotent_rerun(tmp_path: Path) -> None:
     db_path = tmp_path / "app.db"
     first = run_migrations(db_path, backup_dir=tmp_path / "bk")
-    assert first.applied == [1, 2, 3]
-    assert first.current_version == 3
+    assert first.applied == [1, 2, 3, 4]
+    assert first.current_version == 4
     second = run_migrations(db_path, backup_dir=tmp_path / "bk")
     assert second.already_current is True
     assert second.applied == []
-    assert current_version(db_path) == 3
+    assert current_version(db_path) == 4
 
 
 def test_snapshot_taken_before_each_apply(tmp_path: Path) -> None:
@@ -210,7 +213,7 @@ def test_real_upgrade_from_phase0_001_to_002(tmp_path: Path) -> None:
         conn.close()
 
     result = run_migrations(db_path, backup_dir=tmp_path / "new-backups")
-    assert result.applied == [2, 3]
+    assert result.applied == [2, 3, 4]
     conn = connect(db_path)
     try:
         columns = {

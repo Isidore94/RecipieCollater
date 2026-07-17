@@ -21,9 +21,10 @@ from app.auth import (
     ingest_auth_handler,
 )
 from app.config import PACKAGE_DIR, get_settings
-from app.db import run_migrations
+from app.db import connect, run_migrations
 from app.logging_config import configure_logging, get_logger
 from app.routers import admin, auth, health, onboarding, pages
+from app.services.units import seed_core_units
 
 log = get_logger(__name__)
 
@@ -35,6 +36,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Idempotent: brings a fresh install up to the current schema and is a no-op when a
     # staged update already migrated the copy. Snapshots are taken before each apply.
     result = run_migrations(settings.db_path, backup_dir=settings.backups_dir / "pre_migration")
+    seed_conn = connect(settings.db_path)
+    try:
+        units_seeded = seed_core_units(seed_conn)
+    finally:
+        seed_conn.close()
     log.info(
         "startup",
         version=__version__,
@@ -42,6 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db=str(settings.db_path),
         schema_version=result.current_version,
         applied=result.applied,
+        units_seeded=units_seeded,
     )
     yield
     log.info("shutdown")
