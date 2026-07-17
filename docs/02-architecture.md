@@ -1,0 +1,100 @@
+# RecipeCollater — Architecture
+
+## 1. Decision summary
+
+| Decision | Choice | Why (short) |
+|---|---|---|
+| Language/framework | **Python 3.12+ / FastAPI**, single uvicorn worker | The entire ingestion ecosystem (recipe-scrapers, yt-dlp, ingredient-parser-nlp) is Python-native; any other language shells out to it anyway |
+| Frontend | **Server-rendered Jinja2 + htmx + Alpine.js** (+ one client-side island for the shopping list) | Fast on LAN, no build toolchain, no hydration bugs, the most reliably LLM-buildable frontend pattern; page weight <150 KB |
+| Datastore | **SQLite** (WAL) — sole store, incl. FTS5 search and later sqlite-vec | Mealie officially recommends SQLite to ~20 users; zero ops; trivial backup |
+| Background jobs | **Huey + SqliteHuey**, one worker process | Durable queue + cron-style periodic tasks, no Redis/Celery |
+| Deployment | **Bare systemd units** (web, worker) behind **Caddy** | dockerd adds ~100 MB RSS and ~2 W idle wakeups on a ~5 W box; systemd gives restart/journald/resource caps for free |
+| TLS & naming | Cheap real domain → A record to the N95's reserved LAN IP → **Caddy DNS-01 Let's Encrypt** | One green-lock URL on LAN and away; required for PWA install, Android share target, camera APIs, Secure cookies |
+| Remote access | **Tailscale**, N95 as subnet router; **no port forwarding, ever** | Free plan covers 6 users; app never faces the public internet |
+| Auth | Named users, **device-session cookie** (400-day, HttpOnly, revocable rows) via magic-link/QR onboarding; separate long-lived **Bearer tokens** for ingest | No passwords for the family; lost phone = revoke one row; Immich/Home Assistant-proven pattern |
+| AI | **Claude API only** (Haiku extract / Sonnet chat), structured outputs, SSE streaming | Local LLM confirmed non-viable on N95 (~1 tok/s with context); API cost ≈ $3–8/month |
+| Python env | **uv** + `pyproject.toml`, dependencies pinned | Reproducible, fast, no Docker needed |
+
+An architecture panel (minimal-footprint vs modern-PWA vs agent-buildable proposals, judged across N95 fit, family UX, and buildability) converged on this same shape; the modern-SPA alternative's only real win — richer client interactivity — is covered by the htmx+Alpine islands pattern at a fraction of the complexity.
+
+## 2. Process model on the N95
+
+```
+systemd
+├── recipecollater-web.service      # uvicorn, 1 worker  (~60–90 MB RSS)
+│     FastAPI: pages (Jinja2+htmx), /api/*, SSE chat relay, static files
+├── recipecollater-worker.service   # huey_consumer, 1–2 threads (~50–80 MB)
+│     ingest jobs, image processing, LLM calls, periodic tasks
+│     (nightly backup, weekly yt-dlp update, embedding refresh)
+└── caddy.service                   # TLS termination, HTTP/2, static caching (~30 MB)
+
+data/recipecollater.db  ← shared by web + worker (WAL; local disk only)
+```
+
+- Total idle budget: **< 250 MB RSS, ~0% CPU** (no server-side polling; htmx polls only while an ingest job is in flight in someone's open tab).
+- Burst behavior: ingest jobs run in the worker at nice priority; the web process never blocks on them. LLM latency is Anthropic's, not ours.
+- Lazy-import heavy libs (yt-dlp, PIL, ingredient-parser) inside worker tasks so the web process stays slim — this is precisely how Mealie's FastAPI app ballooned to 400 MB and ours won't.
+- Watchdog: `Restart=on-failure`, `MemoryMax=512M` per unit as a leak backstop.
+
+## 3. Repository layout (for the builder agent)
+
+```
+recipecollater/
+├── pyproject.toml            # uv-managed; ruff + pytest config
+├── app/
+│   ├── main.py               # FastAPI factory, routers, startup
+│   ├── db.py                 # connection factory (pragmas), migration runner
+│   ├── migrations/           # 001_init.sql, 002_...  (plain SQL, ordered)
+│   ├── auth.py               # cookie/session/token dependencies
+│   ├── models.py             # Pydantic models (incl. extraction schemas)
+│   ├── routers/              # recipes, inbox, pantry, shopping, plan, chat, ingest, admin, share
+│   ├── services/             # scaler, matcher, aggregation, exporter  (pure functions, unit-tested)
+│   ├── ingest/               # fetch.py, web.py, youtube.py, normalize.py, images.py
+│   ├── ai/                   # client.py (usage logging, spend cap), extract.py, assistant.py (tools)
+│   ├── tasks.py              # Huey task definitions
+│   ├── templates/            # Jinja2; partials/ for htmx fragments
+│   └── static/               # css, js (htmx, alpine, shopping-island.js), icons
+├── seed/                     # foods.json, units.json, conversions.json, aliases.json
+├── deploy/                   # systemd units, Caddyfile, install.sh, backup/restore docs
+├── shortcuts/                # Apple Shortcut definition + setup guide
+├── tests/                    # unit + golden fixtures + Playwright smoke
+└── docs/                     # these documents
+```
+
+Conventions: business logic in `services/` as pure functions (LLM-friendly to test); routers thin; every htmx fragment has a full-page fallback route (progressive enhancement, also makes Playwright trivial).
+
+## 4. Request paths
+
+**Page read** (cookbook, recipe sheet): cookie dependency → SQLite read → Jinja2 render (<100 ms). htmx swaps for scaler changes, filters, checkboxes.
+
+**Ingest**: `POST /api/ingest` (Bearer or cookie) → insert `ingest_jobs` → Huey enqueue → 202 `{job_id}`. Worker walks the pipeline (see `04-ingestion-pipeline.md`), updates job status; the inbox partial polls only in-flight jobs.
+
+**Chat**: `POST /chat/send` → SSE `StreamingResponse` relaying `text_delta`s from the Claude stream; tool calls executed server-side; proposal blocks rendered as accept/edit cards on completion.
+
+**Shopping sync**: `POST /api/shopping/sync {device_id, ops[]}` → apply idempotent ops (UUID adds, LWW field updates, tombstone deletes, clamp client timestamps, 3-day staleness cutoff) → return full canonical snapshot (~200 rows max — no delta machinery).
+
+## 5. Security posture
+
+- Never exposed to the public internet: LAN + Tailscale only. Caddy binds the LAN interface; no router port-forwards.
+- Exactly one persistent HttpOnly Secure SameSite=Lax cookie (WebKit 272325 discipline). All tokens stored as SHA-256 hashes; opaque, revocable per device from the admin page.
+- Ingest endpoints validate/normalize URLs (http/https only, no internal-network SSRF); fetches capped 15s/5 MB.
+- `ANTHROPIC_API_KEY` in `EnvironmentFile=/etc/recipecollater/env` (root-owned, 0600) — never in the repo or the browser.
+- CSRF: SameSite=Lax + custom-header check on state-changing htmx routes (one line, belt and braces).
+- Backups tested by restoring: a backup that's never been restored is a hope, not a backup.
+
+## 6. The one client-side island
+
+Everything is server-rendered except the **in-store shopping list**, which must survive dead spots: an Alpine store renders from `localStorage` snapshot ⊕ pending-ops outbox; flushes on mutation, `online`, `visibilitychange→visible`, `pageshow`, and a 15 s visible-interval (`sendBeacon` last-gasp on hide). No Background Sync API (unsupported on iOS), no Workbox, no service-worker caching of `/api` responses (the two-sources-of-truth bug that broke Mealie's offline list). Cook mode gets the same treatment *lite*: current step + timers persist to `localStorage` so an iOS PWA reload (backgrounded apps are killed in seconds) restores exactly where you were.
+
+## 7. Backups & recovery
+
+- Nightly Huey task: `VACUUM INTO data/backups/rc-YYYYMMDD.db`, keep 14; copy latest to a second disk/NAS via rclone if configured.
+- Weekly export: all recipes as JSON+markdown into a dated tarball (data outlives the app).
+- Optional Litestream for continuous off-box WAL replication.
+- `deploy/RESTORE.md` documents the drill; admin page shows last-backup age with a red banner past 48 h.
+
+## 8. Observability (right-sized)
+
+- structlog → journald (`journalctl -u recipecollater-web`).
+- Admin dashboard: job queue health, last-N failures with tracebacks, AI month-to-date spend, yt-dlp version + last self-update, DB size, backup age.
+- No Prometheus/Grafana — the dashboard is the monitoring.
