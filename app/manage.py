@@ -17,9 +17,11 @@ import sys
 from pathlib import Path
 
 from app.config import get_settings
-from app.db import current_version, run_migrations
+from app.db import connect, current_version, run_migrations
 from app.logging_config import configure_logging, get_logger
 from app.services import backup
+from app.services import onboarding as onboarding_service
+from app.services.users import list_users
 
 log = get_logger("manage")
 
@@ -41,9 +43,43 @@ def _cmd_backup() -> int:
     settings = get_settings()
     settings.ensure_dirs()
     result = backup.create_backup(settings)
-    ok = backup.verify_backup(result.backup_dir)
-    log.info("backup", dir=str(result.backup_dir), integrity_ok=result.integrity_ok, verified=ok)
+    ok = backup.backup_is_healthy(result.backup_dir)
+    log.info(
+        "backup",
+        dir=str(result.backup_dir),
+        integrity_ok=result.integrity_ok,
+        restore_tested=result.restore_tested,
+        verified=ok,
+    )
+    # Deliberately last: deploy/update.sh records the exact set used for rollback.
+    print(result.backup_dir)
     return 0 if ok else 1
+
+
+def _cmd_snapshot_db(target: str) -> int:
+    settings = get_settings()
+    backup.snapshot_database(settings.db_path, Path(target))
+    log.info("snapshot_db", source=str(settings.db_path), target=target)
+    return 0
+
+
+def _cmd_recover_admin(user_name: str | None, device_name: str) -> int:
+    settings = get_settings()
+    conn = connect(settings.db_path)
+    try:
+        admins = [user for user in list_users(conn) if user.is_admin]
+        if user_name:
+            admins = [user for user in admins if user.name.casefold() == user_name.casefold()]
+        if len(admins) != 1:
+            choices = ", ".join(user.name for user in admins) or "none"
+            log.error("recover_admin_requires_one_match", matches=choices)
+            return 2
+        issued = onboarding_service.issue_pairing_code(conn, admins[0].id, device_name)
+    finally:
+        conn.close()
+    print(f"Admin: {admins[0].name}")
+    print(f"Pairing code (expires in 15 minutes): {issued.raw}")
+    return 0
 
 
 def _cmd_verify_backup(backup_dir: str) -> int:
@@ -70,6 +106,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("migrate")
     sub.add_parser("backup")
     sub.add_parser("schema-version")
+    p_snapshot = sub.add_parser("snapshot-db")
+    p_snapshot.add_argument("target")
+    p_recover = sub.add_parser("recover-admin")
+    p_recover.add_argument("--user")
+    p_recover.add_argument("--device-name", default="Recovered device")
     p_verify = sub.add_parser("verify-backup")
     p_verify.add_argument("backup_dir")
     p_restore = sub.add_parser("restore")
@@ -84,6 +125,10 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_backup()
         case "schema-version":
             return _cmd_schema_version()
+        case "snapshot-db":
+            return _cmd_snapshot_db(args.target)
+        case "recover-admin":
+            return _cmd_recover_admin(args.user, args.device_name)
         case "verify-backup":
             return _cmd_verify_backup(args.backup_dir)
         case "restore":

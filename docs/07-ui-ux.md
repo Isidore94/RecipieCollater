@@ -4,7 +4,7 @@ One responsive web app, mobile-first, installable as a PWA on both platforms. It
 
 ## 1. Design language
 
-- **Warm minimalism**: generous whitespace, large recipe photography, a serif display face for recipe titles over a clean sans for UI, cream/paper light theme and a true dark theme (auto via `prefers-color-scheme`, manual toggle stored per device).
+- **Warm minimalism**: generous whitespace, large recipe photography, a serif display face for recipe titles over a clean sans for UI, cream/paper light theme and a true dark theme (auto via `prefers-color-scheme`, manual toggle stored per device in local storage—not a second cookie).
 - **Cards everywhere**: the recipe card (photo, title, time chip, tier badge, "have 7/9" pantry chip, rating) is the core visual unit — grid on desktop, single/double column on mobile.
 - Tier badges with consistent color + icon: 🥡 Meal Prep / 🍽 Family / ✨ Company.
 - Micro-interactions via CSS + Alpine (checkbox satisfaction, gauge cycling, card hover) — no JS animation library. Use the **View Transitions API** (htmx supports it natively; pure progressive enhancement) for page morphs and list reordering, which removes most of the "web-page-like vs app-like" gap the design panel flagged as htmx's UX ceiling.

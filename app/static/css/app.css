@@ -56,6 +56,11 @@ a { color: var(--brand); }
 /* ---- App shell ---- */
 .app-shell { min-height: 100dvh; }
 .main { padding: 20px 16px 90px; max-width: 1100px; margin: 0 auto; }
+.mobile-tools {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  margin-bottom: 14px; color: var(--ink-soft); font-size: 13px;
+}
+.mobile-tools select { min-height: 36px; padding: 6px 8px; }
 
 .rail { display: none; }
 .tabbar {
@@ -92,6 +97,7 @@ a { color: var(--brand); }
   .rail-user { font-size: 13px; color: var(--ink-soft); }
   .rail-mini { font-size: 13px; }
   .main { padding: 28px 32px 40px; }
+  .mobile-tools { display: none; }
 }
 
 /* ---- Pieces ---- */
@@ -146,6 +152,8 @@ button:hover { filter: brightness(1.05); }
 .chip { background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
 .chip-tag { color: var(--brand); font-size: 12px; }
 .data { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.table-scroll .data { min-width: 680px; }
 .data th, .data td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .data tr.is-revoked { opacity: .5; }
 .data td form { margin: 0; }

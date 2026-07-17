@@ -1,20 +1,21 @@
 # Restore & bare-machine recovery
 
 A backup is trusted only after it has been **restored** (CONVENTIONS §14). Backups are
-*sets*, not a lone DB file: a `VACUUM INTO` database snapshot plus `images/` and
+*sets*, not a lone DB file: a SQLite online-backup snapshot plus `images/` and
 `artifacts/` trees, described by a checksum `manifest.json`.
 
 ## What a backup set contains
 
 ```
 <backup_root>/<timestamp>-<id>/
-  recipecollater.db     VACUUM INTO snapshot
+  recipecollater.db     transactionally consistent SQLite snapshot
   images/               recipe images (empty until Phase 1)
   artifacts/            immutable ingestion artifacts (empty until Phase 2)
-  manifest.json         schema version, app version, per-file SHA-256, integrity flag
+  manifest.json         schema/release version, complete file hashes, integrity + restore time
 ```
 
-`<backup_root>` is `RC_BACKUP_DIR` (should be a **different physical device** — USB/NAS).
+`<backup_root>` is `RC_BACKUP_DIR` and must already be mounted on a **different filesystem**
+(USB/NAS). The app refuses a missing mount or a destination on the data filesystem.
 
 ## Verify a backup without restoring
 
@@ -22,7 +23,9 @@ A backup is trusted only after it has been **restored** (CONVENTIONS §14). Back
 /opt/recipecollater/current/.venv/bin/python -m app.manage verify-backup <backup_dir>
 ```
 
-Re-hashes every file against the manifest and runs `PRAGMA integrity_check`. Exit 0 = healthy.
+Requires the manifest to list every file exactly once, re-hashes each file, and runs
+`PRAGMA integrity_check`. A newly created backup is called healthy only after its automatic scratch
+restore has also succeeded.
 
 ## Restore into a data directory
 
@@ -31,7 +34,7 @@ Re-hashes every file against the manifest and runs `PRAGMA integrity_check`. Exi
 python -m app.manage restore <backup_dir> /var/lib/recipecollater.restored
 ```
 
-Restore refuses to run unless the backup verifies. To make it live:
+Restore refuses to run unless the backup verifies and the target is empty. To make it live:
 
 ```sh
 sudo systemctl stop recipecollater-web recipecollater-worker
@@ -53,7 +56,6 @@ curl -fsS http://127.0.0.1/healthz
 
 ## Restore-test cadence
 
-The nightly worker creates a backup; a restore **smoke test** must run on a schedule (a
-scheduled restore into a scratch directory + `verify-backup`). Admin surfaces the last
-healthy backup age and the last restore-test age; treat >48 h since backup or >7 days since a
-restore test as red (roadmap "Measurable budgets").
+The nightly worker immediately restores every new set into a private scratch directory, checks the
+restored database, records `restore_tested_at`, and then prunes to the latest 14 sets. Phase 6 adds
+weekly retention and surfaces backup/restore age in Admin.

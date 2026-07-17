@@ -88,6 +88,9 @@ Migration runner: refuses out-of-order files and takes a `VACUUM INTO` snapshot 
 
 - Never exposed to the public internet: the app binds the LAN interface only; no router port-forwards, ever. The threat model is "trusted home network" — auth exists for attribution and lost-phone revocation, not to repel attackers.
 - Exactly one persistent HttpOnly SameSite=Lax cookie (WebKit 272325 discipline; the `Secure` flag is added only if the optional HTTPS upgrade is installed). All tokens are opaque, hashed at rest, revocable per device, and scoped; Shortcut tokens can ingest but cannot read recipes or mutate pantry/admin data.
+- Theme and other presentation preferences live in local storage, so `rc_session` remains the only
+  cookie. `RC_ALLOWED_HOSTS` blocks Host-header/DNS-rebinding access, and initial administrator
+  creation additionally requires the random `RC_SETUP_TOKEN` printed by the installer.
 - Ingest endpoints normalize URLs and defend against SSRF across initial resolution **and every redirect**: allow only http/https; reject loopback, private, link-local, multicast, IPv4-mapped, IPv6 local, and cloud-metadata ranges; cap fetches at 15s/5 MB; re-resolve and re-check to limit DNS rebinding.
 - `APP_BASE_URL=http://recipes.local` is the single URL source for Shortcut templates, bookmarklets, links, and callbacks—never hardcode `http` or `https` elsewhere.
 - `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` live in `EnvironmentFile=/etc/recipecollater/env` (root-owned, 0600), never in the repo/browser. Either alone runs supported tasks. Non-secret routing lives in `settings`. OpenAI Responses calls set `store: false`; both provider adapters enforce output/tool limits and redact secrets from logs.
@@ -102,9 +105,9 @@ The shopping list deliberately starts simpler: server-rendered list at home, plu
 
 ## 7. Backups & recovery
 
-- Nightly Huey task creates a staged backup set: `VACUUM INTO` database snapshot plus `data/images/`, uploaded originals, immutable ingestion artifacts, and a small manifest of checksums/schema version. Keep 14 daily + 8 weekly on a **different physical device**—a second partition on the same SSD does not cover disk death.
+- Nightly Huey task creates a staged backup set: SQLite online-backup snapshot plus `data/images/`, uploaded originals, immutable ingestion artifacts, and a complete manifest of checksums/schema/release version. It immediately restores each set into scratch and runs integrity checks. Keep 14 daily in Phase 0, growing to 14 daily + 8 weekly in Phase 6, on a **different physical device**—a second partition on the same SSD does not cover disk death.
 - **Nightly export**: every cookbook recipe as plain JSON+markdown files (dead-man's portability guarantee, a second durability layer independent of SQLite itself).
-- Every backup runs `PRAGMA integrity_check`, verifies manifest checksums, and is considered healthy only after a scheduled restore smoke test. `deploy/RESTORE.md` documents bare-machine recovery; admin shows last healthy backup and last restore-test age.
+- Every backup runs `PRAGMA integrity_check`, verifies manifest completeness/checksums, and is considered healthy only after its immediate scratch restore succeeds. `deploy/RESTORE.md` documents bare-machine recovery; admin later shows last healthy backup and restore-test age.
 - Optional Litestream may replicate SQLite but does not replace image/artifact backups.
 
 ## 8. Observability (right-sized)
@@ -137,6 +140,9 @@ The shopping list deliberately starts simpler: server-rendered list at home, plu
 ## 10. Installation, updates, and rollback
 
 - Install into versioned releases (for example `/opt/recipecollater/releases/<commit>/`) with a dedicated uv environment per release and a `current` symlink.
-- An update builds the new environment, runs offline tests, snapshots data, applies migrations against a copy, starts on a temporary port, and checks `/healthz` before switching `current` and restarting systemd.
+- An update builds the locked environment, runs every offline gate, uses SQLite's backup API for a
+  consistent rehearsal snapshot, starts on a temporary port, and checks the exact release ID. It
+  then stops both services, creates an externally mounted restore-tested backup, migrates, atomically
+  switches `current`, and requires matching web/worker release health.
 - Never run `pip install -U` inside the live environment. Hot dependencies such as yt-dlp are checked weekly and shown in admin; installation is explicit or uses the same staged smoke-test/rollback path.
 - Application rollback and data rollback are separate documented actions. A release that contains a forward-only schema migration cannot be rolled back by switching code alone.

@@ -14,7 +14,7 @@ def test_migrate_and_schema_version(data_dir: Path, capsys) -> None:  # type: ig
     assert main(["migrate"]) == 0
     assert main(["schema-version"]) == 0
     out = capsys.readouterr().out.strip().splitlines()[-1]
-    assert out == "1"
+    assert out == "2"
 
 
 def test_backup_verify_restore_cycle(data_dir: Path) -> None:
@@ -40,3 +40,24 @@ def test_backup_verify_restore_cycle(data_dir: Path) -> None:
         assert {u.name for u in list_users(restored)} == {"Aaron"}
     finally:
         restored.close()
+
+
+def test_snapshot_db_and_admin_recovery(data_dir: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    assert main(["migrate"]) == 0
+    conn = connect(config.get_settings().db_path)
+    try:
+        create_user(conn, "Aaron", is_admin=True)
+    finally:
+        conn.close()
+
+    snapshot = data_dir.parent / "rehearsal.db"
+    assert main(["snapshot-db", str(snapshot)]) == 0
+    copied = connect(snapshot)
+    try:
+        assert {u.name for u in list_users(copied)} == {"Aaron"}
+    finally:
+        copied.close()
+
+    assert main(["recover-admin", "--user", "aaron", "--device-name", "New PC"]) == 0
+    output = capsys.readouterr().out
+    assert "Pairing code" in output

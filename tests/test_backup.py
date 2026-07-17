@@ -32,8 +32,10 @@ def test_empty_backup_restore_smoke(data_dir: Path) -> None:
 
     result = backup.create_backup(settings)
     assert result.integrity_ok is True
+    assert result.restore_tested is True
     assert (result.backup_dir / "manifest.json").exists()
     assert backup.verify_backup(result.backup_dir) is True
+    assert backup.backup_is_healthy(result.backup_dir) is True
 
     restore_target = data_dir.parent / "restored"
     backup.restore_backup(result.backup_dir, restore_target)
@@ -124,3 +126,53 @@ def test_prune_keep_zero_is_noop(data_dir: Path) -> None:
     removed = backup.prune_backups(settings.backups_dir, keep=0)
     assert removed == []
     assert len(backup.list_backups(settings.backups_dir)) == 1
+
+
+def test_restore_refuses_nonempty_target(data_dir: Path) -> None:
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    _make_data(data_dir)
+    result = backup.create_backup(settings)
+    target = data_dir.parent / "existing"
+    target.mkdir()
+    (target / "stale.db-wal").write_text("stale", encoding="utf-8")
+    with pytest.raises(FileExistsError, match="must be empty"):
+        backup.restore_backup(result.backup_dir, target)
+
+
+def test_manifest_must_list_every_file(data_dir: Path) -> None:
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    _make_data(data_dir)
+    result = backup.create_backup(settings)
+    (result.backup_dir / "unlisted.bin").write_bytes(b"not in manifest")
+    assert backup.verify_backup(result.backup_dir) is False
+
+
+def test_missing_external_backup_mount_fails(data_dir: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    _make_data(data_dir)
+    monkeypatch.setenv("RC_BACKUP_DIR", str(data_dir.parent / "missing-mount"))
+    with pytest.raises(backup.BackupDestinationError, match="mounted"):
+        backup.create_backup(settings)
+
+
+def test_external_backup_must_be_another_filesystem(data_dir: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    _make_data(data_dir)
+    same_disk = data_dir.parent / "same-disk-backups"
+    same_disk.mkdir()
+    monkeypatch.setenv("RC_BACKUP_DIR", str(same_disk))
+    with pytest.raises(backup.BackupDestinationError, match="same filesystem"):
+        backup.create_backup(settings)
+
+
+def test_backup_rejects_symlinks(data_dir: Path) -> None:
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    _make_data(data_dir)
+    result = backup.create_backup(settings)
+    (result.backup_dir / "unexpected-link").symlink_to(result.backup_dir / "images")
+    assert backup.verify_backup(result.backup_dir) is False

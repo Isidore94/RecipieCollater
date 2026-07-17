@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from app.security import (
     ONBOARDING_LIFETIME,
+    SESSION_LIFETIME,
     generate_pairing_code,
     generate_token,
     hash_token,
@@ -34,6 +35,56 @@ class IssuedOnboarding:
 class ConsumedOnboarding:
     user_id: int
     device_name: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class BootstrappedAdmin:
+    user_id: int
+    session_token: str
+
+
+def bootstrap_first_admin(
+    conn: sqlite3.Connection, *, name: str, device_name: str
+) -> BootstrappedAdmin | None:
+    """Atomically create the first administrator and its initial device session."""
+    clean_name = name.strip()
+    if not clean_name:
+        raise ValueError("user name must not be empty")
+    issued = now()
+    raw = generate_token()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()
+        if row["n"] != 0:
+            conn.execute("ROLLBACK")
+            return None
+        cur = conn.execute(
+            "INSERT INTO users (name, is_admin) VALUES (?, 1)",
+            (clean_name,),
+        )
+        user_id = cur.lastrowid
+        if user_id is None:  # pragma: no cover - SQLite always supplies a rowid
+            raise RuntimeError("bootstrap user insert returned no rowid")
+        conn.execute(
+            """INSERT INTO device_sessions
+               (token_hash, user_id, device_name, issued_at, last_seen_at, expires_at, renewed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                hash_token(raw),
+                user_id,
+                device_name.strip() or "device",
+                to_iso(issued),
+                to_iso(issued),
+                to_iso(issued + SESSION_LIFETIME),
+                to_iso(issued),
+            ),
+        )
+        conn.execute("COMMIT")
+    except Exception:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    return BootstrappedAdmin(user_id=user_id, session_token=raw)
 
 
 def _issue(

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ theme }}">
+<html lang="en" data-theme="auto">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -15,12 +15,26 @@
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="stylesheet" href="/static/css/app.css">
   <script>
-    // Apply the saved theme before first paint to avoid a flash.
+    // A local preference avoids creating a second persistent cookie alongside rc_session.
     (function () {
+      var allowed = ['auto', 'light', 'dark'];
+      window.setRecipeTheme = function (value) {
+        if (!allowed.includes(value)) value = 'auto';
+        document.documentElement.setAttribute('data-theme', value);
+        document.querySelectorAll('.theme-select').forEach(function (select) {
+          select.value = value;
+        });
+        try { localStorage.setItem('rc_theme', value); } catch (e) {}
+      };
+      var saved = 'auto';
       try {
-        var m = document.cookie.match(/(?:^|;\s*)rc_theme=([^;]+)/);
-        if (m) document.documentElement.setAttribute('data-theme', decodeURIComponent(m[1]));
+        saved = localStorage.getItem('rc_theme') || 'auto';
       } catch (e) {}
+      if (!allowed.includes(saved)) saved = 'auto';
+      document.documentElement.setAttribute('data-theme', saved);
+      document.addEventListener('DOMContentLoaded', function () {
+        window.setRecipeTheme(saved);
+      });
     })();
   </script>
 </head>
@@ -45,19 +59,31 @@
       </ul>
       <div class="rail-foot">
         {% if user.is_admin %}<a class="rail-mini" href="/admin/devices">Devices</a>{% endif %}
-        <form method="post" action="/theme" class="theme-toggle">
-          <label class="visually-hidden" for="theme-select">Theme</label>
-          <select id="theme-select" name="theme" onchange="this.form.submit()">
-            <option value="auto"{% if theme == 'auto' %} selected{% endif %}>Auto</option>
-            <option value="light"{% if theme == 'light' %} selected{% endif %}>Light</option>
-            <option value="dark"{% if theme == 'dark' %} selected{% endif %}>Dark</option>
+        <div class="theme-toggle">
+          <label class="visually-hidden" for="theme-select-desktop">Theme</label>
+          <select id="theme-select-desktop" class="theme-select"
+                  onchange="window.setRecipeTheme(this.value)">
+            <option value="auto">Auto</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
           </select>
-        </form>
+        </div>
         <span class="rail-user">{{ user.name }}</span>
       </div>
     </nav>
 
     <main id="main" class="main">
+      <div class="mobile-tools">
+        {% if user.is_admin %}<a href="/admin/devices">Devices</a>{% endif %}
+        <span>{{ user.name }}</span>
+        <label class="visually-hidden" for="theme-select-mobile">Theme</label>
+        <select id="theme-select-mobile" class="theme-select"
+                onchange="window.setRecipeTheme(this.value)">
+          <option value="auto">Auto</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
       {% block content %}{% endblock %}
     </main>
 

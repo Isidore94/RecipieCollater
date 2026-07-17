@@ -43,11 +43,19 @@ The web service binds port 80 via `CAP_NET_BIND_SERVICE` (no root). Family devic
 
 ## 4. Onboard devices
 
-1. Open `http://recipes.local` on the N95 (or any PC) — first run shows the **setup** page;
-   create the admin account.
+1. Run the installer and save the random **setup token** it prints. Open
+   `http://recipes.local` on the N95 (or any PC), enter that token on the first-run page, and
+   create the admin account. Add the reserved IP to `RC_ALLOWED_HOSTS` before using the IP fallback.
 2. Admin → **Devices** → *Invite a device* → open the pairing link on the phone/PC, or type
    the 6-character code. On iPhone, then **Share → Add to Home Screen**.
 3. For the Apple Shortcut ingest token (Phase 2), Admin → Devices → *Create ingest token*.
+
+If every admin device is lost or accidentally revoked, recover locally on the N95:
+
+```sh
+sudo -u recipecollater env RC_DATA_DIR=/var/lib/recipecollater \
+  /opt/recipecollater/current/.venv/bin/python -m app.manage recover-admin --user "Your name"
+```
 
 ## 5. iOS "Local Network" prompt
 

@@ -38,6 +38,14 @@ def test_session_create_and_resolve(migrated_db: sqlite3.Connection) -> None:
     assert resolved.renewed is False
 
 
+def test_recent_session_read_does_not_write(migrated_db: sqlite3.Connection) -> None:
+    user = create_user(migrated_db, "Aaron")
+    raw = sessions.create_session(migrated_db, user.id, "PC")
+    changes_before = migrated_db.total_changes
+    assert sessions.resolve_session(migrated_db, raw) is not None
+    assert migrated_db.total_changes == changes_before
+
+
 def test_session_only_hash_is_stored(migrated_db: sqlite3.Connection) -> None:
     user = create_user(migrated_db, "Aaron")
     raw = sessions.create_session(migrated_db, user.id, "PC")
@@ -67,11 +75,18 @@ def test_sliding_renewal_extends_expiry(migrated_db: sqlite3.Connection) -> None
     user = create_user(migrated_db, "Aaron")
     raw = sessions.create_session(migrated_db, user.id, "PC")
     # Age the session beyond the renewal threshold.
-    migrated_db.execute("UPDATE device_sessions SET issued_at = '2020-01-01 00:00:00'")
+    migrated_db.execute(
+        """UPDATE device_sessions
+           SET issued_at = '2020-01-01 00:00:00', renewed_at = '2020-01-01 00:00:00'"""
+    )
     migrated_db.commit()
     resolved = sessions.resolve_session(migrated_db, raw)
     assert resolved is not None
     assert resolved.renewed is True
+    # The renewal timestamp was advanced, so the next request does not renew again.
+    again = sessions.resolve_session(migrated_db, raw)
+    assert again is not None
+    assert again.renewed is False
 
 
 # ---- Ingest-token scope boundary (both directions) ------------------------------------
@@ -165,6 +180,14 @@ def test_pairing_code_is_case_insensitive(migrated_db: sqlite3.Connection) -> No
     user = create_user(migrated_db, "Aaron")
     issued = onboarding.issue_pairing_code(migrated_db, user.id, None)
     assert onboarding.consume(migrated_db, issued.raw.lower(), kind="pairing_code") is not None
+
+
+def test_first_admin_bootstrap_is_single_winner(migrated_db: sqlite3.Connection) -> None:
+    first = onboarding.bootstrap_first_admin(migrated_db, name="Aaron", device_name="PC")
+    second = onboarding.bootstrap_first_admin(migrated_db, name="Intruder", device_name="Other")
+    assert first is not None
+    assert second is None
+    assert migrated_db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
 
 
 # ---- CSRF dependency ------------------------------------------------------------------

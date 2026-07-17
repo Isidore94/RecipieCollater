@@ -2,7 +2,9 @@
 
 A self-hosted family recipe platform for a home mini PC. Share a YouTube cooking video or a recipe webpage from any device — an AI pipeline parses it into a clean, interactive recipe sheet. Triage new finds in a **Test Recipes inbox**, promote keepers into the **family cookbook**, track what's on hand in a location-aware **pantry**, and let the built-in **AI assistant** turn cookbook + pantry into meal plans and shopping lists.
 
-> **Status: planning complete — implementation not started.** The `docs/` folder is the full build specification, written to be executed phase by phase by any capable coding agent. The documents are the contract; model-specific implementation assumptions are deliberately avoided.
+> **Status: Phase 0 foundation implemented; N95/iPhone acceptance testing remains.** The app
+> shell, migrations, device onboarding, scoped tokens, worker, backups, and staged deployment are
+> built. Recipe features begin in Phase 1 only after the real-hardware Phase 0 checklist passes.
 
 ## What it does (when built)
 
@@ -31,3 +33,18 @@ A self-hosted family recipe platform for a home mini PC. Share a YouTube cooking
 ## Target environment
 
 Intel N95 mini PC (4 cores), Linux, Ethernet-connected on the home LAN. Family access from iPhones and PCs on the same Wi-Fi at `http://recipes.local` — LAN-only by design, never exposed to the internet. Python 3.12+, SQLite, no Docker, no Redis, no Postgres, no Node toolchain, no domain or certificates.
+
+## Phase 0 local development
+
+Set `RC_SETUP_TOKEN` and allow the development client's host before first-run setup:
+
+```sh
+export RC_SETUP_TOKEN=local-development-only
+export RC_ALLOWED_HOSTS=localhost,127.0.0.1
+uv sync --frozen
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+# In another terminal, so the default /healthz also proves worker liveness:
+uv run huey_consumer app.tasks.huey -w 1 -k thread
+```
+
+Production installation generates a random setup token automatically. See `deploy/LAN.md`.

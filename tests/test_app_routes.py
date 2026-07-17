@@ -4,6 +4,7 @@ ingest token grants zero browser/app access."""
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -26,6 +27,8 @@ def test_healthz_ok(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["checks"]["schema"] == "current"
     assert body["checks"]["queue_db"] == "ok"
+    assert body["checks"]["worker"] == "ok"
+    assert body["release_id"] == "development"
 
 
 def test_first_run_shows_setup(client: TestClient) -> None:
@@ -55,7 +58,10 @@ def test_setup_then_access(admin_client: TestClient) -> None:
 def test_second_setup_is_refused(admin_client: TestClient) -> None:
     # A second /setup must not create another admin once the app is initialised.
     r = admin_client.post(
-        "/setup", data={"admin_name": "Intruder"}, headers=SAME_ORIGIN, follow_redirects=False
+        "/setup",
+        data={"admin_name": "Intruder", "setup_token": "wrong"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert r.status_code == 303
     conn = _app_db()
@@ -69,19 +75,39 @@ def test_second_setup_is_refused(admin_client: TestClient) -> None:
 def test_csrf_blocks_cross_site_post(client: TestClient) -> None:
     r = client.post(
         "/setup",
-        data={"admin_name": "Aaron"},
+        data={"admin_name": "Aaron", "setup_token": "test-setup-token"},
         headers={"sec-fetch-site": "cross-site"},
         follow_redirects=False,
     )
     assert r.status_code == 403
 
 
-def test_theme_toggle_sets_cookie(admin_client: TestClient) -> None:
-    r = admin_client.post(
-        "/theme", data={"theme": "dark"}, headers=SAME_ORIGIN, follow_redirects=False
+def test_theme_uses_local_storage_not_a_second_cookie(admin_client: TestClient) -> None:
+    r = admin_client.get("/inbox")
+    assert "localStorage.setItem('rc_theme'" in r.text
+    assert "rc_theme=" not in r.headers.get("set-cookie", "")
+    assert admin_client.post("/theme", headers=SAME_ORIGIN).status_code == 404
+
+
+def test_first_run_rejects_wrong_setup_token(client: TestClient) -> None:
+    r = client.post(
+        "/setup",
+        data={"admin_name": "Intruder", "setup_token": "wrong"},
+        headers=SAME_ORIGIN,
     )
-    assert r.status_code == 303
-    assert "rc_theme=dark" in r.headers.get("set-cookie", "")
+    assert r.status_code == 403
+
+
+def test_untrusted_host_is_rejected(client: TestClient) -> None:
+    assert client.get("/healthz", headers={"host": "attacker.example"}).status_code == 400
+
+
+def test_health_detects_missing_worker_but_temp_smoke_can_skip_it(
+    client: TestClient, data_dir: Path
+) -> None:
+    (data_dir / "worker-heartbeat.json").unlink()
+    assert client.get("/healthz").status_code == 503
+    assert client.get("/healthz?include_worker=false").status_code == 200
 
 
 def test_admin_devices_visible_to_admin(admin_client: TestClient) -> None:

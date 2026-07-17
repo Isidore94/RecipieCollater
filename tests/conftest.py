@@ -18,6 +18,8 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     d = tmp_path / "data"
     monkeypatch.setenv("RC_DATA_DIR", str(d))
     monkeypatch.setenv("RC_LOG_CONSOLE", "1")
+    monkeypatch.setenv("RC_ALLOWED_HOSTS", "testserver")
+    monkeypatch.setenv("RC_SETUP_TOKEN", "test-setup-token")
     monkeypatch.delenv("RC_HTTPS", raising=False)
     monkeypatch.delenv("RC_BACKUP_DIR", raising=False)
     config.reset_settings_cache()
@@ -41,7 +43,9 @@ def migrated_db(data_dir: Path) -> Iterator[sqlite3.Connection]:
 def client(data_dir: Path) -> Iterator[TestClient]:
     """A TestClient whose lifespan migrates the temp database on startup."""
     from app.main import create_app
+    from app.services.worker_health import write_heartbeat
 
+    write_heartbeat(config.get_settings())
     with TestClient(create_app()) as c:
         yield c
 
@@ -55,7 +59,11 @@ def admin_client(client: TestClient) -> TestClient:
     """A client that has completed first-run setup and holds an admin session cookie."""
     resp = client.post(
         "/setup",
-        data={"admin_name": "Aaron", "device_name": "Kitchen PC"},
+        data={
+            "admin_name": "Aaron",
+            "device_name": "Kitchen PC",
+            "setup_token": "test-setup-token",
+        },
         headers=SAME_ORIGIN,
         follow_redirects=False,
     )

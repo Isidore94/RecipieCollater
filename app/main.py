@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import __version__
 from app.auth import (
@@ -37,6 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info(
         "startup",
         version=__version__,
+        release_id=settings.release_id,
         db=str(settings.db_path),
         schema_version=result.current_version,
         applied=result.applied,
@@ -57,6 +59,8 @@ def create_app() -> FastAPI:
         openapi_url=None,
         lifespan=lifespan,
     )
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
 
     @app.middleware("http")
     async def request_context(

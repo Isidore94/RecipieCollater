@@ -30,12 +30,17 @@ Before each phase:
 - Repository layout, `pyproject.toml`, Python pin, ruff, pytest, type checking, and minimal CI.
 - Root `CONVENTIONS.md`: exact-math boundary, no ORM, short transactions, lazy heavy imports, one-cookie discipline, scoped tokens, htmx fragment conventions, artifact immutability, provider privacy, dependency pin/update policy, and Markdown docs as the contract.
 - FastAPI factory, Jinja/htmx shell, responsive navigation, dark mode, `/healthz`, structured logging, and static assets.
-- SQLite connection factory/pragmas and ordered migration runner. Migration 001 contains only phase-0 tables; later tables arrive with their owning phase. Test fresh install and upgrade from the previous snapshot.
+- SQLite connection factory/pragmas and ordered migration runner. Migration 001 contains only
+  phase-0 identity tables; migration 002 hardens session renewal without adding later-phase data.
+  Later tables arrive with their owning phase. Test fresh install and upgrade from the previous snapshot.
+  Phase 1 therefore begins at migration 003.
 - Huey + separate `queue.db`, worker lifecycle, systemd units, Avahi/DHCP guide.
 - Named users, device sessions, pairing flow, and separate scoped ingest tokens.
 - Versioned-release install/update/rollback skeleton: build new uv environment, offline tests, DB-copy migration rehearsal, temporary-port health check, atomic release switch. Never mutate the live environment with `pip install -U`.
 - Backup framework and manifest format established even before recipe data exists.
-- **Exit criteria:** clean install on the N95; onboard one iPhone and one PC; restart survives reboot; `/healthz` passes; migration/rollback rehearsal and an empty backup/restore smoke test pass; idle budgets measured.
+- **Exit criteria:** clean install on the N95; onboard one iPhone and one PC using the bootstrap
+  token; restart survives reboot; `/healthz` proves both web and worker release IDs; migration/
+  rollback rehearsal and an external-device backup/restore smoke test pass; idle budgets measured.
 
 ## Phase 1 — Manual cookbook vertical slice
 
@@ -94,7 +99,7 @@ Before each phase:
 
 ## Phase 6 — Resilience and evidence-driven polish
 
-- Complete backup sets: `VACUUM INTO` DB + images/originals + artifacts + manifest/checksums to a separate physical device; 14 daily + 8 weekly; `PRAGMA integrity_check`; automated restore smoke test; bare-machine restore document.
+- Complete backup sets: SQLite online-backup DB + images/originals + artifacts + manifest/checksums to a separate physical device; 14 daily + 8 weekly; `PRAGMA integrity_check`; automated restore smoke test; bare-machine restore document.
 - Nightly JSON/Markdown cookbook export.
 - Admin dashboard: queue health, categorized failures, selected provider/model capabilities, spend/caps, yt-dlp installed/latest-known version, DB/data size, last healthy backup, last restore test.
 - Performance and accessibility pass against budgets; real iPhone + desktop regression checklist.

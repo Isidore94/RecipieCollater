@@ -62,6 +62,8 @@ first math commit starts correct.)*
   default plain-HTTP LAN it is omitted, because a `Secure` cookie is dropped over HTTP.
 - Never use Starlette `SessionMiddleware` (client-side signed blob: unrevocable). Identity authority
   is the `device_sessions` row keyed by the SHA-256 hash of the cookie value.
+- Preferences such as theme use browser local storage or a server-side device record, never another
+  cookie. `rc_session` is the only cookie the application creates.
 
 ## 6. Scoped, opaque, hashed tokens
 
@@ -117,6 +119,8 @@ first math commit starts correct.)*
 - `APP_BASE_URL` (default `http://recipes.local`) is the single source of truth for links, Shortcut
   templates, bookmarklets, and callbacks. Never hardcode `http`/`https` or an IP elsewhere.
 - The app binds the LAN interface only. No reverse proxy, no port-forwarding, ever.
+- Validate `Host` against `RC_ALLOWED_HOSTS`; LAN-only is not a substitute for DNS-rebinding
+  protection. First-run bootstrap requires the installer-generated `RC_SETUP_TOKEN`.
 - Ingest fetches enforce SSRF defence (http/https only; reject loopback/private/link-local/multicast/
   IPv4-mapped/IPv6-local/cloud-metadata; 15 s / 5 MB caps; re-resolve after redirects). *(Phase 2.)*
 
@@ -146,6 +150,9 @@ first math commit starts correct.)*
 - A backup is "healthy" only after: complete manifest (DB snapshot + images + originals + artifacts),
   verified checksums, `PRAGMA integrity_check`, **and** a successful restore smoke test. File
   creation alone is not a backup.
+- If `RC_BACKUP_DIR` is configured, it must already exist on a different mounted filesystem from
+  `RC_DATA_DIR`; never create a missing mountpoint and silently write a supposed external backup to
+  the system disk.
 
 ## 15. Testing & honesty
 

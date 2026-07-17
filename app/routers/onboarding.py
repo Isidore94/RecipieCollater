@@ -15,9 +15,11 @@ from fastapi import APIRouter, Depends, Form, Request, Response
 from fastapi.responses import RedirectResponse
 
 from app.auth import require_csrf, set_session_cookie
+from app.config import get_settings
 from app.deps import get_db
+from app.security import constant_time_equals
 from app.services import onboarding, sessions
-from app.services.users import count_users, create_user, get_user
+from app.services.users import count_users, get_user
 from app.templating import render
 
 router = APIRouter()
@@ -46,24 +48,44 @@ def welcome(request: Request, db: sqlite3.Connection = Depends(get_db)) -> Respo
 @router.post("/setup")
 def first_run_setup(
     request: Request,
-    response: Response,
     admin_name: str = Form(...),
     device_name: str = Form(""),
+    setup_token: str = Form(...),
     db: sqlite3.Connection = Depends(get_db),
     _: None = Depends(require_csrf),
 ) -> Response:
     # First-run only. Once any user exists this endpoint refuses (no privilege escalation).
     if count_users(db) != 0:
         return RedirectResponse(url="/welcome", status_code=303)
+    expected_token = get_settings().setup_token
+    if expected_token is None:
+        return render(
+            request,
+            "onboarding/setup.html",
+            error="First-run setup is disabled until RC_SETUP_TOKEN is configured.",
+            status_code=503,
+        )
+    if not constant_time_equals(setup_token.strip(), expected_token):
+        return render(
+            request,
+            "onboarding/setup.html",
+            error="The setup token is incorrect.",
+            status_code=403,
+        )
     name = admin_name.strip()
     if not name:
         return render(
             request, "onboarding/setup.html", error="Please enter your name.", status_code=400
         )
-    user = create_user(db, name, is_admin=True)
-    raw = sessions.create_session(db, user.id, device_name.strip() or _default_device_name(request))
+    result = onboarding.bootstrap_first_admin(
+        db,
+        name=name,
+        device_name=device_name.strip() or _default_device_name(request),
+    )
+    if result is None:
+        return RedirectResponse(url="/welcome", status_code=303)
     redirect = RedirectResponse(url="/", status_code=303)
-    set_session_cookie(redirect, raw)
+    set_session_cookie(redirect, result.session_token)
     return redirect
 
 

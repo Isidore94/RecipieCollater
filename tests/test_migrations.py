@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.db import (
+    MIGRATIONS_DIR,
     MigrationError,
     connect,
     current_version,
@@ -61,12 +62,12 @@ def test_real_migration_001_is_only_phase0_tables(tmp_path: Path) -> None:
 def test_fresh_install_and_idempotent_rerun(tmp_path: Path) -> None:
     db_path = tmp_path / "app.db"
     first = run_migrations(db_path, backup_dir=tmp_path / "bk")
-    assert first.applied == [1]
-    assert first.current_version == 1
+    assert first.applied == [1, 2]
+    assert first.current_version == 2
     second = run_migrations(db_path, backup_dir=tmp_path / "bk")
     assert second.already_current is True
     assert second.applied == []
-    assert current_version(db_path) == 1
+    assert current_version(db_path) == 2
 
 
 def test_snapshot_taken_before_each_apply(tmp_path: Path) -> None:
@@ -190,6 +191,33 @@ def test_upgrade_from_prior_snapshot_preserves_data(tmp_path: Path) -> None:
         assert row["name"] == "Aaron"  # data preserved across the upgrade
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(person)").fetchall()}
         assert "nickname" in cols
+    finally:
+        conn.close()
+
+
+def test_real_upgrade_from_phase0_001_to_002(tmp_path: Path) -> None:
+    """A database created by the original Phase-0 commit upgrades without editing 001."""
+    old_migrations = tmp_path / "old-migrations"
+    old_migrations.mkdir()
+    shutil.copy2(MIGRATIONS_DIR / "001_phase0_identity.sql", old_migrations)
+    db_path = tmp_path / "old-release.db"
+    run_migrations(db_path, old_migrations, backup_dir=tmp_path / "old-backups")
+    conn = connect(db_path)
+    try:
+        conn.execute("INSERT INTO users (name, is_admin) VALUES ('Aaron', 1)")
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = run_migrations(db_path, backup_dir=tmp_path / "new-backups")
+    assert result.applied == [2]
+    conn = connect(db_path)
+    try:
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(device_sessions)").fetchall()
+        }
+        assert "renewed_at" in columns
+        assert conn.execute("SELECT name FROM users").fetchone()["name"] == "Aaron"
     finally:
         conn.close()
 

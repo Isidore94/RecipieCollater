@@ -41,7 +41,6 @@ def render(
         "active_nav": active_nav,
         "user": user,
         "csrf_header": CSRF_HEADER,
-        "theme": request.cookies.get("rc_theme", "auto"),
         **context,
     }
     return _TEMPLATES.TemplateResponse(

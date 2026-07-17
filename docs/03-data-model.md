@@ -43,7 +43,8 @@ CREATE TABLE device_sessions (
   issued_at     TEXT NOT NULL,
   last_seen_at  TEXT,
   expires_at    TEXT NOT NULL,
-  revoked_at    TEXT
+  revoked_at    TEXT,
+  renewed_at    TEXT NOT NULL                  -- throttles sliding renewal independently of issue time
 );
 
 -- Long-lived Bearer tokens for the iOS Shortcut / scripts (Mealie pattern).

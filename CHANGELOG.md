@@ -26,7 +26,7 @@ before any recipe features exist.
   structured logging with per-request IDs, and an unauthenticated `/healthz` that checks
   the app DB, schema currency, and the separate queue DB.
 - Server-rendered Jinja2 + htmx shell: responsive left-rail (desktop) / bottom tab-bar
-  (mobile) navigation, five empty tab screens, auto/light/dark theme (per-device cookie),
+  (mobile) navigation, five empty tab screens, auto/light/dark theme (per-device local storage),
   accessibility affordances, and self-hosted (checksum-pinned) htmx/Alpine — no runtime CDN.
 - PWA manifest, apple-touch icons, home-screen metadata (no service worker on plain HTTP).
 
@@ -37,9 +37,13 @@ before any recipe features exist.
   every apply, a trigger-aware SQL splitter, and atomic per-migration transactions.
 - Migration `001` creates **only** Phase-0 tables: `users`, `device_sessions`,
   `api_tokens`, `onboarding_tokens`.
+- Migration `002` adds an independent session-renewal timestamp so reads are not forced to write
+  or renew the cookie on every request after day 30.
 
 **Identity & onboarding**
 - Named users; first-run admin bootstrap.
+- Installer-generated first-run token, atomic bootstrap transaction, Host-header allowlist, and a
+  root-run `recover-admin` pairing-code command prevent setup takeover and permanent lockout.
 - One persistent HttpOnly SameSite=Lax device-session cookie with sliding renewal and
   per-device revocation; opaque tokens hashed at rest.
 - Magic-link and typed pairing-code onboarding (single-use, expiring).
@@ -51,11 +55,12 @@ before any recipe features exist.
 - Huey worker on a **separate** `data/queue.db`: liveness `ping`, hourly heartbeat, and a
   nightly backup task; systemd units for web + worker (port-80 capability, memory caps,
   hardening).
-- Backup framework: `VACUUM INTO` snapshot + images/artifacts + checksum manifest +
-  `PRAGMA integrity_check`, with verify / restore / prune and a management CLI
+- Backup framework: SQLite online snapshot + images/artifacts + complete checksum manifest +
+  `PRAGMA integrity_check` + automatic scratch restore, with verify / restore / prune and a CLI
   (`python -m app.manage`).
-- Staged install / update / rollback scripts (build isolated release → offline tests →
-  verified backup → migration rehearsal on a copy → temp-port health check → atomic switch;
+- Staged install / update / rollback scripts (root-owned locked release → offline gates →
+  consistent online snapshot rehearsal → temp-port health check → stopped-service external backup
+  → migration and atomic switch;
   separate application vs data rollback). Never mutates a live env in place.
 - Deploy docs: `LAN.md` (DHCP + Avahi `recipes.local`), `UPDATES.md`, `RESTORE.md`,
   `env.example`.

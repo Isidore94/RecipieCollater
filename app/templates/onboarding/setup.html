@@ -14,6 +14,11 @@
     <label for="device_name">This device's name <span class="muted">(optional)</span></label>
     <input id="device_name" name="device_name" autocomplete="off"
            placeholder="e.g. Kitchen PC">
+    <label for="setup_token">Setup token</label>
+    <input id="setup_token" name="setup_token" required autocomplete="off"
+           spellcheck="false" placeholder="Shown by the installer">
+    <p class="muted">The installer prints this one-time token. It prevents another device on
+      the network from claiming the first administrator account.</p>
     <button type="submit" class="btn-primary">Create admin account</button>
   </form>
 </div>

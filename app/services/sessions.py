@@ -30,6 +30,7 @@ class DeviceSession:
     last_seen_at: str | None
     expires_at: str
     revoked_at: str | None
+    renewed_at: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +48,7 @@ def _row(row: sqlite3.Row) -> DeviceSession:
         last_seen_at=row["last_seen_at"],
         expires_at=row["expires_at"],
         revoked_at=row["revoked_at"],
+        renewed_at=row["renewed_at"] or row["issued_at"],
     )
 
 
@@ -58,8 +60,8 @@ def create_session(conn: sqlite3.Connection, user_id: int, device_name: str) -> 
     conn.execute(
         """
         INSERT INTO device_sessions
-            (token_hash, user_id, device_name, issued_at, last_seen_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (token_hash, user_id, device_name, issued_at, last_seen_at, expires_at, renewed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             hash_token(raw),
@@ -68,6 +70,7 @@ def create_session(conn: sqlite3.Connection, user_id: int, device_name: str) -> 
             to_iso(issued),
             to_iso(issued),
             to_iso(expires),
+            to_iso(issued),
         ),
     )
     conn.commit()
@@ -98,28 +101,37 @@ def resolve_session(conn: sqlite3.Connection, raw_token: str) -> ResolvedSession
 
     renewed = False
     new_expires = session.expires_at
-    if current - parse_iso(session.issued_at) > SESSION_RENEW_AFTER:
+    last_renewed = parse_iso(session.renewed_at)
+    last_seen = parse_iso(session.last_seen_at) if session.last_seen_at else None
+    # Keep read-heavy pages read-only most of the time. Device activity only needs minute-scale
+    # accuracy in the admin UI; writing it on every page view creates avoidable SQLite contention.
+    should_touch_last_seen = last_seen is None or current - last_seen >= SESSION_RENEW_AFTER / 30
+    if current - last_renewed >= SESSION_RENEW_AFTER:
         renewed = True
         new_expires = to_iso(current + SESSION_LIFETIME)
         conn.execute(
-            "UPDATE device_sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?",
-            (now_iso(), new_expires, session.id),
+            """UPDATE device_sessions
+               SET last_seen_at = ?, expires_at = ?, renewed_at = ? WHERE id = ?""",
+            (now_iso(), new_expires, now_iso(), session.id),
         )
-    else:
+        conn.commit()
+    elif should_touch_last_seen:
         conn.execute(
             "UPDATE device_sessions SET last_seen_at = ? WHERE id = ?",
             (now_iso(), session.id),
         )
-    conn.commit()
+        conn.commit()
 
+    touched = renewed or should_touch_last_seen
     refreshed = DeviceSession(
         id=session.id,
         user_id=session.user_id,
         device_name=session.device_name,
         issued_at=session.issued_at,
-        last_seen_at=now_iso(),
+        last_seen_at=now_iso() if touched else session.last_seen_at,
         expires_at=new_expires,
         revoked_at=None,
+        renewed_at=now_iso() if renewed else session.renewed_at,
     )
     return ResolvedSession(session=refreshed, renewed=renewed)
 

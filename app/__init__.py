@@ -5,4 +5,6 @@ auth/onboarding, worker plumbing, and deploy/backup scaffolding. Recipe, ingesti
 pantry, shopping, meal-planning, and AI features arrive in later phases.
 """
 
-__version__ = "0.0.0"
+from app.version import PACKAGE_VERSION
+
+__version__ = PACKAGE_VERSION

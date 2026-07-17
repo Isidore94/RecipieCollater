@@ -76,6 +76,7 @@
 <section class="card">
   <h2>Paired devices</h2>
   {% if sessions %}
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Paired devices">
   <table class="data">
     <thead><tr><th>Device</th><th>User</th><th>Last seen</th><th>Status</th><th></th></tr></thead>
     <tbody>
@@ -96,12 +97,14 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}<p class="muted">No devices paired yet.</p>{% endif %}
 </section>
 
 <section class="card">
   <h2>Ingest tokens</h2>
   {% if tokens %}
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Ingest tokens">
   <table class="data">
     <thead><tr><th>Label</th><th>User</th><th>Scope</th><th>Last used</th><th>Status</th><th></th></tr></thead>
     <tbody>
@@ -123,6 +126,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}<p class="muted">No ingest tokens yet.</p>{% endif %}
 </section>
 {% endblock %}
