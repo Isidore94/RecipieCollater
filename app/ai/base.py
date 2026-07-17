@@ -9,7 +9,25 @@ from app.extraction import ExtractedRecipe
 
 
 class AIError(RuntimeError):
-    """An AI provider call failed: network error, refusal, or output that failed validation."""
+    """An AI provider call failed: network error, refusal, or output that failed validation.
+
+    Carries the billed token usage when the *failing* call was still charged (e.g. the model
+    returned a truncated/unparseable response), so the pipeline can count that spend against the
+    cap. Zero when the call never reached the provider (so nothing was billed).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cost_micros: int = 0,
+    ) -> None:
+        super().__init__(message)
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cost_micros = cost_micros
 
 
 class AIBudgetError(AIError):

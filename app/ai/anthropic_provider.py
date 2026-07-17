@@ -43,7 +43,7 @@ class AnthropicExtractor:
         except ImportError as exc:  # pragma: no cover - dep is pinned in production
             raise AIError("the anthropic package is not installed") from exc
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        return cls(client, settings.ai_model)
+        return cls(client, settings.anthropic_model)
 
     def extract(self, content: str, *, source_url: str) -> AIExtraction:
         schema = ExtractedRecipe.model_json_schema()
@@ -66,24 +66,34 @@ class AnthropicExtractor:
         except Exception as exc:  # SDK raises many error types; treat all as a call failure
             raise AIError(f"Anthropic request failed: {exc}") from exc
 
-        payload = _tool_input(message)
-        if payload is None:
-            raise AIError("model did not return the save_recipe tool call")
-        try:
-            recipe = ExtractedRecipe.model_validate(payload)
-        except Exception as exc:
-            raise AIError(f"model output failed schema validation: {exc}") from exc
-
+        # The call was billed the moment it returned; capture its cost so a later parse/validation
+        # failure still counts against the spend cap (a truncated tool call is a common trigger).
         usage = getattr(message, "usage", None)
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+        billed = cost_micros(self.model, input_tokens, output_tokens)
+
+        payload = _tool_input(message)
+        if payload is None:
+            raise AIError(
+                "model did not return the save_recipe tool call",
+                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+            )
+        try:
+            recipe = ExtractedRecipe.model_validate(payload)
+        except Exception as exc:
+            raise AIError(
+                f"model output failed schema validation: {exc}",
+                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+            ) from exc
+
         return AIExtraction(
             recipe=recipe,
             provider=self.provider,
             model=self.model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            cost_micros=cost_micros(self.model, input_tokens, output_tokens),
+            cost_micros=billed,
         )
 
 

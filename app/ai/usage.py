@@ -28,7 +28,12 @@ def spend_month_micros(conn: sqlite3.Connection) -> int:
 
 
 def within_budget(conn: sqlite3.Connection, settings: Settings) -> bool:
-    """True if another call fits under both the daily and monthly cap."""
+    """True while accumulated spend is under both the daily and monthly cap.
+
+    This is a soft cap: it blocks the *next* call once spend crosses the threshold, so a single
+    in-flight call can overshoot by at most its own cost. Because billed-but-failed calls are also
+    counted (AIError carries their cost), the overshoot stays bounded and can't run away.
+    """
     if spend_today_micros(conn) >= settings.ai_daily_cap_micros:
         return False
     return spend_month_micros(conn) < settings.ai_monthly_cap_micros

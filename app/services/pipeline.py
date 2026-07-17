@@ -229,16 +229,18 @@ def _ai_extract_and_apply(
         return False
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider="anthropic", model=settings.ai_model, operation=operation,
+            conn, provider=provider.provider, model=provider.model, operation=operation,
             job_id=job.id, status="blocked", error="daily or monthly AI spend cap reached",
         )
         return False
     try:
         result = provider.extract(content, source_url=job.normalized_url)
     except ai.AIError as exc:
+        # A parse/validation failure can still have been billed - log its real cost so it counts.
         ai_usage.log_usage(
-            conn, provider="anthropic", model=settings.ai_model, operation=operation,
-            job_id=job.id, status="error", error=str(exc)[:500],
+            conn, provider=provider.provider, model=provider.model, operation=operation,
+            job_id=job.id, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
         )
         return False
     ai_usage.log_usage(

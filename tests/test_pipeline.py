@@ -11,7 +11,7 @@ import pytest
 
 from app import config
 from app.ai import usage as ai_usage
-from app.ai.base import AIExtraction
+from app.ai.base import AIError, AIExtraction
 from app.extraction import ExtractedIngredient, ExtractedRecipe, ExtractedStep
 from app.services import ingest, pipeline, recipes, youtube
 
@@ -181,6 +181,30 @@ def test_pipeline_ai_blocked_by_budget(
         "SELECT status FROM ai_usage_log WHERE job_id = ?", (job.id,)
     ).fetchone()
     assert blocked["status"] == "blocked"
+
+
+def test_pipeline_counts_billed_but_failed_ai_call(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A call that was billed but returned unparseable output must still count against the cap.
+    plain = "<html><body>no recipe schema here</body></html>"
+    job, _ = ingest.enqueue_job(migrated_db, "https://example.test/billfail", html=plain)
+
+    class _BilledFailure:
+        provider = "openai"
+        model = "gpt-4o-mini"
+
+        def extract(self, content: str, *, source_url: str) -> AIExtraction:
+            raise AIError("truncated", input_tokens=15000, output_tokens=4096, cost_micros=4711)
+
+    monkeypatch.setattr("app.ai.get_provider", lambda settings: _BilledFailure())
+    pipeline.run_job(migrated_db, job)
+
+    row = migrated_db.execute(
+        "SELECT status, cost_micros FROM ai_usage_log WHERE job_id = ?", (job.id,)
+    ).fetchone()
+    assert row["status"] == "error"
+    assert row["cost_micros"] == 4711  # the billed cost was recorded, not zero
 
 
 def test_pipeline_youtube_extracts_via_ai(

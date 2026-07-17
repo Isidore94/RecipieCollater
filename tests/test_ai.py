@@ -60,8 +60,11 @@ def test_pricing_known_and_unknown_models() -> None:
     assert pricing.cost_micros("claude-sonnet-5", 1_000_000, 0) == 3_000_000
     assert pricing.cost_micros("claude-opus-4-8", 0, 1_000_000) == 75_000_000
     assert pricing.cost_micros("claude-haiku-4-5", 1_000_000, 0) == 800_000
-    # unknown model falls back to Sonnet-class pricing (never zero)
-    assert pricing.cost_micros("mystery-model", 1_000_000, 0) == 3_000_000
+    # OpenAI: the specific prefix must win over the shorter one it would otherwise shadow.
+    assert pricing.cost_micros("gpt-4o-mini", 1_000_000, 0) == 150_000
+    assert pricing.cost_micros("gpt-4o", 1_000_000, 0) == 2_500_000
+    # unknown model falls back to a high rate so spend caps over-estimate, never zero
+    assert pricing.cost_micros("mystery-model", 1_000_000, 0) == 15_000_000
 
 
 # ---- spend caps -----------------------------------------------------------------------
@@ -96,10 +99,12 @@ def test_extract_without_tool_call_raises() -> None:
         AnthropicExtractor(client, "claude-sonnet-5").extract("t", source_url="u")
 
 
-def test_extract_invalid_payload_raises() -> None:
-    client = _Client(_Message([_Block({"ingredients": []})], _Usage(1, 1)))  # no title
-    with pytest.raises(AIError):
+def test_extract_invalid_payload_records_billed_cost() -> None:
+    client = _Client(_Message([_Block({"ingredients": []})], _Usage(1000, 200)))  # no title
+    with pytest.raises(AIError) as exc:
         AnthropicExtractor(client, "claude-sonnet-5").extract("t", source_url="u")
+    # the call was billed even though parsing failed -> cost is carried for the spend cap
+    assert exc.value.cost_micros > 0
 
 
 def test_extract_wraps_client_errors() -> None:
