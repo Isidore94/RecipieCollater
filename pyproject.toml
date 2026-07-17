@@ -26,6 +26,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+build = [
+    "pyinstaller>=6.21.0",
+]
 # Installed by `uv sync` for development/CI; excluded from production releases
 # via `uv sync --no-dev`.
 dev = [

@@ -33,6 +33,24 @@ def executable_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def ensure_streams() -> None:
+    """A windowed .exe (console=False) sets sys.stdout/stderr to None. Libraries that probe them -
+    uvicorn's logging calls sys.stdout.isatty() - then crash. Point them at a log file (or the
+    null device) so the frozen app runs headless without a console."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        sink = open(  # noqa: SIM115 - the stream must outlive this function
+            executable_dir() / "recipecollater.log", "a", encoding="utf-8", buffering=1
+        )
+    except OSError:
+        sink = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115 - lives for the process
+    if sys.stdout is None:
+        sys.stdout = sink
+    if sys.stderr is None:
+        sys.stderr = sink
+
+
 def load_env_file() -> None:
     """Load KEY=VALUE lines from a .env beside the executable. Existing env vars always win."""
     env_path = executable_dir() / ".env"
@@ -144,8 +162,34 @@ def run_smoke_test() -> int:
     finally:
         server.should_exit = True
 
-    ok = code in (200, 503)
-    print(f"SMOKE OK (/healthz {code})" if ok else f"SMOKE FAIL: /healthz {code}")
+    # The worker imports these lazily, so a PyInstaller bundling miss only surfaces on a real
+    # import - check them here so --smoke-test validates the whole app, not just the web path.
+    missing = []
+    for module in (
+        "recipe_scrapers", "yt_dlp", "bs4", "PIL.Image", "anthropic", "openai",
+        "huey.consumer", "app.tasks", "app.services.pipeline",
+    ):
+        try:
+            __import__(module)
+        except Exception as exc:  # any import failure means a broken bundle
+            missing.append(f"{module} ({exc})")
+
+    ok = code in (200, 503) and not missing
+    if ok:
+        result = f"SMOKE OK (/healthz {code}, worker libs import cleanly)"
+    else:
+        parts = []
+        if code not in (200, 503):
+            parts.append(f"/healthz {code}")
+        if missing:
+            parts.append("missing: " + ", ".join(missing))
+        result = "SMOKE FAIL: " + "; ".join(parts)
+
+    # A windowed .exe has no console, so also record the verdict to a file for the build check.
+    out = os.environ.get("RC_SMOKE_OUT")
+    if out:
+        Path(out).write_text(result + "\n", encoding="utf-8")
+    print(result)
     return 0 if ok else 1
 
 
@@ -161,6 +205,7 @@ def run_gui() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    ensure_streams()
     load_env_file()
     args = sys.argv[1:] if argv is None else argv
     if "--web" in args:

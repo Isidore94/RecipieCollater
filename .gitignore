@@ -10,6 +10,13 @@ __pycache__/
 .venv/
 uv.lock.bak
 
+# PyInstaller build output (the .exe is ~150 MB; never committed)
+/build/
+/dist/
+
+# Runtime log written by the desktop app when it has no console
+*.log
+
 # Runtime data — never committed (contains the family's recipes, tokens, backups)
 /data/
 
