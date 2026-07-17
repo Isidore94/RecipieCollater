@@ -2,7 +2,22 @@
 
 Phased so that **every phase ends with something the family actually uses**. The builder agent (Claude Opus/Sonnet) should complete phases in order; each phase's exit criteria are testable. Keep a `CHANGELOG.md` from phase 1.
 
-**Cost constraint (owner requirement): $0 infrastructure.** No domain, no certificates, no cloud services, no subscriptions — the only recurring cost is Claude API usage (~$3–8/month). LAN-only: plain HTTP at `http://recipes.local` (DHCP reservation + Avahi mDNS). Optional free upgrades (mkcert HTTPS, Tailscale) are documented in `deploy/` but never on the roadmap's critical path.
+**Cost constraint (owner requirement): $0 infrastructure.** No domain, no certificates, no cloud services, no subscriptions — the only recurring cost is AI API usage (~$3–8/month). LAN-only: plain HTTP at `http://recipes.local` (DHCP reservation + Avahi mDNS). Optional free upgrades (mkcert HTTPS, Tailscale) are documented in `deploy/` but never on the roadmap's critical path.
+
+## Build-model & effort guidance
+
+No model produces a flawless build on its own — "no mistakes" comes from **a strong model on the hard parts + the verification gates this roadmap already specifies**. Concretely:
+
+- **Default: Claude Opus 4.8 at high reasoning effort** for the whole build — it's the strongest coding model, and a from-scratch multi-subsystem app rewards architectural coherence held in one head. (Opus fast mode is fine for iterating; it doesn't downgrade the model.)
+- **Max effort (or Claude 5 / Fable-class if available) on the six flaw-prone subsystems**, where a subtle bug hides and silently corrupts data or trust:
+  1. the **AI provider adapter + fallback** (normalizing two vendors' structured-output/tool shapes; the per-provider golden-file tests);
+  2. **unit-conversion / scaling / pantry-deduction math** (canonical g/ml, fraction rendering, zero-crossing, count↔mass bridges);
+  3. the **shopping-list sync protocol** (LWW, UUID adds, tombstones, staleness cutoff, the outbox JS);
+  4. **auth** (device-session cookies, magic-link, one-cookie iOS discipline);
+  5. **schema + migration runner** (the foundation; mistakes propagate);
+  6. **ingest edge cases** (yt-dlp fallbacks, thin extractions, curl_cffi bot-walls).
+- **Sonnet at medium effort is a fine cost/speed swap for the mechanical bulk** — Jinja templates, styling, straightforward CRUD routes, the settings and week-board UIs.
+- **The actual "no-flaws" levers are the gates, not the model**: never advance a phase while its exit criteria are red; write the tests this roadmap names (property tests for scaler/aggregation/deduction math, golden-file tests per AI provider, the two-device sync test, the write-contention test, offline extraction fixtures); keep `CONVENTIONS.md` authoritative to stop multi-session drift; and run a `/code-review` + `/verify` pass at the end of every phase before moving on.
 
 ## Phase 0 — Skeleton & plumbing (foundation, no features)
 
