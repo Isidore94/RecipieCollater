@@ -246,3 +246,15 @@ def list_active_jobs(conn: sqlite3.Connection) -> list[IngestJob]:
         "ORDER BY created_at DESC"
     ).fetchall()
     return [_row_to_job(r) for r in rows]
+
+
+def list_pending_jobs(conn: sqlite3.Connection, *, limit: int = 25) -> list[IngestJob]:
+    """Jobs the inbox should surface: everything not yet 'done' (in-flight or failed).
+
+    A successful job becomes an inbox recipe card, so it drops out of this list on completion.
+    """
+    rows = conn.execute(
+        "SELECT * FROM ingest_jobs WHERE status != 'done' ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [_row_to_job(r) for r in rows]

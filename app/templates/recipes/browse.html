@@ -12,6 +12,29 @@
   <a href="/archive"{% if status == 'archived' %} class="is-active"{% endif %}>Archive</a>
 </nav>
 
+{% if status == 'inbox' %}
+<section class="card ingest-card" x-data="{ paste: false }">
+  <h2 class="ingest-title">Add a recipe from the web</h2>
+  {% if ingest_error %}<p class="form-error" role="alert">{{ ingest_error }}</p>{% endif %}
+  <form method="post" action="/inbox/ingest" class="ingest-form">
+    <div class="ingest-row">
+      <input type="url" name="url" required inputmode="url"
+             placeholder="Paste a recipe or YouTube link&hellip;"
+             aria-label="Recipe URL" class="ingest-input">
+      <button type="submit" class="btn-primary">Add</button>
+    </div>
+    <label class="ingest-toggle">
+      <input type="checkbox" x-model="paste">
+      Paste the page's HTML instead (for sites that block automated fetching)
+    </label>
+    <textarea name="html" rows="5" x-show="paste" x-cloak class="ingest-textarea"
+              placeholder="Optional: paste the recipe page's HTML source here"
+              aria-label="Page HTML"></textarea>
+  </form>
+  {% include "recipes/_ingest_jobs.html" %}
+</section>
+{% endif %}
+
 <form method="get" class="library-search" role="search">
   <input type="search" name="q" value="{{ query }}"
          placeholder="Search titles, ingredients, tags&hellip;" aria-label="Search recipes">
