@@ -40,8 +40,11 @@ def connect(db_path: Path) -> sqlite3.Connection:
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
     # Default isolation_level ("") keeps Python's implicit transaction handling for normal
-    # DML; the migration runner manages its own explicit BEGIN/COMMIT.
-    conn = sqlite3.connect(db_path)
+    # DML; the migration runner manages its own explicit BEGIN/COMMIT. check_same_thread=False
+    # lets a per-request connection (app.deps.get_db) span the dependency worker thread and an
+    # async route's event-loop thread; connections are never shared across requests, so there is
+    # no concurrent cross-thread use.
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     for name, value in _PRAGMAS:
         conn.execute(f"PRAGMA {name}={value}")

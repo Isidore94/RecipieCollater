@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ recipe.title }} · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>{{ recipe.title }}</h1>
+  <p class="muted">
+    <span class="chip-tag">{{ recipe.status }}</span>
+    {% if recipe.tier %} · {{ recipe.tier }}{% endif %}
+    {% if recipe.base_servings %} · serves {{ recipe.base_servings }}{% endif %}
+    {% if recipe.total_minutes %} · {{ recipe.total_minutes }} min{% endif %}
+  </p>
+</header>
+
+{% if recipe.tldr %}<p class="tldr">{{ recipe.tldr }}</p>{% endif %}
+{% if recipe.description %}<p>{{ recipe.description }}</p>{% endif %}
+
+<section class="card">
+  <h2>Ingredients</h2>
+  {% set section = namespace(current=None) %}
+  <ul class="ingredient-list">
+    {% for ing in recipe.ingredients %}
+      {% if ing.section and ing.section != section.current %}
+      <li class="ingredient-section">{{ ing.section }}</li>
+      {% set section.current = ing.section %}
+      {% endif %}
+      <li>
+        {{ ing.original_text }}
+        {% if ing.scaling_mode != 'linear' %}<span class="muted">({{ ing.scaling_mode }})</span>{% endif %}
+      </li>
+    {% else %}
+      <li class="muted">No ingredients yet.</li>
+    {% endfor %}
+  </ul>
+</section>
+
+{% if recipe.steps %}
+<section class="card">
+  <h2>Steps</h2>
+  <ol class="step-list">
+    {% for step in recipe.steps %}<li>{{ step.instruction }}</li>{% endfor %}
+  </ol>
+</section>
+{% endif %}
+
+{% if recipe.tags %}
+<section class="card">
+  <h2>Tags</h2>
+  <ul class="chip-list">{% for tag in recipe.tags %}<li class="chip">{{ tag }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+{% if recipe.source_url or recipe.source_name %}
+<p class="muted">Source:
+  {% if recipe.source_url %}<a href="{{ recipe.source_url }}" rel="noopener">{{ recipe.source_name or recipe.source_url }}</a>
+  {% else %}{{ recipe.source_name }}{% endif %}
+</p>
+{% endif %}
+
+<section class="card">
+  <div class="form-actions">
+    <a href="/recipes/{{ recipe.slug }}/edit" class="btn-secondary">Edit</a>
+    {% if recipe.status != 'cookbook' %}
+    <form method="post" action="/recipes/{{ recipe.slug }}/status" class="inline-form">
+      <input type="hidden" name="status" value="cookbook">
+      <button type="submit" class="btn-primary">Promote to cookbook</button>
+    </form>
+    {% endif %}
+    {% if recipe.status != 'archived' %}
+    <form method="post" action="/recipes/{{ recipe.slug }}/status" class="inline-form">
+      <input type="hidden" name="status" value="archived">
+      <button type="submit" class="btn-secondary">Archive</button>
+    </form>
+    {% endif %}
+    {% if recipe.status != 'inbox' %}
+    <form method="post" action="/recipes/{{ recipe.slug }}/status" class="inline-form">
+      <input type="hidden" name="status" value="inbox">
+      <button type="submit" class="btn-secondary">Back to inbox</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/recipes/{{ recipe.slug }}/delete" class="inline-form"
+          onsubmit="return confirm('Delete this recipe? This cannot be undone.');">
+      <button type="submit" class="btn-danger">Delete</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

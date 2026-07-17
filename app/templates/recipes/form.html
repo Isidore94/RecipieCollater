@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} · RecipeCollater{% endblock %}
+{% block content %}
+{% macro ing_row(row) %}
+<div class="ing-row">
+  <input name="ing_section" placeholder="Group" value="{{ row.section }}" aria-label="Group">
+  <input name="ing_qty" placeholder="Qty" value="{{ row.qty }}" aria-label="Quantity" inputmode="text">
+  <input name="ing_unit" placeholder="Unit" value="{{ row.unit }}" aria-label="Unit" list="unit-list">
+  <input name="ing_food" placeholder="Ingredient" value="{{ row.food }}" aria-label="Ingredient">
+  <input name="ing_note" placeholder="Note" value="{{ row.note }}" aria-label="Note">
+  <select name="ing_scaling" aria-label="Scaling mode">
+    {% for mode in ['linear', 'fixed', 'to_taste', 'round_to_package'] %}
+    <option value="{{ mode }}"{% if row.scaling == mode %} selected{% endif %}>{{ mode }}</option>
+    {% endfor %}
+  </select>
+</div>
+{% endmacro %}
+{% set blank = {'section': '', 'qty': '', 'unit': '', 'food': '', 'note': '', 'scaling': 'linear'} %}
+
+<header class="page-head"><h1>{{ heading }}</h1></header>
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
+
+<form method="post" action="{{ action }}" class="recipe-form">
+  <section class="card">
+    <label for="title">Title</label>
+    <input id="title" name="title" required value="{{ form.title }}">
+    <label for="tldr">TLDR <span class="muted">(a sentence or two on the method)</span></label>
+    <textarea id="tldr" name="tldr" rows="2">{{ form.tldr }}</textarea>
+    <div class="form-grid">
+      <div>
+        <label for="tier">Tier</label>
+        <select id="tier" name="tier">
+          <option value="">&mdash;</option>
+          <option value="meal_prep"{% if form.tier == 'meal_prep' %} selected{% endif %}>Meal prep</option>
+          <option value="family"{% if form.tier == 'family' %} selected{% endif %}>Family</option>
+          <option value="company"{% if form.tier == 'company' %} selected{% endif %}>Company</option>
+        </select>
+      </div>
+      <div>
+        <label for="base_servings">Base servings</label>
+        <input id="base_servings" name="base_servings" value="{{ form.base_servings }}">
+      </div>
+    </div>
+    <div class="form-grid times">
+      <div><label>Prep min</label><input name="prep_minutes" value="{{ form.prep }}" inputmode="numeric"></div>
+      <div><label>Cook min</label><input name="cook_minutes" value="{{ form.cook }}" inputmode="numeric"></div>
+      <div><label>Total min</label><input name="total_minutes" value="{{ form.total }}" inputmode="numeric"></div>
+      <div><label>Active min</label><input name="active_minutes" value="{{ form.active }}" inputmode="numeric"></div>
+      <div><label>Elapsed min</label><input name="elapsed_minutes" value="{{ form.elapsed }}" inputmode="numeric"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Ingredients</h2>
+    <p class="muted">Amount + unit + ingredient per row. Blank rows are ignored; the Group column
+      makes sections. Scaling defaults to linear.</p>
+    <div id="ingredients">
+      {% for ing in form.ingredients %}{{ ing_row(ing) }}{% endfor %}
+      {% for _ in range(blank_rows) %}{{ ing_row(blank) }}{% endfor %}
+    </div>
+    <button type="button" class="btn-secondary" onclick="rcAddIngredient()">+ Add ingredient</button>
+  </section>
+
+  <section class="card">
+    <h2>Steps</h2>
+    <label class="visually-hidden" for="steps">Steps, one per line</label>
+    <textarea id="steps" name="steps" rows="8" placeholder="One step per line">{{ form.steps_text }}</textarea>
+  </section>
+
+  <section class="card">
+    <div class="form-grid">
+      <div>
+        <label for="tags">Tags <span class="muted">(comma separated)</span></label>
+        <input id="tags" name="tags" value="{{ form.tags_text }}" placeholder="italian, weeknight">
+      </div>
+      <div>
+        <label for="source_name">Source</label>
+        <input id="source_name" name="source_name" value="{{ form.source_name }}" placeholder="Cookbook or site">
+      </div>
+    </div>
+    <label for="source_url">Source link <span class="muted">(optional)</span></label>
+    <input id="source_url" name="source_url" value="{{ form.source_url }}" inputmode="url">
+  </section>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Save recipe</button>
+    <a href="/inbox" class="btn-secondary">Cancel</a>
+  </div>
+</form>
+
+<datalist id="unit-list">
+  {% for u in ['tsp', 'tbsp', 'cup', 'ml', 'l', 'g', 'kg', 'oz', 'lb', 'each', 'dozen', 'pinch', 'to taste'] %}
+  <option value="{{ u }}"></option>
+  {% endfor %}
+</datalist>
+
+<template id="ing-row-template">{{ ing_row(blank) }}</template>
+<script>
+  function rcAddIngredient() {
+    var tpl = document.getElementById('ing-row-template');
+    document.getElementById('ingredients').appendChild(tpl.content.cloneNode(true));
+  }
+</script>
+{% endblock %}

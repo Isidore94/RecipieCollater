@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ tab_title }} · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>{{ tab_title }}</h1>
+  <a href="/recipes/new" class="btn-primary">+ New recipe</a>
+</header>
+
+{% if recipes %}
+<ul class="recipe-cards">
+  {% for r in recipes %}
+  <li class="card recipe-card">
+    <a href="/recipes/{{ r.slug }}"><h2>{{ r.title }}</h2></a>
+    {% if r.tldr %}<p class="muted">{{ r.tldr }}</p>{% endif %}
+    {% if r.tier %}<span class="chip-tag">{{ r.tier }}</span>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Nothing here yet. <a href="/recipes/new">Add your first recipe.</a></p>
+{% endif %}
+{% endblock %}
