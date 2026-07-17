@@ -15,7 +15,7 @@
 | AI | **Claude API only** (Haiku extract / Sonnet chat), structured outputs, SSE streaming | Local LLM confirmed non-viable on N95 (~1 tok/s with context); API cost ≈ $3–8/month |
 | Python env | **uv** + `pyproject.toml`, dependencies pinned | Reproducible, fast, no Docker needed |
 
-An architecture panel (minimal-footprint vs modern-PWA vs agent-buildable proposals, judged across N95 fit, family UX, and buildability) converged on this same shape; the modern-SPA alternative's only real win — richer client interactivity — is covered by the htmx+Alpine islands pattern at a fraction of the complexity.
+An architecture panel (three independent proposals — minimal-footprint, modern-PWA, and agent-buildable — scored by three single-lens judges) settled this 2–1: two designers independently produced this exact FastAPI+htmx+SQLite shape, and the N95-performance and buildability judges both picked it. The family-UX judge preferred the SvelteKit PWA alternative for its richer in-hand feel; its winning ideas are grafted in rather than adopted wholesale: the instant client-side scaler preview, View-Transitions page morphs, the designed stock-take screen, and v1 Shortcut HTML-capture. Its disqualifying detail on this box: better-sqlite3's synchronous writes block Node's whole event loop under writer contention — a family-wide stall the single-language design can't have.
 
 ## 2. Process model on the N95
 
@@ -33,8 +33,11 @@ data/recipecollater.db  ← shared by web + worker (WAL; local disk only)
 
 - Total idle budget: **< 250 MB RSS, ~0% CPU** (no server-side polling; htmx polls only while an ingest job is in flight in someone's open tab).
 - Burst behavior: ingest jobs run in the worker at nice priority; the web process never blocks on them. LLM latency is Anthropic's, not ours.
-- Lazy-import heavy libs (yt-dlp, PIL, ingredient-parser) inside worker tasks so the web process stays slim — this is precisely how Mealie's FastAPI app ballooned to 400 MB and ours won't.
-- Watchdog: `Restart=on-failure`, `MemoryMax=512M` per unit as a leak backstop.
+- Lazy-import heavy libs (yt-dlp, PIL, ingredient-parser) inside worker tasks so the web process stays slim — this is precisely how Mealie's FastAPI app ballooned to 400 MB and ours won't. **Stated as a hard rule in `CONVENTIONS.md`.**
+- **Subprocess-per-job for heavy work**: Huey tasks spawn a short-lived `job_runner.py` subprocess for yt-dlp/Pillow/CRF stages. A thread-mode consumer never returns imported-lib RAM to the OS — subprocesses guarantee full release after each burst and isolate a hung extractor from the long-lived worker.
+- **The Huey queue lives in its own SQLite file** (`data/queue.db`), not the app DB, so queue polling/bookkeeping writes never contend with family-facing writes.
+- Short-transaction discipline in the worker is enforced by a test (simultaneous ingest + shopping-list sync must not stall) — the 5s single-writer stall is the easiest regression for AI-generated code to reintroduce.
+- Watchdog: `Restart=always`, `MemoryMax=512M` per unit as a leak backstop.
 
 ## 3. Repository layout (for the builder agent)
 
@@ -63,6 +66,10 @@ recipecollater/
 
 Conventions: business logic in `services/` as pure functions (LLM-friendly to test); routers thin; every htmx fragment has a full-page fallback route (progressive enhancement, also makes Playwright trivial).
 
+A root **`CONVENTIONS.md`** pins the rules a multi-session AI builder must never drift from: lazy-import rule, no-ORM SQL style, short worker transactions, exactly-one-cookie discipline, htmx-fragment naming, and the dependency pin/float split — **yt-dlp deliberately floats** (weekly auto-update; it's a hot dependency), **recipe-scrapers deliberately pinned** (LLM fallback covers breakage between deliberate bumps), curl_cffi and the ingredient-parser CRF model treated as pinned artifacts with a documented rebuild path, Python pinned at 3.12 via uv. Minimal CI: ruff + pytest + the sync-protocol test matrix.
+
+Migration runner: refuses out-of-order files, and takes a `VACUUM INTO` snapshot **before every migration apply**.
+
 ## 4. Request paths
 
 **Page read** (cookbook, recipe sheet): cookie dependency → SQLite read → Jinja2 render (<100 ms). htmx swaps for scaler changes, filters, checkboxes.
@@ -88,8 +95,8 @@ Everything is server-rendered except the **in-store shopping list**, which must 
 
 ## 7. Backups & recovery
 
-- Nightly Huey task: `VACUUM INTO data/backups/rc-YYYYMMDD.db`, keep 14; copy latest to a second disk/NAS via rclone if configured.
-- Weekly export: all recipes as JSON+markdown into a dated tarball (data outlives the app).
+- Nightly Huey task: `VACUUM INTO` snapshot, keep 14 daily + 8 weekly. The snapshot target must be a **different physical device** (USB disk/NAS) — a second partition on the same SSD does not bound the disk-death failure mode.
+- **Nightly export**: every cookbook recipe as plain JSON+markdown files (dead-man's portability guarantee, a second durability layer independent of SQLite itself).
 - Optional Litestream for continuous off-box WAL replication.
 - `deploy/RESTORE.md` documents the drill; admin page shows last-backup age with a red banner past 48 h.
 

@@ -4,9 +4,10 @@ Phased so that **every phase ends with something the family actually uses**. The
 
 ## Phase 0 — Skeleton & plumbing (foundation, no features)
 
-- Repo layout, `pyproject.toml` (uv-managed venv), ruff + pytest wiring.
+- Repo layout, `pyproject.toml` (uv-managed venv, Python pinned 3.12), ruff + pytest wiring, minimal CI.
+- `CONVENTIONS.md`: the drift-proofing rules for a multi-session AI builder (lazy-import rule, no-ORM SQL style, short worker transactions, one-cookie discipline, dependency pin/float split). Write it first; it governs every later phase.
 - FastAPI app factory, Jinja2 + htmx base layout (nav shell, dark mode), static pipeline (Tailwind standalone CLI or vanilla CSS).
-- SQLite connection factory with pragmas; numbered-SQL migration runner; `schema_migrations` table.
+- SQLite connection factory with pragmas; numbered-SQL migration runner (refuses out-of-order files; `VACUUM INTO` snapshot before every apply); `schema_migrations` table. Huey queue in its own `queue.db`.
 - Migration 001: full schema from `03-data-model.md`.
 - Seed loader: units, unit aliases, foods, food aliases, conversions from `seed/` JSON.
 - Huey worker (SqliteHuey) + systemd unit files (`recipecollater-web.service`, `recipecollater-worker.service`) + install script.
@@ -27,7 +28,8 @@ Phased so that **every phase ends with something the family actually uses**. The
 - Web pipeline: httpx→curl_cffi fetch, recipe-scrapers fast path, Claude fallback, OpenGraph stub; `raw_extraction` stored; re-extract button.
 - YouTube pipeline: yt-dlp metadata+comments, transcript fetch, single Claude structuring call, thumbnail capture, per-step `video_seconds`.
 - Ingredient normalization chain (ingredient-parser-nlp → matcher → batched LLM repair → pending-food quarantine chips).
-- Apple Shortcut (documented recipe + iCloud link template with Import Questions); paste box; bookmarklet.
+- Apple Shortcuts (documented recipe + iCloud link template with Import Questions), **including the Safari HTML-capture variant** for bot-walled sites; paste box; bookmarklet.
+- Heavy pipeline stages (yt-dlp, image processing, CRF parsing) run in short-lived subprocesses spawned by Huey tasks (full RAM release, hang isolation).
 - Weekly yt-dlp self-update task; AI usage logging + monthly cap.
 - **Exit criteria**: sharing a YouTube video from an iPhone yields a correct, pretty recipe sheet in <60s with zero further input; a schema.org site imports in <5s without an LLM call.
 
@@ -45,7 +47,7 @@ Phased so that **every phase ends with something the family actually uses**. The
 - Locations CRUD (inline-creatable), pantry item CRUD with graduated quantity modes, stock-take mode, staples & thresholds.
 - Recipe⇄pantry matching ("have 7/9", "cook from what we have" filter).
 - Shopping list: generation (plan − pantry + low staples), aggregation math, aisle grouping, manual adds, provenance labels.
-- In-store island: Alpine store + localStorage outbox + idempotent `POST /api/shopping/sync` (LWW, UUID adds, tombstones, staleness cutoff); post-shop "restock pantry" bulk flow.
+- In-store island: **write the sync-protocol spec (op shapes, LWW rules, tombstones, staleness cutoff) BEFORE generating any JS** — it's the one subsystem where an unspecified agent improvises divergently across sessions. Then: Alpine store + localStorage outbox + idempotent `POST /api/shopping/sync`, a pytest matrix over the sync endpoint (concurrent devices, replays, stale ops), and a defined degrade-to-online-only failure mode (never data loss). Post-shop "restock pantry" bulk flow.
 - Android `share_target` (now that the PWA is installed HTTPS).
 - **Exit criteria**: weekly shop runs off the app in the store, including one dead-signal aisle; pantry survives a month of casual use without a full re-inventory.
 
@@ -59,7 +61,7 @@ Phased so that **every phase ends with something the family actually uses**. The
 
 ## Phase 6 — Polish & resilience
 
-- Nightly `VACUUM INTO` backups + rotation + restore doc (tested!); optional Litestream.
+- Nightly `VACUUM INTO` backups to a different physical device + rotation + restore doc (tested!); nightly JSON/markdown export of the cookbook; optional Litestream.
 - Admin dashboard: job health, AI spend, yt-dlp version, backup status, DB size.
 - Photo import (Claude vision). Semantic search (fastembed + sqlite-vec) if FTS5 feels limiting.
 - Caddy + domain + Tailscale subnet-router setup docs; onboarding guide for family.
@@ -68,7 +70,7 @@ Phased so that **every phase ends with something the family actually uses**. The
 
 ## Testing conventions
 
-- pytest + httpx TestClient; golden-file tests for the extraction schema (recorded yt-dlp/scraper fixtures — never hit the network in tests); property tests for scaler & aggregation math (round-trips, fraction rendering); Playwright smoke for cook mode/wake-lock and the shopping island (Chromium is fine; note real iOS quirks are hand-tested).
+- pytest + httpx TestClient; golden-file tests for the extraction schema (recorded yt-dlp/scraper fixtures — never hit the network in tests); property tests for scaler & aggregation math (round-trips, fraction rendering); a **write-contention test** (simultaneous ingest + shopping sync must not stall the web process); Playwright smoke for cook mode/wake-lock and the shopping island (Chromium is fine; note real iOS quirks are hand-tested).
 - Every LLM call mockable; CI runs fully offline.
 
 ## What "lightweight at idle" means, measurably

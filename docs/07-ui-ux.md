@@ -7,7 +7,7 @@ One responsive web app, mobile-first, installable as a PWA on both platforms. It
 - **Warm minimalism**: generous whitespace, large recipe photography, a serif display face for recipe titles over a clean sans for UI, cream/paper light theme and a true dark theme (auto via `prefers-color-scheme`, manual toggle stored per device).
 - **Cards everywhere**: the recipe card (photo, title, time chip, tier badge, "have 7/9" pantry chip, rating) is the core visual unit — grid on desktop, single/double column on mobile.
 - Tier badges with consistent color + icon: 🥡 Meal Prep / 🍽 Family / ✨ Company.
-- Micro-interactions via CSS + Alpine (checkbox satisfaction, gauge cycling, card hover) — no JS animation library.
+- Micro-interactions via CSS + Alpine (checkbox satisfaction, gauge cycling, card hover) — no JS animation library. Use the **View Transitions API** (htmx supports it natively; pure progressive enhancement) for page morphs and list reordering, which removes most of the "web-page-like vs app-like" gap the design panel flagged as htmx's UX ceiling.
 - Tailwind CSS (standalone CLI binary — no Node toolchain on the server) or hand-rolled CSS custom properties; either way a single small stylesheet, far-future cached.
 - Empty states that teach: an empty inbox shows "Share a YouTube video to get started" with per-device setup buttons.
 
@@ -29,7 +29,7 @@ Global: instant-search overlay (FTS5, keystroke-fast on LAN), "+" action (paste 
 
 ### Recipe sheet (the heart)
 - Hero image, title, source badge (YouTube channel avatar / site favicon → links to origin), tier badge, rating stars, time row (claimed vs *our kitchen* time when set — shown as "45 min · ours: 60"), TLDR in a highlighted "in short" block.
-- **Serving scaler**: segmented 2 / 4 / 6 / 8 / custom, right above ingredients; quantities re-render as kitchen fractions instantly (htmx fragment swap; Alpine handles optimistic display). Non-scalable lines render as written with a subtle "as needed" tag. "Show original amounts" toggle. "Save as scaled copy" under overflow menu.
+- **Serving scaler**: segmented 2 / 4 / 6 / 8 / custom, right above ingredients. Two layers: an **instant client-side preview** (a few lines of Alpine multiplying `data-qty`/`data-base-servings` attributes and rendering kitchen fractions — zero round trip, feels native) over the **authoritative server-rendered fragment** (htmx swap; the math lives in one tested Python function). Non-scalable lines render as written with a subtle "as needed" tag. "Show original amounts" toggle. "Save as scaled copy" under overflow menu.
 - **Ingredients list**: checkbox per line (mise-en-place state, local to device), quantity + unit + food + note; ingredient-group headers ("For the sauce"); low-confidence parses show a dotted underline inviting a one-tap fix; pending-food chips ask "is 'green onion' the same as scallion?".
 - **Steps**: numbered cards; durations inside step text are auto-linked → tap spawns a named timer; steps with `video_seconds` show a tiny play glyph → seeks the embedded player.
 - **Cook mode** button → full-screen step-by-step: one step per screen, huge type, swipe/tap to advance, persistent timer tray, ingredient amounts inline-expandable per step, screen wake-lock (`navigator.wakeLock` in try/catch, re-acquired on `visibilitychange` — iOS PWA quirk), embedded YouTube player collapsed at top for video recipes.

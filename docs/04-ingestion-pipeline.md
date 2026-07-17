@@ -21,7 +21,7 @@ Hard constraints this imposes:
 - **`POST /api/ingest` must return `202 Accepted` + job id in <2s.** Get Contents of URL times out around 25–30s; a YouTube-transcript-plus-LLM parse takes longer. All parsing is async in the worker.
 - First LAN request triggers iOS's one-time **Local Network permission** prompt for Shortcuts — the setup guide must say "tap Allow".
 
-v2 enhancement: a second Shortcut variant that runs JavaScript-in-Safari to capture the rendered page HTML and POSTs `{"url", "html"}` — this defeats every bot-wall for free because the fetch happened in the user's real browser session (Mealie's newer shortcut does this).
+**Ship in v1, not backlog**: a second Shortcut variant that runs JavaScript-in-Safari to capture the rendered page HTML and POSTs `{"url", "html"}` — this defeats every bot-wall for free because the fetch happened in the user's real browser session (Mealie's newer shortcut does this). The design panel's family-UX judge flagged a failed share-from-Safari as the single highest-friction moment the family will hit; don't defer the fix.
 
 ### 1.2 Android — PWA Web Share Target
 
@@ -63,7 +63,7 @@ POST /api/ingest {url[, html]}  ──►  202 {job_id}
 
 - The inbox page shows live processing state (htmx polling every ~2s on in-flight jobs only — zero idle traffic).
 - Failures are visible in the inbox with a human-readable reason ("video has no captions or description recipe"; "site blocked us — try sharing from your phone with page capture") and a **Retry** button.
-- Duplicate check on submit: normalized `source_url` (strip tracking params; canonicalize `youtu.be` → `youtube.com/watch`) already in DB ⇒ inline warning with a link to the existing recipe, and an override.
+- Duplicate check on submit: normalized `source_url` (strip tracking params; canonicalize `youtu.be` → `youtube.com/watch`) already in DB ⇒ inline warning with a link to the existing recipe, and an override. The inbox card itself is also annotated ("possible duplicate of *X*") since fire-and-forget shares from a phone never see the submit-time warning.
 
 ## 3. Web recipe extraction
 
