@@ -42,8 +42,8 @@ def test_add_from_recipe_subtracts_pantry(migrated_db: sqlite3.Connection) -> No
     rid = _recipe(migrated_db, "200", "grams", "flour")
     _exact_pantry(migrated_db, "flour", "50", "grams")  # already have 50 g
     lst = shopping.active_list(migrated_db)
-    added = shopping.add_from_recipe(migrated_db, lst, rid)
-    assert added == 1
+    outcome = shopping.add_from_recipe(migrated_db, lst, rid)
+    assert outcome.added == 1
     item = shopping.list_items(migrated_db, lst)[0]
     assert item.quantity_text == "150"  # 200 needed - 50 on hand
 
@@ -53,7 +53,9 @@ def test_add_from_recipe_skips_when_stocked(migrated_db: sqlite3.Connection) -> 
     rid = _recipe(migrated_db, "200", "grams", "flour")
     _exact_pantry(migrated_db, "flour", "500", "grams")  # plenty
     lst = shopping.active_list(migrated_db)
-    assert shopping.add_from_recipe(migrated_db, lst, rid) == 0
+    outcome = shopping.add_from_recipe(migrated_db, lst, rid)
+    assert outcome.added == 0
+    assert outcome.covered == ["flour"]  # covered items are reported, never silently dropped
     assert shopping.list_items(migrated_db, lst) == []
 
 
@@ -80,7 +82,9 @@ def test_gauge_pantry_item_covers_recipe(migrated_db: sqlite3.Connection) -> Non
         ),
     )  # gauge 'full' -> treated as covered
     lst = shopping.active_list(migrated_db)
-    assert shopping.add_from_recipe(migrated_db, lst, rid) == 0
+    outcome = shopping.add_from_recipe(migrated_db, lst, rid)
+    assert outcome.added == 0
+    assert outcome.covered == ["flour"]
 
 
 def test_add_staples(migrated_db: sqlite3.Connection) -> None:

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Done shopping · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Put it away</h1>
+  <a href="/shopping" class="btn-secondary">Back</a>
+</header>
+
+<p class="muted">You checked these off &mdash; update the pantry so coverage and deductions stay
+  truthful. Untick anything you don&rsquo;t want tracked. Checked items are cleared either way.</p>
+
+<form method="post" action="/shopping/restock/apply" class="card restock-form">
+  <ul class="restock-list">
+    {% for line in candidates %}
+    <li class="restock-item">
+      {% if line.pantry_item_id and line.action_text %}
+      <label class="check">
+        <input type="checkbox" name="restock" value="{{ line.item_id }}" checked>
+        <span>{{ line.display_text }}</span>
+      </label>
+      <span class="restock-action">{{ line.pantry_item_name }} &rarr; {{ line.action_text }}</span>
+      {% elif line.can_create %}
+      <label class="check">
+        <input type="checkbox" name="create" value="{{ line.item_id }}">
+        <span>{{ line.display_text }}</span>
+      </label>
+      <span class="restock-action muted">start tracking in the pantry</span>
+      {% else %}
+      <span class="restock-plain">{{ line.display_text }}</span>
+      <span class="restock-action muted">not tracked</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if candidates | selectattr('can_create') | list %}
+  <label class="restock-location">New items go in
+    <select name="create_location">
+      {% for loc in locations %}
+      <option value="{{ loc.id }}">{{ loc.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Update pantry &amp; clear</button>
+    <a href="/shopping" class="btn-secondary">Not now</a>
+  </div>
+</form>
+{% endblock %}

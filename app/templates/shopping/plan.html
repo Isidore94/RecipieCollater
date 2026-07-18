@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Plan a trip · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Plan a trip</h1>
+  <a href="/shopping" class="btn-secondary">Back to list</a>
+</header>
+
+<p class="muted">Pick what you&rsquo;re cooking. The list is built once across everything you pick,
+  minus what the pantry already covers &mdash; you review it before anything is added.</p>
+
+<form method="post" action="/shopping/plan/preview" class="trip-form">
+  {% macro pick_rows(recipe_list) %}
+  <ul class="trip-picks">
+    {% for r in recipe_list %}
+    <li class="trip-pick">
+      <label class="check trip-pick-label">
+        <input type="checkbox" name="recipe" value="{{ r.id }}">
+        <span>{{ r.title }}</span>
+      </label>
+      <label class="trip-servings muted">servings
+        <input name="servings_{{ r.id }}" value="" placeholder="{{ r.base_servings if r.base_servings else '4' }}"
+               inputmode="decimal" size="3" aria-label="Servings for {{ r.title }}">
+      </label>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endmacro %}
+
+  {% if cookbook %}
+  <section class="card">
+    <h2>Cookbook</h2>
+    {{ pick_rows(cookbook) }}
+  </section>
+  {% endif %}
+
+  {% if inbox %}
+  <section class="card">
+    <h2>Inbox (not tried yet)</h2>
+    {{ pick_rows(inbox) }}
+  </section>
+  {% endif %}
+
+  {% if not cookbook and not inbox %}
+  <p class="muted">No recipes yet. <a href="/recipes/new">Add one first.</a></p>
+  {% else %}
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Preview the list &rarr;</button>
+  </div>
+  {% endif %}
+</form>
+{% endblock %}

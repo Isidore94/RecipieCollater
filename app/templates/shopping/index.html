@@ -4,8 +4,13 @@
 
 <header class="page-head">
   <h1>Shopping list</h1>
-  <a href="/pantry" class="btn-secondary">Pantry</a>
+  <div class="head-actions">
+    <a href="/shopping/plan" class="btn-primary">Plan a trip</a>
+    <a href="/pantry" class="btn-secondary">Pantry</a>
+  </div>
 </header>
+
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
 
 <form method="post" action="/shopping/add" class="shop-add">
   <input name="text" required placeholder="Add an item&hellip;" aria-label="Add an item" autocomplete="off">
@@ -28,6 +33,7 @@
   <a href="/shopping/export.json" class="btn-secondary" target="_blank" rel="noopener">JSON</a>
   <button type="button" class="btn-secondary" onclick="window.print()">Print</button>
   {% if remaining < total %}
+  <a href="/shopping/restock" class="btn-primary">Done shopping &rarr;</a>
   <form method="post" action="/shopping/clear-checked">
     <button type="submit" class="btn-secondary">Clear checked</button>
   </form>
@@ -41,13 +47,29 @@
   <h2 class="shop-aisle-name">{{ aisle }}</h2>
   <ul class="shop-list">
     {% for item in items %}
-    <li class="shop-item{% if item.checked %} is-checked{% endif %}">
+    <li class="shop-item{% if item.checked %} is-checked{% endif %}{% if item.needs_check %} needs-check{% endif %}">
       <form method="post" action="/shopping/items/{{ item.id }}/toggle" class="shop-check">
         <button type="submit" aria-label="{{ 'Uncheck' if item.checked else 'Check off' }}">
           {{ '☑' if item.checked else '☐' }}
         </button>
       </form>
-      <span class="shop-text">{{ item.label }}</span>
+      <span class="shop-text">
+        {{ item.label }}
+        {% if sources.get(item.id) %}
+        <span class="shop-source muted">{{ sources[item.id] | join(' · ') }}</span>
+        {% endif %}
+      </span>
+      {% if item.wants_purchase_info %}
+      <details class="shop-pack no-print">
+        <summary class="muted" title="Tell the list how you buy this">pack size?</summary>
+        <form method="post" action="/shopping/foods/{{ item.food_id }}/purchase" class="shop-pack-form">
+          <input name="label" placeholder="bag, can&hellip;" aria-label="Package word" size="6">
+          <input name="quantity" placeholder="2" aria-label="Package size" size="4" inputmode="decimal">
+          <input name="unit" placeholder="kg" aria-label="Package unit" size="4" list="unit-list">
+          <button type="submit" class="btn-secondary">Save</button>
+        </form>
+      </details>
+      {% endif %}
       <form method="post" action="/shopping/items/{{ item.id }}/remove" class="shop-remove no-print">
         <button type="submit" class="btn-link" aria-label="Remove">&times;</button>
       </form>
@@ -57,7 +79,14 @@
 </section>
 {% endfor %}
 {% else %}
-<p class="muted">Your list is empty. Add items above, pull in low staples, or use &ldquo;Add missing to shopping&rdquo; on a recipe.</p>
+<p class="muted">Your list is empty. Add items above, pull in low staples, use &ldquo;Add missing
+  to shopping&rdquo; on a recipe, or <a href="/shopping/plan">plan a whole trip</a>.</p>
 {% endif %}
+
+<datalist id="unit-list">
+  {% for u in ['g', 'kg', 'ml', 'l', 'oz', 'lb', 'each', 'cup'] %}
+  <option value="{{ u }}"></option>
+  {% endfor %}
+</datalist>
 <script src="/static/js/shopping.js" defer></script>
 {% endblock %}

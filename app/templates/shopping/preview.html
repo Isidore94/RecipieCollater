@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Trip preview · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Trip preview</h1>
+  <a href="/shopping/plan" class="btn-secondary">Change recipes</a>
+</header>
+
+<form method="post" action="/shopping/plan/apply">
+  {% for recipe_id, servings in preview.picks %}
+  <input type="hidden" name="recipe" value="{{ recipe_id }}">
+  <input type="hidden" name="servings_{{ recipe_id }}" value="{{ servings }}">
+  {% endfor %}
+
+  {% if preview.to_buy %}
+  {% for aisle, lines in preview.aisles %}
+  <section class="shop-aisle card">
+    <h2 class="shop-aisle-name">{{ aisle }}</h2>
+    <ul class="trip-lines">
+      {% for line in lines %}
+      <li class="trip-line{% if line.kind == 'check' %} needs-check{% endif %}">
+        <label class="check">
+          <input type="checkbox" name="line" value="{{ line.key }}" checked>
+          <span>{{ line.label }}</span>
+        </label>
+        {% if line.recipe_titles %}
+        <span class="shop-source muted">for {{ line.recipe_titles | join(', ') }}</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+  {% else %}
+  <p class="card muted">Nothing to buy &mdash; the pantry covers everything. &#127881;</p>
+  {% endif %}
+
+  {% if preview.covered %}
+  <details class="card trip-covered">
+    <summary>Covered by the pantry ({{ preview.covered | length }}) &#10003;</summary>
+    <ul class="muted">
+      {% for name in preview.covered %}<li>{{ name }}</li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  {% if preview.to_taste %}
+  <p class="muted">To taste (not listed): {{ preview.to_taste | join(', ') }}</p>
+  {% endif %}
+
+  {% if preview.to_buy %}
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Add to shopping list</button>
+    <a href="/shopping" class="btn-secondary">Cancel</a>
+  </div>
+  {% endif %}
+</form>
+{% endblock %}
