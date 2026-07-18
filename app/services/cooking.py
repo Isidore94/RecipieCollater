@@ -195,14 +195,11 @@ def _planned(ing: recipes.IngredientView, factor: Decimal) -> str | None:
         or ing.scaling_mode in ("fixed", "to_taste")
     ):
         return ing.quantity_text
-    package = (
-        quantity.parse_quantity(ing.package_quantity_text) if ing.package_quantity_text else None
-    )
     scaled = quantity.scale(
         quantity.parse_quantity(ing.quantity_text),
         factor=factor,
         mode=ing.scaling_mode,
-        package=package,
+        package=recipes.package_in_unit(ing),
     )
     return quantity.format_quantity(scaled) if scaled is not None else ing.quantity_text
 

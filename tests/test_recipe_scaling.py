@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 from decimal import Decimal
 
+import pytest
+
 from app.services import recipes, units
 
 
@@ -57,3 +59,59 @@ def test_unscaled_keeps_original_wording(migrated_db: sqlite3.Connection) -> Non
 def test_scale_factor_guards_zero_base() -> None:
     assert recipes.scale_factor("4", "6") == Decimal(6) / Decimal(4)
     assert recipes.scale_factor("0", "6") == Decimal(1)
+
+
+def _package_recipe(
+    conn: sqlite3.Connection, *, unit: str, package_qty: str, package_unit: str | None
+) -> recipes.RecipeDetail:
+    units.seed_core_units(conn)
+    recipe_id = recipes.create_recipe(
+        conn,
+        recipes.RecipeInput(
+            title="Bread",
+            base_servings="4",
+            ingredients=[
+                recipes.IngredientInput(
+                    quantity_text="300", unit=unit, food="flour",
+                    scaling_mode="round_to_package",
+                    package_quantity_text=package_qty, package_unit=package_unit,
+                )
+            ],
+        ),
+    )
+    detail = recipes.get_recipe(conn, recipe_id)
+    assert detail is not None
+    return detail
+
+
+def test_round_to_package_converts_cross_unit(migrated_db: sqlite3.Connection) -> None:
+    # 300 g bought in 1 kg packs, scaled 4->6 (x1.5 = 450 g) must round up to a full 1 kg (1000 g),
+    # NOT to 450 (the bug where the '1' kg package was treated as 1 gram). Finding #2.
+    detail = _package_recipe(migrated_db, unit="grams", package_qty="1", package_unit="kg")
+    display = recipes.scale_ingredients(detail, "6")[0].display
+    assert "1000 grams" in display
+    assert "450" not in display
+
+
+def test_round_to_package_same_unit_unchanged(migrated_db: sqlite3.Connection) -> None:
+    # Package in the ingredient's own unit still works: 300 g in 500 g packs, x1.5 = 450 -> 500 g.
+    detail = _package_recipe(migrated_db, unit="grams", package_qty="500", package_unit="grams")
+    assert "500 grams" in recipes.scale_ingredients(detail, "6")[0].display
+
+
+def test_round_to_package_rejects_incompatible_dimension(migrated_db: sqlite3.Connection) -> None:
+    units.seed_core_units(migrated_db)
+    with pytest.raises(recipes.RecipeError):
+        recipes.create_recipe(
+            migrated_db,
+            recipes.RecipeInput(
+                title="Bad",
+                ingredients=[
+                    recipes.IngredientInput(
+                        quantity_text="300", unit="grams", food="flour",
+                        scaling_mode="round_to_package",
+                        package_quantity_text="1", package_unit="cups",  # volume vs mass
+                    )
+                ],
+            ),
+        )

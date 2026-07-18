@@ -75,8 +75,9 @@
 
 {% if recipe.source_url or recipe.source_name %}
 <p class="muted">Source:
-  {% if recipe.source_url %}<a href="{{ recipe.source_url }}" rel="noopener">{{ recipe.source_name or recipe.source_url }}</a>
-  {% else %}{{ recipe.source_name }}{% endif %}
+  {% set safe_source = recipe.source_url | safe_url %}
+  {% if safe_source %}<a href="{{ safe_source }}" rel="noopener nofollow">{{ recipe.source_name or recipe.source_url }}</a>
+  {% else %}{{ recipe.source_name or recipe.source_url }}{% endif %}
 </p>
 {% endif %}
 

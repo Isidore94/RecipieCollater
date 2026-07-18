@@ -142,6 +142,8 @@ def test_validation_rejects_bad_input(migrated_db: sqlite3.Connection) -> None:
             title="X",
             ingredients=[recipes.IngredientInput(food="flour", scaling_mode="round_to_package")],
         ),
+        # A script-bearing source link must never be stored (finding #9.1).
+        recipes.RecipeInput(title="X", source_url="javascript:alert(document.cookie)"),
     ]
     for bad in bad_inputs:
         with pytest.raises(recipes.RecipeError):

@@ -15,6 +15,7 @@ import re
 import sqlite3
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
+from urllib.parse import urlsplit
 
 from app.security import now_iso
 from app.services import quantity, units
@@ -95,6 +96,12 @@ class IngredientView:
     scaling_mode: str
     package_quantity_text: str | None
     package_unit_id: int | None
+    # Canonical factors + dimensions carried so pure scaling code can convert a package expressed
+    # in a different unit into the ingredient's unit without a DB round-trip (finding #2).
+    unit_dimension: str | None = None
+    unit_to_canonical: int | None = None
+    package_unit_dimension: str | None = None
+    package_unit_to_canonical: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +222,11 @@ def _validate(conn: sqlite3.Connection, data: RecipeInput) -> None:
         raise RecipeError(f"unknown tier: {data.tier!r}")
     if data.source_type not in VALID_SOURCE_TYPE:
         raise RecipeError(f"unknown source type: {data.source_type!r}")
+    # A source link is rendered into an href; only http(s) may be stored so a 'javascript:' or
+    # 'data:' URL can never become a stored-XSS click target (finding #9.1).
+    source_url = _clean(data.source_url)
+    if source_url is not None and urlsplit(source_url).scheme.lower() not in ("http", "https"):
+        raise RecipeError("source link must be an http:// or https:// URL")
     if quantity.parse_quantity(data.base_servings) <= 0:
         raise RecipeError("base servings must be greater than zero")
     for ing in data.ingredients:
@@ -231,7 +243,24 @@ def _validate(conn: sqlite3.Connection, data: RecipeInput) -> None:
             package_qty = _clean(ing.package_quantity_text)
             if package_qty is None:
                 raise RecipeError(f"'{label}' uses round-to-package but has no package size")
-            quantity.parse_quantity(package_qty)
+            if quantity.parse_quantity(package_qty) <= 0:
+                raise RecipeError(f"'{label}' package size must be greater than zero")
+            # A package expressed in a different unit ('300 g' bought in '1 kg' packs) must share
+            # the ingredient's dimension, or the ceiling-to-package math can't convert it exactly.
+            package_unit_text = _clean(ing.package_unit)
+            if package_unit_text is not None:
+                package_unit = units.resolve_unit(conn, package_unit_text)
+                if package_unit is None:
+                    raise RecipeError(f"'{label}' has an unrecognised package unit")
+                ingredient_unit = units.resolve_unit(conn, _clean(ing.unit) or "")
+                if (
+                    ingredient_unit is not None
+                    and package_unit.dimension != ingredient_unit.dimension
+                ):
+                    raise RecipeError(
+                        f"'{label}' package unit ({package_unit.name}) must measure the same thing "
+                        f"as the ingredient's unit ({ingredient_unit.name})"
+                    )
 
 
 def _insert_children(conn: sqlite3.Connection, recipe_id: int, data: RecipeInput) -> None:
@@ -396,9 +425,14 @@ def set_image(conn: sqlite3.Connection, recipe_id: int, image_path: str) -> None
 def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail:
     recipe_id = int(row["id"])
     ing_rows = conn.execute(
-        """SELECT ri.*, u.name AS unit_name, u.plural_name AS unit_plural, fo.name AS food_name
+        """SELECT ri.*, u.name AS unit_name, u.plural_name AS unit_plural,
+                  u.dimension AS unit_dimension, u.to_canonical_microunits AS unit_to_canonical,
+                  pu.dimension AS package_unit_dimension,
+                  pu.to_canonical_microunits AS package_unit_to_canonical,
+                  fo.name AS food_name
            FROM recipe_ingredients ri
            LEFT JOIN units u ON u.id = ri.unit_id
+           LEFT JOIN units pu ON pu.id = ri.package_unit_id
            LEFT JOIN foods fo ON fo.id = ri.food_id
            WHERE ri.recipe_id = ? ORDER BY ri.sort_order""",
         (recipe_id,),
@@ -411,6 +445,9 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
             note=r["note"],
             scaling_mode=r["scaling_mode"], package_quantity_text=r["package_quantity_text"],
             package_unit_id=r["package_unit_id"],
+            unit_dimension=r["unit_dimension"], unit_to_canonical=r["unit_to_canonical"],
+            package_unit_dimension=r["package_unit_dimension"],
+            package_unit_to_canonical=r["package_unit_to_canonical"],
         )
         for r in ing_rows
     )
@@ -514,6 +551,29 @@ def scale_factor(base_servings: str, target_servings: str) -> Decimal:
     return target / base
 
 
+def package_in_unit(ing: IngredientView) -> Decimal | None:
+    """The round_to_package package size expressed in the INGREDIENT's own unit.
+
+    ``package_unit_id`` may differ from the ingredient's unit - a '300 g' ingredient bought in
+    '1 kg' packs - so convert through canonical micro-units (finding #2). When the package uses the
+    same/absent unit, or either unit is approximate (no factor), no conversion is possible or needed
+    and the raw amount is returned. Validation guarantees matching dimensions when a package unit is
+    set, so the dimension guard here is purely defensive.
+    """
+    if not ing.package_quantity_text:
+        return None
+    pkg = quantity.parse_quantity(ing.package_quantity_text)
+    if (
+        ing.package_unit_id is None
+        or ing.package_unit_id == ing.unit_id
+        or ing.unit_to_canonical is None
+        or ing.package_unit_to_canonical is None
+        or ing.unit_dimension != ing.package_unit_dimension
+    ):
+        return pkg
+    return quantity.convert(pkg, ing.package_unit_to_canonical, ing.unit_to_canonical)
+
+
 def _scaled_display(ing: IngredientView, factor: Decimal) -> str:
     # No amount, an unscaled view, fixed, and to-taste lines keep the original wording.
     if ing.quantity_text is None or ing.unit_name is None:
@@ -521,10 +581,9 @@ def _scaled_display(ing: IngredientView, factor: Decimal) -> str:
     if factor == 1 or ing.scaling_mode in ("fixed", "to_taste"):
         return ing.original_text
     amount = quantity.parse_quantity(ing.quantity_text)
-    package = (
-        quantity.parse_quantity(ing.package_quantity_text) if ing.package_quantity_text else None
+    scaled = quantity.scale(
+        amount, factor=factor, mode=ing.scaling_mode, package=package_in_unit(ing)
     )
-    scaled = quantity.scale(amount, factor=factor, mode=ing.scaling_mode, package=package)
     if scaled is None:
         return ing.original_text
     unit_label = ing.unit_plural if (scaled > 1 and ing.unit_plural) else ing.unit_name

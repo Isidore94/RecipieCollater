@@ -14,6 +14,18 @@ from app.services.users import User
 
 _TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
 
+
+def safe_url(value: str | None) -> str:
+    """Return the URL only if it is an http(s) link, else ''. Defence in depth for any value that
+    reaches an href: HTML-escaping does not neutralise a 'javascript:' or 'data:' URI (#9.1)."""
+    if not value:
+        return ""
+    trimmed = value.strip()
+    return trimmed if trimmed.lower().startswith(("http://", "https://")) else ""
+
+
+_TEMPLATES.env.filters["safe_url"] = safe_url
+
 # Primary navigation (docs/07-ui-ux.md §2). Phase-0 tabs render empty states.
 NAV_ITEMS: list[dict[str, str]] = [
     {"key": "inbox", "label": "Inbox", "href": "/inbox", "icon": "inbox"},
