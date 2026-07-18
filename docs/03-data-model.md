@@ -277,7 +277,7 @@ CREATE TABLE cook_log (
   actual_minutes INTEGER,                   -- feeds recipes.our_minutes suggestion
   actual_active_minutes INTEGER,
   actual_elapsed_minutes INTEGER,
-  rating         INTEGER CHECK (rating BETWEEN 1 AND 5),
+  rating         INTEGER CHECK (rating BETWEEN 1 AND 10),  -- 1-10 to match recipes.rating (migration 009)
   notes          TEXT                       -- 'doubled the chilies, kids loved it'
 );
 

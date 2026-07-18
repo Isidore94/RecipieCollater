@@ -51,6 +51,7 @@ class StepInput:
     instruction: str
     section: str | None = None
     minutes: int | None = None
+    video_seconds: int | None = None  # deep-link into a YouTube recipe at this step
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +104,7 @@ class StepView:
     section: str | None
     instruction: str
     minutes: int | None
+    video_seconds: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +129,9 @@ class RecipeDetail:
     image_path: str | None
     rating: int | None
     notes: str | None
+    our_minutes: int | None
+    our_active_minutes: int | None
+    video_id: str | None
     created_at: str
     updated_at: str
     ingredients: tuple[IngredientView, ...]
@@ -252,9 +257,10 @@ def _insert_children(conn: sqlite3.Connection, recipe_id: int, data: RecipeInput
         if not instruction:
             continue
         conn.execute(
-            "INSERT INTO recipe_steps (recipe_id, sort_order, section, instruction, minutes) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (recipe_id, order, _clean(step.section), instruction, step.minutes),
+            "INSERT INTO recipe_steps "
+            "(recipe_id, sort_order, section, instruction, minutes, video_seconds) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (recipe_id, order, _clean(step.section), instruction, step.minutes, step.video_seconds),
         )
     for raw_tag in data.tags:
         tag = _clean(raw_tag)
@@ -414,7 +420,7 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
     steps = tuple(
         StepView(
             id=int(r["id"]), sort_order=int(r["sort_order"]), section=r["section"],
-            instruction=r["instruction"], minutes=r["minutes"],
+            instruction=r["instruction"], minutes=r["minutes"], video_seconds=r["video_seconds"],
         )
         for r in step_rows
     )
@@ -433,6 +439,8 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
         source_type=row["source_type"], source_url=row["source_url"],
         source_name=row["source_name"], image_path=row["image_path"],
         rating=row["rating"], notes=row["notes"],
+        our_minutes=row["our_minutes"], our_active_minutes=row["our_active_minutes"],
+        video_id=row["video_id"],
         created_at=row["created_at"], updated_at=row["updated_at"],
         ingredients=ingredients, steps=steps, tags=tags,
     )
