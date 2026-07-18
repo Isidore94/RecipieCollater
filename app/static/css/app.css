@@ -236,11 +236,12 @@ pre { overflow-x: auto; background: var(--paper); border: 1px solid var(--line);
 pre code { font-size: 13px; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
-/* Recipe rating stars + my-notes */
-.star-rating { display: flex; align-items: center; gap: 0; margin: 2px 0 14px; }
-.star-rating .star { background: none; border: none; border-radius: 0; box-shadow: none; padding: 0 2px; font-size: 26px; line-height: 1; color: var(--line); cursor: pointer; }
+/* Recipe rating stars (1-10) + my-notes */
+.star-rating { display: flex; align-items: center; flex-wrap: wrap; gap: 0; margin: 2px 0 14px; }
+.star-rating .star { background: none; border: none; border-radius: 0; box-shadow: none; padding: 0 1px; font-size: 23px; line-height: 1; color: var(--line); cursor: pointer; }
 .star-rating .star.is-filled { color: var(--brand); }
 .star-rating .star:hover { color: var(--brand); }
+.star-rating-value { font-weight: 600; color: var(--ink); margin-left: 8px; }
 .star-rating .star-clear { background: none; border: none; box-shadow: none; color: var(--ink-soft); font-size: 12px; margin-left: 10px; cursor: pointer; }
 .notes-card h2 { margin: 0 0 8px; }
 .notes-input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-family: inherit; font-size: 14px; }

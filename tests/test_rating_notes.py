@@ -16,13 +16,13 @@ def _make(conn: sqlite3.Connection) -> int:
 
 def test_set_rating_clamps_and_clears(migrated_db: sqlite3.Connection) -> None:
     rid = _make(migrated_db)
-    recipes.set_rating(migrated_db, rid, 4)
+    recipes.set_rating(migrated_db, rid, 9)  # 1-10 scale, so 9 is valid
     got = recipes.get_recipe(migrated_db, rid)
-    assert got is not None and got.rating == 4
+    assert got is not None and got.rating == 9
 
-    recipes.set_rating(migrated_db, rid, 9)  # out of range -> clamped to 5
+    recipes.set_rating(migrated_db, rid, 15)  # out of range -> clamped to 10
     got = recipes.get_recipe(migrated_db, rid)
-    assert got is not None and got.rating == 5
+    assert got is not None and got.rating == 10
 
     recipes.set_rating(migrated_db, rid, 0)  # 0 clears the rating
     got = recipes.get_recipe(migrated_db, rid)
@@ -62,11 +62,12 @@ def _create_web(client: TestClient) -> None:
 def test_rating_route_marks_stars(admin_client: TestClient) -> None:
     _create_web(admin_client)
     resp = admin_client.post(
-        "/recipes/chili/rating", data={"rating": "5"}, headers=SAME_ORIGIN, follow_redirects=False
+        "/recipes/chili/rating", data={"rating": "8"}, headers=SAME_ORIGIN, follow_redirects=False
     )
     assert resp.status_code == 303
     view = admin_client.get("/recipes/chili").text
-    assert view.count("star is-filled") == 5
+    assert view.count("star is-filled") == 8  # 8 of the 10 stars filled
+    assert "8/10" in view
 
 
 def test_notes_route_saves_and_shows(admin_client: TestClient) -> None:

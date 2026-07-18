@@ -356,8 +356,8 @@ def delete_recipe(conn: sqlite3.Connection, recipe_id: int) -> bool:
 
 
 def set_rating(conn: sqlite3.Connection, recipe_id: int, rating: int | None) -> None:
-    """Set a 1-5 star rating; 0 or None clears it. Out-of-range values are clamped."""
-    value = None if not rating else max(1, min(5, int(rating)))
+    """Set a 1-10 rating; 0 or None clears it. Out-of-range values are clamped."""
+    value = None if not rating else max(1, min(10, int(rating)))
     conn.execute(
         "UPDATE recipes SET rating = ?, updated_at = ? WHERE id = ?",
         (value, now_iso(), recipe_id),
