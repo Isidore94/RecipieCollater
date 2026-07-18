@@ -158,6 +158,17 @@ class CookError(ValueError):
     """Invalid after-cook input (a bad servings/amount string)."""
 
 
+VALID_DEVIATIONS: frozenset[str] = frozenset({"omitted", "substituted", "adjusted"})
+
+
+@dataclass(frozen=True, slots=True)
+class DeviationInput:
+    """What actually happened to one ingredient line this cook (docs/07 after-cook capture)."""
+
+    kind: str  # 'omitted' | 'substituted' | 'adjusted'
+    text: str | None = None  # what was used instead / the changed amount, as typed
+
+
 @dataclass(frozen=True, slots=True)
 class CookCaptureInput:
     rating: int | None = None
@@ -166,6 +177,8 @@ class CookCaptureInput:
     elapsed_minutes: int | None = None
     notes: str | None = None
     promote: bool = False
+    deviations: dict[int, DeviationInput] = field(default_factory=dict)  # by ingredient_id
+    additions: str | None = None  # free text: "also threw in a can of black beans"
 
 
 def _clean(value: str | None) -> str | None:
@@ -196,6 +209,10 @@ def record_cook(
     elapsed = data.elapsed_minutes
     active = data.active_minutes
     notes = _clean(data.notes)
+    additions = _clean(data.additions)
+    for ingredient_id, dev_input in data.deviations.items():
+        if dev_input.kind not in VALID_DEVIATIONS:
+            raise CookError(f"unknown deviation: {dev_input.kind!r} on line {ingredient_id}")
 
     # Compute every planned amount before the first write, so a bad amount never leaves a
     # half-written cook log (validate-before-write, like recipes._validate).
@@ -206,18 +223,36 @@ def record_cook(
     cur = conn.execute(
         """INSERT INTO cook_log
            (recipe_id, user_id, cooked_at, servings_made, actual_minutes,
-            actual_active_minutes, actual_elapsed_minutes, rating, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (recipe_id, user_id, stamp, servings_made, elapsed, active, elapsed, rating, notes),
+            actual_active_minutes, actual_elapsed_minutes, rating, notes, additions)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            recipe_id, user_id, stamp, servings_made, elapsed, active, elapsed, rating, notes,
+            additions,
+        ),
     )
     cook_log_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
 
     for ing, planned_text in snapshots:
+        deviation = data.deviations.get(ing.id)
+        used_text = _clean(deviation.text) if deviation else None
+        used_quantity_text: str | None = None
+        if deviation and deviation.kind == "adjusted" and used_text:
+            # Keep the raw text either way; also store it as a parseable amount when it is one,
+            # so the pantry deduction can use the ACTUAL amount instead of the plan.
+            try:
+                quantity.parse_quantity(used_text)
+                used_quantity_text = used_text
+            except quantity.QuantityError:
+                used_quantity_text = None
         conn.execute(
             """INSERT INTO cook_log_ingredients
-               (cook_log_id, ingredient_id, original_text, food_id, planned_quantity_text)
-               VALUES (?, ?, ?, ?, ?)""",
-            (cook_log_id, ing.id, ing.original_text, ing.food_id, planned_text),
+               (cook_log_id, ingredient_id, original_text, food_id, planned_quantity_text,
+                deviation, used_text, used_quantity_text)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                cook_log_id, ing.id, ing.original_text, ing.food_id, planned_text,
+                deviation.kind if deviation else None, used_text, used_quantity_text,
+            ),
         )
 
     # Feed the "in our kitchen" time suggestion and mirror the rating onto the recipe.
@@ -263,6 +298,18 @@ def _planned(ing: recipes.IngredientView, factor: Decimal) -> str | None:
 
 
 @dataclass(frozen=True, slots=True)
+class CookDeviation:
+    """One recorded change, ready to render ("used greek yogurt instead of sour cream")."""
+
+    kind: str
+    display: str
+    food_id: int | None
+    food_name: str | None
+    used_text: str | None
+    remembered: bool  # a substitution already saved to food_substitutes
+
+
+@dataclass(frozen=True, slots=True)
 class CookLogEntry:
     id: int
     cooked_at: str
@@ -272,12 +319,51 @@ class CookLogEntry:
     active_minutes: int | None
     elapsed_minutes: int | None
     notes: str | None
+    additions: str | None = None
+    deviations: list[CookDeviation] = field(default_factory=list)
+
+
+def _deviation_display(kind: str, name: str, used_text: str | None) -> str:
+    if kind == "omitted":
+        return f"left out {name}"
+    if kind == "substituted":
+        return f"used {used_text or 'something else'} instead of {name}"
+    return f"{name}: {used_text}" if used_text else f"changed the amount of {name}"
+
+
+def _deviations_by_cook(conn: sqlite3.Connection, recipe_id: int) -> dict[int, list[CookDeviation]]:
+    rows = conn.execute(
+        """SELECT cli.cook_log_id, cli.deviation, cli.used_text, cli.original_text,
+                  cli.food_id, fo.name AS food_name,
+                  EXISTS (SELECT 1 FROM food_substitutes fs
+                          WHERE fs.food_id = cli.food_id
+                            AND fs.substitute_text = cli.used_text COLLATE NOCASE) AS remembered
+           FROM cook_log_ingredients cli
+           JOIN cook_log cl ON cl.id = cli.cook_log_id
+           LEFT JOIN foods fo ON fo.id = cli.food_id
+           WHERE cl.recipe_id = ? AND cli.deviation IS NOT NULL
+           ORDER BY cli.id""",
+        (recipe_id,),
+    ).fetchall()
+    out: dict[int, list[CookDeviation]] = {}
+    for r in rows:
+        name = r["food_name"] or r["original_text"]
+        out.setdefault(int(r["cook_log_id"]), []).append(
+            CookDeviation(
+                kind=r["deviation"],
+                display=_deviation_display(r["deviation"], name, r["used_text"]),
+                food_id=r["food_id"], food_name=r["food_name"], used_text=r["used_text"],
+                remembered=bool(r["remembered"]),
+            )
+        )
+    return out
 
 
 def list_cook_log(conn: sqlite3.Connection, recipe_id: int) -> list[CookLogEntry]:
+    deviations = _deviations_by_cook(conn, recipe_id)
     rows = conn.execute(
         """SELECT cl.id, cl.cooked_at, u.name AS cook_name, cl.servings_made, cl.rating,
-                  cl.actual_active_minutes, cl.actual_elapsed_minutes, cl.notes
+                  cl.actual_active_minutes, cl.actual_elapsed_minutes, cl.notes, cl.additions
            FROM cook_log cl LEFT JOIN users u ON u.id = cl.user_id
            WHERE cl.recipe_id = ? ORDER BY cl.cooked_at DESC, cl.id DESC""",
         (recipe_id,),
@@ -287,7 +373,8 @@ def list_cook_log(conn: sqlite3.Connection, recipe_id: int) -> list[CookLogEntry
             id=int(r["id"]), cooked_at=r["cooked_at"], cook_name=r["cook_name"],
             servings_made=r["servings_made"], rating=r["rating"],
             active_minutes=r["actual_active_minutes"], elapsed_minutes=r["actual_elapsed_minutes"],
-            notes=r["notes"],
+            notes=r["notes"], additions=r["additions"],
+            deviations=deviations.get(int(r["id"]), []),
         )
         for r in rows
     ]

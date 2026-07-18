@@ -6,6 +6,7 @@ timer / checklist progress is device-local (cook.js + localStorage), never a ser
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -14,7 +15,7 @@ from starlette.datastructures import FormData
 
 from app.auth import current_user, require_csrf
 from app.deps import get_db
-from app.services import cooking, deductions, recipes
+from app.services import cooking, deductions, foods, recipes
 from app.services.users import User
 from app.templating import render
 
@@ -78,6 +79,13 @@ async def record_after_cook(
     if detail is None:
         return RedirectResponse("/cookbook", status_code=303)
     async with request.form() as form:
+        deviations: dict[int, cooking.DeviationInput] = {}
+        for ing in detail.ingredients:
+            kind = _form_str(form, f"dev_{ing.id}")
+            if kind in cooking.VALID_DEVIATIONS:
+                deviations[ing.id] = cooking.DeviationInput(
+                    kind=kind, text=_form_str(form, f"dev_text_{ing.id}") or None
+                )
         data = cooking.CookCaptureInput(
             rating=_form_int(form, "rating"),
             servings_made=_form_str(form, "servings_made") or None,
@@ -85,6 +93,8 @@ async def record_after_cook(
             elapsed_minutes=_form_int(form, "elapsed_minutes"),
             notes=_form_str(form, "notes") or None,
             promote=_form_str(form, "promote") in ("on", "true", "1"),
+            deviations=deviations,
+            additions=_form_str(form, "additions") or None,
         )
         try:
             cook_log_id = cooking.record_cook(db, detail.id, data, user_id=user.id)
@@ -175,6 +185,27 @@ async def deductions_apply(
     return RedirectResponse(
         f"/recipes/{slug}/deductions?cook={cook_log_id}&applied={result.batch_id}", status_code=303
     )
+
+
+@router.post("/{slug}/remember-sub")
+async def remember_sub(
+    request: Request,
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    """Save a logged substitution into the household's learned subs (food_substitutes)."""
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is None:
+        return RedirectResponse("/cookbook", status_code=303)
+    async with request.form() as form:
+        food_id = _form_int(form, "food_id")
+        text = _form_str(form, "text")
+        if food_id is not None and text:
+            with contextlib.suppress(foods.FoodError):
+                foods.record_substitute(db, food_id, text, source="cook")
+    return RedirectResponse(f"/recipes/{slug}", status_code=303)
 
 
 @router.post("/{slug}/deductions/undo")

@@ -12,14 +12,21 @@
     <summary>All ingredients &middot; {{ view.servings }} servings</summary>
     <ul class="checklist">
       {% for ing in view.ingredients %}
-      <li>
+      <li class="cook-ing" data-devkey="ing-{{ loop.index }}">
         <label>
           <input type="checkbox" class="cook-check" data-key="ing-{{ loop.index }}">
           <span>{{ ing.display }}</span>
         </label>
+        <span class="cook-dev no-print">
+          <button type="button" class="dev-btn" data-dev="omitted" title="Left it out">skip</button>
+          <button type="button" class="dev-btn" data-dev="substituted" title="Used something else">sub</button>
+        </span>
+        <input class="dev-text" hidden placeholder="used instead&hellip;" aria-label="What you used instead">
       </li>
       {% endfor %}
     </ul>
+    <p class="muted cook-dev-hint">skip / sub marks are remembered and pre-fill the
+      after-cook questions.</p>
   </details>
 
   <div class="cook-steps">

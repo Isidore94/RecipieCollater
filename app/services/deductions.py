@@ -143,7 +143,8 @@ def propose(
         (recipe_id,),
     ).fetchall()
 
-    lines = [_propose_line(conn, r, factor) for r in rows]
+    deviations = _cook_deviations(conn, cook_log_id)
+    lines = [_propose_line(conn, r, factor, deviations.get(int(r["id"]))) for r in rows]
     return DeductionProposal(
         recipe_id=recipe_id, cook_log_id=cook_log_id, deduction_mode=recipe["deduction_mode"],
         servings=servings, lines=lines,
@@ -159,7 +160,33 @@ def _skip(row: sqlite3.Row, reason: str) -> ProposedLine:
     )
 
 
-def _propose_line(conn: sqlite3.Connection, row: sqlite3.Row, factor: Decimal) -> ProposedLine:
+def _cook_deviations(
+    conn: sqlite3.Connection, cook_log_id: int | None
+) -> dict[int, sqlite3.Row]:
+    """This cook's recorded deviations by ingredient_id - what ACTUALLY happened wins over
+    the recipe's plan (an omitted line must not deduct; an adjusted amount deducts as used)."""
+    if cook_log_id is None:
+        return {}
+    rows = conn.execute(
+        "SELECT ingredient_id, deviation, used_text, used_quantity_text "
+        "FROM cook_log_ingredients WHERE cook_log_id = ? AND deviation IS NOT NULL "
+        "AND ingredient_id IS NOT NULL",
+        (cook_log_id,),
+    ).fetchall()
+    return {int(r["ingredient_id"]): r for r in rows}
+
+
+def _propose_line(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    factor: Decimal,
+    deviation: sqlite3.Row | None = None,
+) -> ProposedLine:
+    if deviation is not None and deviation["deviation"] == "omitted":
+        return _skip(row, "you left it out this cook")
+    if deviation is not None and deviation["deviation"] == "substituted":
+        used = deviation["used_text"] or "something else"
+        return _skip(row, f"you used {used} instead")
     if not row["deduct_from_pantry"]:
         return _skip(row, "deduction turned off for this ingredient")
     if row["scaling_mode"] in ("fixed", "to_taste"):
@@ -188,7 +215,12 @@ def _propose_line(conn: sqlite3.Connection, row: sqlite3.Row, factor: Decimal) -
         item_unit = units.get_unit(conn, item.unit_id) if item.unit_id else None
         if item_unit is None or item_unit.dimension != row["unit_dimension"]:
             return _skip(row, "recipe and pantry units don't match - needs a bridge")
-        scaled = quantity.parse_quantity(row["quantity_text"]) * factor
+        if deviation is not None and deviation["used_quantity_text"]:
+            # 'adjusted': the cook recorded the ACTUAL amount (in the recipe line's unit) -
+            # deduct that, not the plan. Already at cooked servings; never re-scaled.
+            scaled = quantity.parse_quantity(deviation["used_quantity_text"])
+        else:
+            scaled = quantity.parse_quantity(row["quantity_text"]) * factor
         used_canonical = quantity.to_canonical(scaled, int(row["unit_factor"]))
         eligible = confirmed and trusted
         # Show the amount in the PANTRY item's unit (what actually gets decremented), not the

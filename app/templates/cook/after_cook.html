@@ -4,7 +4,8 @@
 <header class="page-head"><h1>How did &ldquo;{{ recipe.title }}&rdquo; go?</h1></header>
 {% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
-<form method="post" action="/recipes/{{ recipe.slug }}/after-cook" class="card after-cook">
+<form method="post" action="/recipes/{{ recipe.slug }}/after-cook" class="card after-cook"
+      data-recipe="{{ recipe.slug }}" id="after-cook-form">
   <fieldset class="rating-pick">
     <legend>Rating</legend>
     <div class="rating-scale">
@@ -34,6 +35,30 @@
     </div>
   </div>
 
+  {% if recipe.ingredients %}
+  <details class="after-devs" id="after-devs">
+    <summary>Made it as written? <span class="muted">record swaps and skips &mdash; the pantry
+      and the cook log both use them</span></summary>
+    <ul class="dev-list">
+      {% for ing in recipe.ingredients %}
+      <li class="dev-row" data-devkey="ing-{{ loop.index }}">
+        <span class="dev-name">{{ ing.food_name or ing.original_text }}</span>
+        <select name="dev_{{ ing.id }}" aria-label="What happened to {{ ing.food_name or ing.original_text }}">
+          <option value="">as written</option>
+          <option value="omitted">left it out</option>
+          <option value="substituted">used something else</option>
+          <option value="adjusted">changed the amount</option>
+        </select>
+        <input name="dev_text_{{ ing.id }}" placeholder="what / how much"
+               aria-label="Details for {{ ing.food_name or ing.original_text }}">
+      </li>
+      {% endfor %}
+    </ul>
+    <label for="additions">Added anything?</label>
+    <input id="additions" name="additions" placeholder="e.g. a can of black beans">
+  </details>
+  {% endif %}
+
   <label for="notes">Notes for next time</label>
   <textarea id="notes" name="notes" rows="3" class="notes-input"
             placeholder="What you'd change &mdash; more salt, longer simmer&hellip;">{{ recipe.notes or '' }}</textarea>
@@ -49,4 +74,30 @@
     <a href="/recipes/{{ recipe.slug }}" class="btn-secondary">Cancel</a>
   </div>
 </form>
+
+<script>
+  // Pre-fill deviations captured in cook mode (cook.js stores them per-recipe in localStorage).
+  (function () {
+    var form = document.getElementById("after-cook-form");
+    if (!form) return;
+    var ns = "rc-cook:" + (form.getAttribute("data-recipe") || "recipe") + ":";
+    var devs = {};
+    try { devs = JSON.parse(localStorage.getItem(ns + "devs") || "{}") || {}; } catch (e) {}
+    var any = false;
+    form.querySelectorAll(".dev-row").forEach(function (row) {
+      var d = devs[row.getAttribute("data-devkey")];
+      if (!d || !d.kind) return;
+      any = true;
+      var select = row.querySelector("select");
+      var text = row.querySelector("input");
+      if (select) select.value = d.kind;
+      if (text && d.text) text.value = d.text;
+    });
+    var details = document.getElementById("after-devs");
+    if (any && details) details.open = true;
+    form.addEventListener("submit", function () {
+      try { localStorage.removeItem(ns + "devs"); } catch (e) {}
+    });
+  })();
+</script>
 {% endblock %}

@@ -49,6 +49,48 @@
     });
   });
 
+  // --- deviation quick-capture (skip / sub) -------------------------------------------
+  // Stored per recipe; the after-cook form reads the same key to pre-fill its questions.
+  var devState = load("devs", {}) || {};
+  root.querySelectorAll(".cook-ing").forEach(function (row) {
+    var key = row.getAttribute("data-devkey");
+    var textInput = row.querySelector(".dev-text");
+    function apply() {
+      var d = devState[key] || {};
+      row.querySelectorAll(".dev-btn").forEach(function (b) {
+        b.classList.toggle("is-on", b.getAttribute("data-dev") === d.kind);
+      });
+      if (textInput) {
+        textInput.hidden = d.kind !== "substituted";
+        if (d.text && !textInput.value) textInput.value = d.text;
+      }
+      row.classList.toggle("is-skipped", d.kind === "omitted");
+    }
+    row.querySelectorAll(".dev-btn").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var kind = b.getAttribute("data-dev");
+        var current = devState[key] || {};
+        if (current.kind === kind) {
+          delete devState[key]; // second tap clears the mark
+        } else {
+          devState[key] = { kind: kind, text: current.text || "" };
+        }
+        save("devs", devState);
+        apply();
+        if (kind === "substituted" && devState[key] && textInput) textInput.focus();
+      });
+    });
+    if (textInput) {
+      textInput.addEventListener("input", function () {
+        if (devState[key]) {
+          devState[key].text = textInput.value;
+          save("devs", devState);
+        }
+      });
+    }
+    apply();
+  });
+
   // --- timers -------------------------------------------------------------------------
   var tray = root.querySelector("[data-timer-tray]");
   var timers = load("timers", []) || [];
