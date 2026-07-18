@@ -7,7 +7,8 @@
 
 <p class="muted">
   Set up an Apple Shortcut once, then share any recipe page or YouTube video straight into your
-  inbox from the iOS share sheet. It works the same on an iPhone, iPad, or a Mac.
+  inbox from the iOS share sheet. It works on an iPhone, iPad, or a Mac &mdash; while the device is
+  on your home Wi-Fi (it sends the link straight to this PC at <code>{{ ingest_url }}</code>).
 </p>
 
 <section class="card">
@@ -44,7 +45,8 @@
     </li>
     <li>Set <strong>Method</strong> to <code>POST</code>.</li>
     <li>Under <strong>Headers</strong>, add <code>Authorization</code> with the value:
-      <pre><code>Bearer YOUR_TOKEN</code></pre>
+      <pre><code>Bearer {{ new_token if new_token else 'YOUR_TOKEN' }}</code></pre>
+      {% if not new_token %}<span class="muted">(Create a token above to see the full value here.)</span>{% endif %}
     </li>
     <li>Set <strong>Request Body</strong> to <strong>JSON</strong> with one field <code>url</code>, whose value is the
       Shortcut Input (the shared link).</li>
@@ -64,5 +66,25 @@
     <li>In the JSON body, add a second field <code>html</code> set to that JavaScript result (keep <code>url</code> too).</li>
   </ol>
   <p class="muted">The server still de-duplicates by URL, so sending HTML never creates a second copy.</p>
+</section>
+
+<section class="card">
+  <h2>4. Share it with the household</h2>
+  <p class="muted">
+    Once your Shortcut works, hand it to your partner so they can add recipes too &mdash; no rebuilding.
+  </p>
+  <ol class="shortcut-steps">
+    <li>In the <strong>Shortcuts</strong> app, press and hold your &ldquo;Send to RecipeCollater&rdquo;
+      shortcut and choose <strong>Share</strong> &rarr; <strong>Copy iCloud Link</strong>.</li>
+    <li>Send that link (Messages, etc.). They open it and tap <strong>Add Shortcut</strong> &mdash; the
+      address and token are already inside, so it just works on your home Wi-Fi.</li>
+    <li>Prefer separate tokens? Have them open this page on their own device, create their own token
+      in step&nbsp;1, and paste it into the shortcut's <code>Authorization</code> header. You can revoke
+      any token later on the <strong>Devices</strong> page.</li>
+  </ol>
+  <p class="muted">
+    Sharing while away from home won't reach the PC &mdash; save the link and send it once you're back
+    on your network (or set up remote access later).
+  </p>
 </section>
 {% endblock %}
