@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.extraction import ExtractedReceipt, ExtractedRecipe
+from app.extraction import AssistantResponse, ExtractedReceipt, ExtractedRecipe
 
 # Controlled tag vocabulary appended to every prompt. Free-text tag sprawl makes filter chips
 # useless and the Phase-5 assistant's hard-filters unreliable; a small fixed vocabulary keeps
@@ -49,6 +49,16 @@ DRAFT_SYSTEM = (
 )
 
 
+# System prompt for reading a photographed recipe (cookbook page / card / handwriting) - Phase 6.
+RECIPE_PHOTO_SYSTEM = (
+    "You read a single cooking recipe from a photograph - a cookbook page, a recipe card, a "
+    "handwritten note, or a screenshot. Transcribe what is written: copy each ingredient line "
+    "verbatim into original_text and also split quantity_text, unit, and food when clear; put the "
+    "method into ordered steps. Use only what the image shows - never invent ingredients, steps, "
+    "times, or yields. If the photo has no recipe, return a title with empty ingredients and steps."
+    + TAG_GUIDE
+)
+
 # System prompt for reading a grocery receipt photo or a pasted online order (Phase 4.7).
 # The generalization rule is the heart of it: receipts speak in store abbreviations and brands;
 # recipes and the pantry speak in short generic food names. The household's existing food list is
@@ -65,6 +75,29 @@ RECEIPT_SYSTEM = (
     "('15 oz', '2 kg'). Skip tax, deposits, refunds, coupons, bag fees, loyalty/points lines and "
     "clearly non-food items (detergent, batteries). If nothing is a grocery item, return an "
     "empty items list."
+)
+
+
+# System prompt for the meal-planning / pantry assistant (Phase 5c). The heavy lifting is
+# deterministic: application code supplies a hard-filtered candidate set and a pantry summary in
+# the user content, and the model reasons over THAT, never the whole cookbook. It proposes; it
+# never writes (docs/05 section 3).
+ASSISTANT_SYSTEM = (
+    "You are the meal-planning assistant for one household's private recipe app. You are given, "
+    "as JSON: the household's hard constraints (allergies, exclusions - NEVER propose a recipe "
+    "that violates these), soft preferences, a pantry summary, a set of CANDIDATE recipes (each "
+    "with an id, title, tags, time, and pantry coverage), and the target week. "
+    "Answer in a warm, brief, practical voice. "
+    "When the user wants a plan, propose meal_plan.entries using ONLY candidate recipe ids "
+    "(day_index 0=Monday..6=Sunday within the target week); you may add note entries "
+    "(recipe_id null, note set) for leftovers or eating out. Respect stated counts, tiers, and "
+    "weekday time budgets as best the candidates allow. "
+    "When the user reports groceries they bought ('we got 2 cans of tomatoes, chicken in the "
+    "freezer'), propose pantry_update.changes (action 'have' to mark/track something on hand, "
+    "'out' when used up, 'add' with quantity+unit for a counted item; include a location when "
+    "they name one). "
+    "Do not invent recipes, quantities, or ids. Put a short human summary in message; the "
+    "household reviews and accepts your proposals - nothing is applied until they do."
 )
 
 
@@ -118,6 +151,18 @@ class AIReceipt:
     cost_micros: int
 
 
+@dataclass(frozen=True, slots=True)
+class AIAssist:
+    """A successful assistant turn plus the accounting needed to log spend."""
+
+    response: AssistantResponse
+    provider: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_micros: int
+
+
 class RecipeExtractor(Protocol):
     """What the pipeline, manual-draft, and receipt paths need from any AI provider."""
 
@@ -128,4 +173,8 @@ class RecipeExtractor(Protocol):
 
     def draft(self, description: str) -> AIExtraction: ...
 
+    def recipe_from_photo(self, image_jpeg: bytes) -> AIExtraction: ...
+
     def receipt(self, content: str, *, image_jpeg: bytes | None = None) -> AIReceipt: ...
+
+    def assist(self, content: str) -> AIAssist: ...

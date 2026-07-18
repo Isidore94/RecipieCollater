@@ -52,6 +52,57 @@ class ExtractedReceipt(BaseModel):
     items: list[ExtractedReceiptItem] = Field(default_factory=list)
 
 
+class ProposedPlanEntry(BaseModel):
+    """One meal the assistant proposes for the week board."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    day_index: int = Field(ge=0, le=6)  # 0=Mon .. 6=Sun, relative to the target week
+    slot: str = "dinner"
+    recipe_id: int | None = None  # must be one of the candidate ids the context supplied
+    note: str | None = None       # a note entry ('leftovers', 'takeout') when recipe_id is null
+    servings_text: str | None = None
+
+
+class ProposedPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entries: list[ProposedPlanEntry] = Field(default_factory=list)
+
+
+class ProposedPantryChange(BaseModel):
+    """One conversational pantry update ('2 cans of tomatoes into the downstairs pantry')."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    food: str
+    action: str = "have"  # 'have' | 'out' | 'add'
+    quantity_text: str | None = None
+    unit: str | None = None
+    location: str | None = None
+
+
+class ProposedPantryUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    changes: list[ProposedPantryChange] = Field(default_factory=list)
+
+
+class AssistantResponse(BaseModel):
+    """The assistant's structured turn: presentation text plus optional pending proposals.
+
+    The model NEVER mutates data - a meal_plan/pantry_update here is a proposal the household
+    accepts, edits, or dismisses (docs/05 section 3). Authoritative quantities and writes are
+    computed by deterministic services on acceptance.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    message: str
+    meal_plan: ProposedPlan | None = None
+    pantry_update: ProposedPantryUpdate | None = None
+
+
 class ExtractedRecipe(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

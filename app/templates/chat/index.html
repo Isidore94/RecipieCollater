@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Assistant · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Assistant</h1>
+  <a href="/chat/new" class="btn-secondary">New chat</a>
+</header>
+
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+
+{% if not messages %}
+<div class="card chat-intro">
+  <p class="muted">Ask me to plan meals or update the pantry. For example:</p>
+  <ul class="chat-examples">
+    <li>&ldquo;Plan next week&rsquo;s dinners &mdash; nothing over 45 minutes on weeknights.&rdquo;</li>
+    <li>&ldquo;What can I make tonight from what we have?&rdquo;</li>
+    <li>&ldquo;We just got groceries: 2 cans of tomatoes and chicken in the freezer.&rdquo;</li>
+  </ul>
+</div>
+{% endif %}
+
+<div class="chat-thread">
+  {% for m in messages %}
+  <div class="chat-msg chat-{{ m.role }}">
+    <p class="chat-bubble">{{ m.content }}</p>
+    {% for p in proposals.get(m.id, []) %}
+    <div class="card proposal proposal-{{ p.status }}">
+      <div class="proposal-head">
+        <strong>{% if p.kind == 'meal_plan' %}Proposed plan{% else %}Pantry update{% endif %}</strong>
+        {% if p.status != 'pending' %}<span class="chip-tag">{{ p.status }}</span>{% endif %}
+      </div>
+      {% if p.kind == 'meal_plan' %}
+      <ul class="proposal-list">
+        {% for e in p.payload.entries %}
+        <li>Day {{ e.day_index + 1 }} · {{ e.slot }} —
+          {% if e.recipe_id %}{{ e.title or 'recipe' }}{% else %}{{ e.note }}{% endif %}
+          {% if e.servings_text %}<span class="muted">({{ e.servings_text }})</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <ul class="proposal-list">
+        {% for c in p.payload.changes %}
+        <li>{{ c.food }} —
+          {% if c.action == 'add' %}add {{ c.quantity_text }} {{ c.unit }}
+          {% elif c.action == 'out' %}mark out{% else %}on hand{% endif %}
+          {% if c.location %}<span class="muted">({{ c.location }})</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if p.status == 'pending' %}
+      <div class="proposal-actions">
+        <form method="post" action="/chat/proposal/{{ p.id }}/accept" class="inline-post">
+          <button type="submit" class="btn-primary">Accept</button>
+        </form>
+        <form method="post" action="/chat/proposal/{{ p.id }}/dismiss" class="inline-post">
+          <button type="submit" class="btn-secondary">Dismiss</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+<form method="post" action="/chat/message" class="chat-compose">
+  <input type="hidden" name="conversation_id" value="{{ conversation_id }}">
+  <textarea name="message" rows="2" required placeholder="Ask the assistant…"
+            aria-label="Message"></textarea>
+  <button type="submit" class="btn-primary">Send</button>
+</form>
+<p class="muted chat-foot no-print">The assistant proposes; nothing changes until you Accept.
+  Set <a href="/preferences">preferences</a> to sharpen its suggestions.</p>
+{% endblock %}
