@@ -42,8 +42,8 @@
       {% else %}
       <ul class="proposal-list">
         {% for c in p.payload.changes %}
-        <li>{{ c.food }} —
-          {% if c.action == 'add' %}add {{ c.quantity_text }} {{ c.unit }}
+        <li>{{ c.food }} &mdash;
+          {% if c.action == 'add' %}add{% if c.quantity_text %} {{ c.quantity_text }}{% endif %}{% if c.unit %} {{ c.unit }}{% endif %}
           {% elif c.action == 'out' %}mark out{% else %}on hand{% endif %}
           {% if c.location %}<span class="muted">({{ c.location }})</span>{% endif %}
         </li>

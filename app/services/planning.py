@@ -227,11 +227,19 @@ def week_picks(conn: sqlite3.Connection, start: date) -> list[tuple[int, str | N
 
 
 def plan_to_shopping(conn: sqlite3.Connection, start: date, *, commit: bool = True) -> int:
-    """Add the week's recipes to the active shopping list (pantry-aware, aggregated once)."""
+    """Sync the week's recipes onto the active shopping list (pantry-aware, aggregated once).
+
+    Idempotent: it first clears the list's existing recipe/plan lines, so re-syncing after adding
+    a meal REPLACES the plan's contribution instead of doubling every quantity (review finding).
+    Staples, hand-added items, and checked-off lines are preserved.
+    """
     picks = week_picks(conn, start)
-    if not picks:
-        return 0
     list_id = shopping.active_list(conn)
+    shopping.clear_recipe_lines(conn, list_id, commit=False)
+    if not picks:
+        if commit:
+            conn.commit()
+        return 0
     return shopping.apply_trip(conn, list_id, picks, commit=commit)
 
 

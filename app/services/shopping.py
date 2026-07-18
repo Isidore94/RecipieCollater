@@ -1049,6 +1049,32 @@ def clear_checked(conn: sqlite3.Connection, list_id: int, *, commit: bool = True
     return cur.rowcount
 
 
+def clear_recipe_lines(conn: sqlite3.Connection, list_id: int, *, commit: bool = True) -> int:
+    """Remove unchecked, non-manual lines that came only from recipe/meal-plan sources.
+
+    Lets a plan re-sync REPLACE its own contribution instead of doubling it (review finding).
+    Staples, hand-added lines, and anything already checked off are left untouched.
+    """
+    cur = conn.execute(
+        """DELETE FROM shopping_list_items
+           WHERE list_id = ? AND checked = 0 AND is_manual = 0
+             AND id IN (
+                 SELECT sli.id FROM shopping_list_items sli
+                 WHERE sli.list_id = ?
+                   AND EXISTS (SELECT 1 FROM shopping_item_sources s
+                               WHERE s.item_id = sli.id
+                                 AND s.source_type IN ('recipe','meal_plan'))
+                   AND NOT EXISTS (SELECT 1 FROM shopping_item_sources s
+                                   WHERE s.item_id = sli.id
+                                     AND s.source_type IN ('staple','manual'))
+             )""",
+        (list_id, list_id),
+    )
+    if commit:
+        conn.commit()
+    return cur.rowcount
+
+
 def to_text(conn: sqlite3.Connection, list_id: int) -> str:
     """Aisle-grouped plain text for copy / share / an Apple Shortcut import."""
     lines: list[str] = []

@@ -21,7 +21,7 @@
 <div class="plan-tools no-print">
   <form method="post" action="/plan/shopping">
     <input type="hidden" name="week_start" value="{{ week_start }}">
-    <button type="submit" class="btn-primary">Add week to shopping list</button>
+    <button type="submit" class="btn-primary">Sync week to shopping list</button>
   </form>
   <a href="/shopping" class="btn-secondary">Shopping{% if shopping_remaining %} ({{ shopping_remaining }}){% endif %}</a>
 </div>

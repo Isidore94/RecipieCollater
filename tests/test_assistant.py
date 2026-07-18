@@ -210,3 +210,59 @@ def test_chat_routes(
     assert post.status_code == 303
     page = admin_client.get("/chat")
     assert "A plan for you." in page.text and "Accept" in page.text
+
+
+def test_out_for_untracked_food_is_noop(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review fix: 'out' for a food we don't track must NOT create it as on-hand."""
+    seed_core_units(migrated_db)
+    pantry.create_location(migrated_db, "Pantry")
+    provider = _FakeProvider(response=AssistantResponse(
+        message="ok",
+        pantry_update=ProposedPantryUpdate(changes=[
+            ProposedPantryChange(food="olive oil", action="out"),
+        ]),
+    ))
+    _use(monkeypatch, provider)
+    conv = assistant.start_conversation(migrated_db)
+    pid = assistant.ask(migrated_db, conv, "finished the oil", week_start=_MON).proposal_ids[0]
+    assistant.accept_proposal(migrated_db, pid)
+    row = migrated_db.execute("SELECT id FROM foods WHERE name = 'olive oil'").fetchone()
+    # even if a food row exists, no pantry item should have been created for it
+    if row is not None:
+        assert pantry.items_for_food(migrated_db, int(row["id"])) == []
+
+
+def test_add_untracked_food_with_quantity_tracks_exact(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review fix: 'add 2 cans' for a new food tracks it exactly, not silently 'full'."""
+    seed_core_units(migrated_db)
+    pantry.create_location(migrated_db, "Pantry")
+    provider = _FakeProvider(response=AssistantResponse(
+        message="ok",
+        pantry_update=ProposedPantryUpdate(changes=[
+            ProposedPantryChange(food="canned tomatoes", action="add",
+                                 quantity_text="2", unit="each"),
+        ]),
+    ))
+    _use(monkeypatch, provider)
+    conv = assistant.start_conversation(migrated_db)
+    pid = assistant.ask(migrated_db, conv, "got 2 cans", week_start=_MON).proposal_ids[0]
+    assistant.accept_proposal(migrated_db, pid)
+    row = migrated_db.execute("SELECT id FROM foods WHERE name = 'canned tomatoes'").fetchone()
+    assert row is not None
+    item = pantry.items_for_food(migrated_db, int(row["id"]))[0]
+    assert item.quantity_mode == "exact" and item.quantity_text == "2"
+
+
+def test_chat_message_route_surfaces_error(
+    admin_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review fix: an ask() error (no AI key) is shown, not silently dropped."""
+    monkeypatch.setattr("app.ai.get_provider", lambda settings: None)
+    resp = admin_client.post(
+        "/chat/message", data={"message": "plan"}, headers=SAME_ORIGIN, follow_redirects=False,
+    )
+    assert resp.status_code == 303 and "notice=" in resp.headers["location"]

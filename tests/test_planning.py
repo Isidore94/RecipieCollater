@@ -119,3 +119,20 @@ def test_board_route_and_shopping(
     assert ship.status_code == 303
     ics = admin_client.get(f"/plan/export.ics?start={_MON.isoformat()}")
     assert ics.status_code == 200 and "text/calendar" in ics.headers["content-type"]
+
+
+def test_plan_to_shopping_is_idempotent(migrated_db: sqlite3.Connection) -> None:
+    """Review fix: re-syncing a week REPLACES its recipe lines instead of doubling them."""
+    seed_core_units(migrated_db)
+    rid = _recipe(migrated_db, "Bread", food="flour")  # 200 g flour
+    planning.add_recipe_entry(migrated_db, _MON.isoformat(), rid)
+    lst = shopping.active_list(migrated_db)
+    # a hand-added staple/manual line must survive the re-sync
+    shopping.add_manual(migrated_db, lst, "paper towels")
+
+    planning.plan_to_shopping(migrated_db, _MON)
+    planning.plan_to_shopping(migrated_db, _MON)  # sync again - must not double
+    items = shopping.list_items(migrated_db, lst)
+    flour = [i for i in items if i.food_id and i.quantity_text]
+    assert len(flour) == 1 and flour[0].quantity_text == "200"  # not 400
+    assert any(i.display_text == "paper towels" for i in items)  # manual line preserved

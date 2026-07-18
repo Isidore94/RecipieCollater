@@ -65,7 +65,11 @@ async def message(
             int(conversation_raw) if conversation_raw.isdigit()
             else assistant.get_or_create_conversation(db, user_id=user.id)
         )
-        assistant.ask(db, conversation_id, _str(form, "message"), user_id=user.id)
+        result = assistant.ask(db, conversation_id, _str(form, "message"), user_id=user.id)
+    # ask() surfaces setup problems (no AI key, empty message, spend cap) via .error rather
+    # than persisting an assistant turn - show it instead of redirecting to a silent page.
+    if result.error:
+        return RedirectResponse(f"/chat?notice={quote(result.error)}", status_code=303)
     return RedirectResponse("/chat", status_code=303)
 
 

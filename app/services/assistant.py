@@ -456,10 +456,13 @@ def _apply_pantry_update(
         items = pantry.items_for_food(conn, food_id) if food_id else []
         target = items[0] if items else None
 
-        if action == "out" and target is not None:
-            pantry.remove_item(conn, target.id, reason="manual_remove", user_id=user_id,
-                               commit=False)
-            summary.append(f"{target.display_name} → out")
+        if action == "out":
+            if target is not None:
+                pantry.remove_item(conn, target.id, reason="manual_remove", user_id=user_id,
+                                   commit=False)
+                summary.append(f"{target.display_name} → out")
+            # An 'out' for a food we don't track is a no-op: never CREATE it as on-hand
+            # (that recorded the opposite of what the user said - review finding).
             continue
         if target is not None:
             if target.quantity_mode == "gauge":
@@ -475,16 +478,36 @@ def _apply_pantry_update(
                 summary.append(f"{target.display_name} {added}")
         elif default_location is not None:
             location_id = _location_by_name(conn, change.get("location")) or default_location
-            pantry.add_item(
-                conn,
-                pantry.PantryItemInput(
-                    display_name=food_name, location_id=location_id,
-                    quantity_mode="gauge", gauge="full", food=food_name,
-                ),
-                user_id=user_id, commit=False,
-            )
-            summary.append(f"{food_name} → tracked (full)")
+            new_item = _new_tracked_item(food_name, location_id, change)
+            pantry.add_item(conn, new_item, user_id=user_id, commit=False)
+            if new_item.quantity_mode == "exact":
+                summary.append(f"{food_name} → tracked ({new_item.quantity_text} {new_item.unit})")
+            else:
+                summary.append(f"{food_name} → tracked (full)")
     return summary
+
+
+def _new_tracked_item(
+    food_name: str, location_id: int, change: dict[str, object]
+) -> pantry.PantryItemInput:
+    """Start tracking a new food. When the change carries a countable quantity+unit, track it
+    exactly (so 'add 2 cans' isn't silently reduced to 'full'); otherwise gauge-full."""
+    qty = str(change.get("quantity_text") or "").strip()
+    unit = str(change.get("unit") or "").strip()
+    if change.get("action") == "add" and qty and unit:
+        try:
+            quantity.parse_quantity(qty)
+        except quantity.QuantityError:
+            qty = ""
+        if qty:
+            return pantry.PantryItemInput(
+                display_name=food_name, location_id=location_id, quantity_mode="exact",
+                food=food_name, quantity_text=qty, unit=unit,
+            )
+    return pantry.PantryItemInput(
+        display_name=food_name, location_id=location_id, quantity_mode="gauge",
+        gauge="full", food=food_name,
+    )
 
 
 def _add_exact(

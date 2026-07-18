@@ -125,12 +125,29 @@ def load(conn: sqlite3.Connection) -> Preferences:
     )
 
 
+def _stem(word: str) -> str:
+    """Crude singular stem so 'peanuts' matches 'peanut' and 'tomatoes' matches 'tomato'."""
+    if word.endswith("es") and len(word) > 4:
+        return word[:-2]
+    if word.endswith("s") and len(word) > 3:
+        return word[:-1]
+    return word
+
+
+_WORD_RE = re.compile(r"[a-z]+")
+
+
 def recipe_violates_hard(
     conn: sqlite3.Connection, recipe_id: int, hard_terms: list[str]
 ) -> str | None:
-    """The first hard term a recipe's ingredients hit, or None. Whole-word match on food name +
-    original text (so 'nut' doesn't trip on 'nutmeg'... it would; callers pass real allergen
-    words like 'peanut', 'tree nut' - and we err toward EXCLUDING, which is the safe direction)."""
+    """The first hard term a recipe's ingredients hit, or None.
+
+    Matching is stemmed and errs toward EXCLUDING (the safe direction for an allergy): a
+    single-word term matches when any ingredient word shares its stem, so a stored 'peanut'
+    catches an ingredient written 'peanuts' (whole-word regex missed that - review finding).
+    Multi-word terms ('tree nut', 'soy sauce') match as a substring; they are specific enough
+    that a false positive is far cheaper than serving an allergen.
+    """
     if not hard_terms:
         return None
     rows = conn.execute(
@@ -142,8 +159,14 @@ def recipe_violates_hard(
     haystacks = [
         f"{(r['food_name'] or '')} {(r['original_text'] or '')}".lower() for r in rows
     ]
+    stem_sets = [{_stem(w) for w in _WORD_RE.findall(h)} for h in haystacks]
     for term in hard_terms:
-        pattern = re.compile(r"\b" + re.escape(term) + r"\b")
-        if any(pattern.search(h) for h in haystacks):
+        key = term.lower().strip()
+        if " " in key:
+            if any(key in h for h in haystacks):
+                return term
+            continue
+        term_stem = _stem(key)
+        if any(term_stem in stems for stems in stem_sets):
             return term
     return None

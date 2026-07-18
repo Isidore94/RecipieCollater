@@ -54,3 +54,38 @@ def test_hard_filter_matches_whole_words(migrated_db: sqlite3.Connection) -> Non
     assert preferences.recipe_violates_hard(migrated_db, peanut, ["peanut"]) == "peanut"
     assert preferences.recipe_violates_hard(migrated_db, safe, ["peanut"]) is None
     assert preferences.recipe_violates_hard(migrated_db, safe, []) is None
+
+
+def test_hard_filter_matches_plurals(migrated_db: sqlite3.Connection) -> None:
+    """Review fix: a stored singular allergen must catch the plural in an ingredient (and the
+    reverse), including free-text ingredients with no linked food."""
+    seed_core_units(migrated_db)
+    # free-text ingredient (food_id stays null) written in the plural
+    rid = recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="Satay", base_servings="4",
+            ingredients=[recipes.IngredientInput(
+                original_text="1/2 cup peanuts, chopped", food=None
+            )],
+        ),
+    )
+    assert preferences.recipe_violates_hard(migrated_db, rid, ["peanut"]) == "peanut"
+    # multi-word allergen matches as a phrase
+    rid2 = recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="Stirfry", base_servings="4",
+            ingredients=[recipes.IngredientInput(original_text="2 tbsp soy sauce", food=None)],
+        ),
+    )
+    assert preferences.recipe_violates_hard(migrated_db, rid2, ["soy sauce"]) == "soy sauce"
+    # 'nut' must NOT trip 'nutmeg' (whole-stem, not substring, for single words)
+    rid3 = recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="Spice", base_servings="4",
+            ingredients=[recipes.IngredientInput(original_text="1 tsp nutmeg", food=None)],
+        ),
+    )
+    assert preferences.recipe_violates_hard(migrated_db, rid3, ["nut"]) is None
