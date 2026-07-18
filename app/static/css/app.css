@@ -286,10 +286,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .sort-toggle { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 
 /* Pantry (Phase 4) */
-.pantry-locations { flex-wrap: wrap; }
+.pantry-locations { flex-wrap: wrap; margin-bottom: 0; }
 .pantry-restock { margin: 0 0 12px; }
-.pantry-forms { display: grid; gap: 12px; margin-bottom: 18px; }
-@media (min-width: 720px) { .pantry-forms { grid-template-columns: 1fr 1fr; } }
+.pantry-locbar { margin-bottom: 16px; }
+.loc-adder { margin-top: 6px; }
+.loc-adder-btn { display: inline-block; cursor: pointer; color: var(--brand); font-size: 13px; list-style: none; padding: 2px 0; }
+.loc-adder-btn::-webkit-details-marker { display: none; }
+.loc-adder-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.loc-adder-form input[name="name"] { flex: 1; min-width: 150px; }
+.pantry-forms { margin-bottom: 18px; }
 .pantry-add { padding: 14px 20px; margin-bottom: 0; }
 .pantry-add summary { cursor: pointer; font-weight: 600; }
 .pantry-add form { margin-top: 12px; }

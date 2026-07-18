@@ -20,14 +20,24 @@
 </form>
 {% endif %}
 
-<nav class="library-nav pantry-locations" aria-label="Locations">
-  <a href="/pantry"{% if not active_location %} class="is-active"{% endif %}>All</a>
-  {% for loc in locations %}
-  <a href="/pantry?location={{ loc.id }}"{% if active_location == loc.id %} class="is-active"{% endif %}>
-    {{ loc.name }}{% if loc.is_freezer %} ❄{% endif %}
-  </a>
-  {% endfor %}
-</nav>
+<div class="pantry-locbar">
+  <nav class="library-nav pantry-locations" aria-label="Locations">
+    <a href="/pantry"{% if not active_location %} class="is-active"{% endif %}>All</a>
+    {% for loc in locations %}
+    <a href="/pantry?location={{ loc.id }}"{% if active_location == loc.id %} class="is-active"{% endif %}>
+      {{ loc.name }}{% if loc.is_freezer %} ❄{% endif %}
+    </a>
+    {% endfor %}
+  </nav>
+  <details class="loc-adder">
+    <summary class="loc-adder-btn" title="Add a location">+ Location</summary>
+    <form method="post" action="/pantry/locations" class="loc-adder-form">
+      <input name="name" required autocomplete="off" placeholder="New location&hellip;" aria-label="Location name">
+      <label class="check"><input type="checkbox" name="is_freezer"> Freezer</label>
+      <button type="submit" class="btn-secondary">Add</button>
+    </form>
+  </details>
+</div>
 
 <div class="pantry-forms">
   <details class="card pantry-add">
@@ -60,15 +70,6 @@
         <input type="date" name="expires_on">
       </label>
       <button type="submit" class="btn-primary">Add to pantry</button>
-    </form>
-  </details>
-
-  <details class="card pantry-add">
-    <summary>+ Add a location</summary>
-    <form method="post" action="/pantry/locations" class="stack">
-      <label>Name <input name="name" required placeholder="Downstairs Freezer"></label>
-      <label class="check"><input type="checkbox" name="is_freezer"> This is a freezer</label>
-      <button type="submit" class="btn-primary">Add location</button>
     </form>
   </details>
 </div>
