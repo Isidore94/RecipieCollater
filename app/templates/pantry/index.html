@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Pantry · RecipeCollater{% endblock %}
+{% block content %}
+{% set back = '/pantry?location=' ~ active_location if active_location else '/pantry' %}
+
+<header class="page-head">
+  <h1>Pantry</h1>
+  {% if active_location %}
+  <a href="/pantry/stock-take/{{ active_location }}" class="btn-primary">Stock-take</a>
+  {% endif %}
+</header>
+
+{% if restock_count %}
+<p class="pantry-restock muted">{{ restock_count }} staple{{ 's' if restock_count != 1 }} to restock.</p>
+{% endif %}
+
+<nav class="library-nav pantry-locations" aria-label="Locations">
+  <a href="/pantry"{% if not active_location %} class="is-active"{% endif %}>All</a>
+  {% for loc in locations %}
+  <a href="/pantry?location={{ loc.id }}"{% if active_location == loc.id %} class="is-active"{% endif %}>
+    {{ loc.name }}{% if loc.is_freezer %} ❄{% endif %}
+  </a>
+  {% endfor %}
+</nav>
+
+<div class="pantry-forms">
+  <details class="card pantry-add">
+    <summary>+ Add an item</summary>
+    <form method="post" action="/pantry/items" class="stack" x-data="{ mode: 'gauge' }">
+      <input type="hidden" name="next" value="{{ back }}">
+      <label>Name
+        <input name="display_name" required autocomplete="off" placeholder="Chopped tomatoes">
+      </label>
+      <label>Location
+        <select name="location_id" required>
+          {% for loc in locations %}
+          <option value="{{ loc.id }}"{% if active_location == loc.id %} selected{% endif %}>{{ loc.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>How do you track it?
+        <select name="quantity_mode" x-model="mode">
+          <option value="gauge">Full / half / low / out</option>
+          <option value="exact">Exact count</option>
+          <option value="binary">Have / out</option>
+        </select>
+      </label>
+      <div x-show="mode === 'exact'" class="row">
+        <label>Amount <input name="quantity_text" inputmode="decimal" placeholder="3"></label>
+        <label>Unit <input name="unit" autocomplete="off" placeholder="each, g, ml"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="is_staple"> Always keep this on hand (staple)</label>
+      <label class="advanced">Expires <span class="muted">(optional)</span>
+        <input type="date" name="expires_on">
+      </label>
+      <button type="submit" class="btn-primary">Add to pantry</button>
+    </form>
+  </details>
+
+  <details class="card pantry-add">
+    <summary>+ Add a location</summary>
+    <form method="post" action="/pantry/locations" class="stack">
+      <label>Name <input name="name" required placeholder="Downstairs Freezer"></label>
+      <label class="check"><input type="checkbox" name="is_freezer"> This is a freezer</label>
+      <button type="submit" class="btn-primary">Add location</button>
+    </form>
+  </details>
+</div>
+
+{% if items %}
+<ul class="pantry-grid">
+  {% for item in items %}
+  <li class="card pantry-item{% if item.needs_restock %} is-low{% endif %}">
+    <div class="pantry-item-head">
+      <span class="pantry-name">{{ item.display_name }}</span>
+      {% if not active_location %}<span class="chip-tag">{{ item.location_name }}</span>{% endif %}
+      {% if item.is_staple %}<span class="chip-tag" title="Staple">★</span>{% endif %}
+      {% if item.expires_on %}<span class="chip-tag pantry-expiry">exp {{ item.expires_on[:10] }}</span>{% endif %}
+    </div>
+
+    {% if item.quantity_mode == 'gauge' %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust" class="gauge-row">
+      <input type="hidden" name="next" value="{{ back }}">
+      <input type="hidden" name="action" value="gauge">
+      {% for level in ['full', 'half', 'low', 'out'] %}
+      <button name="gauge" value="{{ level }}" class="gauge-btn{% if item.gauge == level %} is-on{% endif %}">{{ level }}</button>
+      {% endfor %}
+    </form>
+    {% elif item.quantity_mode == 'exact' %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust" class="stepper">
+      <input type="hidden" name="next" value="{{ back }}">
+      <input type="hidden" name="action" value="step">
+      <button name="delta" value="-1" aria-label="Use one">&minus;</button>
+      <span class="stepper-val">{{ item.display_quantity }}</span>
+      <button name="delta" value="1" aria-label="Add one">+</button>
+    </form>
+    {% else %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust">
+      <input type="hidden" name="next" value="{{ back }}">
+      <button name="action" value="toggle" class="have-btn{% if item.have %} is-on{% endif %}">
+        {{ 'Have' if item.have else 'Out' }}
+      </button>
+    </form>
+    {% endif %}
+
+    <details class="pantry-manage">
+      <summary aria-label="More">&hellip;</summary>
+      <form method="post" action="/pantry/items/{{ item.id }}/staple" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <label class="check"><input type="checkbox" name="is_staple"{% if item.is_staple %} checked{% endif %}> Staple</label>
+        {% if item.quantity_mode == 'exact' %}
+        <input name="min_quantity_text" value="{{ item.min_quantity_text or '' }}" placeholder="min" class="pantry-min">
+        {% endif %}
+        <button type="submit" class="btn-secondary">Save</button>
+      </form>
+      <form method="post" action="/pantry/items/{{ item.id }}/remove" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <button name="reason" value="manual_remove" class="btn-secondary">Used up</button>
+        <button name="reason" value="spoiled" class="btn-secondary">Went bad</button>
+        <button name="reason" value="manual_remove" formmethod="post" class="btn-danger"
+                onclick="this.form.delete.value='1'">Delete</button>
+        <input type="hidden" name="delete" value="0">
+      </form>
+    </details>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">
+  {% if locations %}Nothing here yet. Add your first item above.
+  {% else %}Start by adding a location (a cupboard, the freezer&hellip;), then add what&rsquo;s in it.{% endif %}
+</p>
+{% endif %}
+{% endblock %}

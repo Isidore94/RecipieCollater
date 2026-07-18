@@ -31,6 +31,7 @@ from app.routers import (
     ingest_api,
     onboarding,
     pages,
+    pantry,
     recipes,
     shortcut,
 )
@@ -113,6 +114,7 @@ def create_app() -> FastAPI:
     app.include_router(shortcut.router)
     app.include_router(recipes.router)
     app.include_router(cooking.router)
+    app.include_router(pantry.router)
     app.include_router(pages.router)
 
     return app

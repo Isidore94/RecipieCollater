@@ -188,11 +188,6 @@ def archive(
     return _render_library(request, db, user, "archived", "Archive", q)
 
 
-@router.get("/pantry")
-def pantry(request: Request, user: User = Depends(current_user)) -> Response:
-    return _render_tab(request, user, "pantry")
-
-
 @router.get("/plan")
 def plan(request: Request, user: User = Depends(current_user)) -> Response:
     return _render_tab(request, user, "plan")

@@ -284,3 +284,50 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cook-log-when strong { color: var(--brand); }
 .cook-log-note { margin-top: 4px; }
 .sort-toggle { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+
+/* Pantry (Phase 4) */
+.pantry-locations { flex-wrap: wrap; }
+.pantry-restock { margin: 0 0 12px; }
+.pantry-forms { display: grid; gap: 12px; margin-bottom: 18px; }
+@media (min-width: 720px) { .pantry-forms { grid-template-columns: 1fr 1fr; } }
+.pantry-add { padding: 14px 20px; margin-bottom: 0; }
+.pantry-add summary { cursor: pointer; font-weight: 600; }
+.pantry-add form { margin-top: 12px; }
+.pantry-add .row { display: flex; gap: 8px; }
+.pantry-add .row label { flex: 1; }
+.pantry-add input, .pantry-add select { width: 100%; }
+.advanced { font-weight: 400 !important; color: var(--ink-soft); }
+
+.pantry-grid { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+@media (min-width: 560px) { .pantry-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); } }
+.pantry-item { padding: 14px 16px; margin-bottom: 0; display: flex; flex-direction: column; gap: 10px; }
+.pantry-item.is-low { border-color: var(--brand); }
+.pantry-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pantry-name { font-weight: 600; }
+.pantry-expiry { color: var(--ink-soft); }
+
+.gauge-row { display: flex; gap: 4px; }
+.gauge-row.big { gap: 8px; }
+.gauge-btn {
+  flex: 1; padding: 8px 2px; min-height: 40px; font-size: 13px; text-transform: capitalize;
+  background: var(--paper); color: var(--ink-soft); border: 1px solid var(--line);
+}
+.gauge-row.big .gauge-btn { min-height: 60px; font-size: 15px; }
+.gauge-btn.is-on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+
+.stepper, .have-row { display: flex; gap: 8px; align-items: center; }
+.stepper button { min-width: 48px; font-size: 20px; }
+.stepper.big button { min-width: 64px; min-height: 60px; }
+.stepper-val { flex: 1; text-align: center; font-weight: 600; }
+.have-btn { background: var(--paper); color: var(--ink-soft); border: 1px solid var(--line); min-width: 72px; }
+.have-row.big .have-btn { flex: 1; min-height: 60px; }
+.have-btn.is-on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+
+.pantry-manage summary { list-style: none; cursor: pointer; color: var(--ink-soft); text-align: right; }
+.pantry-manage summary::-webkit-details-marker { display: none; }
+.pantry-menu-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.pantry-min { max-width: 80px; }
+
+.stocktake-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.stocktake-item { padding: 12px 16px; margin-bottom: 0; }
+.stocktake-name { font-weight: 600; margin-bottom: 8px; }

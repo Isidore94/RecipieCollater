@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Stock-take: {{ location.name }} · RecipeCollater{% endblock %}
+{% block content %}
+{% set back = '/pantry/stock-take/' ~ location.id %}
+
+<header class="page-head">
+  <h1>Stock-take<span class="muted"> · {{ location.name }}</span></h1>
+  <a href="/pantry?location={{ location.id }}" class="btn-secondary">Done</a>
+</header>
+
+<p class="muted">Walk the shelf. One tap per item &mdash; haven&rsquo;t seen it? Mark it out.</p>
+
+{% if items %}
+<ul class="stocktake-list">
+  {% for item in items %}
+  <li class="card stocktake-item">
+    <div class="stocktake-name">{{ item.display_name }}
+      {% if item.is_staple %}<span class="chip-tag">★</span>{% endif %}
+    </div>
+
+    {% if item.quantity_mode == 'gauge' %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust" class="gauge-row big">
+      <input type="hidden" name="next" value="{{ back }}">
+      <input type="hidden" name="action" value="gauge">
+      <input type="hidden" name="reason" value="stock_take">
+      {% for level in ['full', 'half', 'low', 'out'] %}
+      <button name="gauge" value="{{ level }}" class="gauge-btn{% if item.gauge == level %} is-on{% endif %}">{{ level }}</button>
+      {% endfor %}
+    </form>
+    {% elif item.quantity_mode == 'exact' %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust" class="stepper big">
+      <input type="hidden" name="next" value="{{ back }}">
+      <input type="hidden" name="action" value="step">
+      <button name="delta" value="-1" aria-label="Use one">&minus;</button>
+      <span class="stepper-val">{{ item.display_quantity }}</span>
+      <button name="delta" value="1" aria-label="Add one">+</button>
+    </form>
+    {% else %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust" class="have-row big">
+      <input type="hidden" name="next" value="{{ back }}">
+      <input type="hidden" name="action" value="have">
+      <input type="hidden" name="reason" value="stock_take">
+      <button name="have" value="1" class="have-btn{% if item.have %} is-on{% endif %}">Have</button>
+      <button name="have" value="0" class="have-btn{% if not item.have %} is-on{% endif %}">Out</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No items in {{ location.name }} yet.</p>
+{% endif %}
+{% endblock %}
