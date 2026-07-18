@@ -86,6 +86,12 @@ def test_extract_parses_function_call_and_prices_it() -> None:
     assert result.cost_micros == (1000 * 150_000 + 250 * 600_000) // 1_000_000
 
 
+def test_draft_uses_the_same_tool_path() -> None:
+    result = OpenAIExtractor(_client_returning(_VALID_PAYLOAD), "gpt-4o-mini").draft("chili recipe")
+    assert result.recipe.title == "AI Stew"
+    assert result.provider == "openai"
+
+
 def test_extract_without_tool_call_raises() -> None:
     client = _Client(_Response([_Choice(_Message([]))], _Usage(5, 0)))
     with pytest.raises(AIError):

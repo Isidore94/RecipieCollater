@@ -21,7 +21,8 @@ from starlette.datastructures import FormData, UploadFile
 from app.auth import current_user, require_csrf
 from app.config import get_settings
 from app.deps import get_db
-from app.services import quantity, recipes
+from app.extraction import ExtractedRecipe
+from app.services import ai_draft, quantity, recipes
 from app.services.users import User
 from app.templating import render
 
@@ -214,6 +215,33 @@ def _model_from_input(data: recipes.RecipeInput) -> dict[str, Any]:
     )
 
 
+def _model_from_extracted(extracted: ExtractedRecipe) -> dict[str, Any]:
+    """Map an AI-drafted recipe into the manual-entry form model so the cook can review + save."""
+    data = recipes.RecipeInput(
+        title=extracted.title,
+        description=extracted.description,
+        servings_text=extracted.servings_text,
+        prep_minutes=extracted.prep_minutes,
+        cook_minutes=extracted.cook_minutes,
+        total_minutes=extracted.total_minutes,
+        source_type="manual",
+        source_name=extracted.source_name,
+        ingredients=[
+            recipes.IngredientInput(
+                original_text=i.original_text, section=i.section, quantity_text=i.quantity_text,
+                unit=i.unit, food=(i.food or i.original_text or None), note=i.note,
+            )
+            for i in extracted.ingredients
+        ],
+        steps=[
+            recipes.StepInput(instruction=s.instruction, section=s.section, minutes=s.minutes)
+            for s in extracted.steps
+        ],
+        tags=list(extracted.tags),
+    )
+    return _model_from_input(data)
+
+
 def _render_form(
     request: Request,
     user: User,
@@ -222,11 +250,15 @@ def _render_form(
     model: dict[str, Any],
     heading: str,
     error: str | None = None,
+    notice: str | None = None,
+    show_draft: bool = False,
+    draft_description: str = "",
     status_code: int = 200,
 ) -> Response:
     return render(
         request, "recipes/form.html", user=user, action=action, form=model, heading=heading,
-        blank_rows=_BLANK_ROWS, error=error, status_code=status_code,
+        blank_rows=_BLANK_ROWS, error=error, notice=notice, show_draft=show_draft,
+        draft_description=draft_description, status_code=status_code,
     )
 
 
@@ -237,7 +269,30 @@ def _render_form(
 
 @router.get("/new")
 def new_form(request: Request, user: User = Depends(current_user)) -> Response:
-    return _render_form(request, user, action="/recipes/new", model=_model(), heading="New recipe")
+    return _render_form(
+        request, user, action="/recipes/new", model=_model(), heading="New recipe", show_draft=True
+    )
+
+
+@router.post("/draft")
+async def draft(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    description = _text(await request.form(), "describe")
+    result = ai_draft.draft_from_description(db, description)
+    if result.recipe is None:
+        return _render_form(
+            request, user, action="/recipes/new", model=_model(), heading="New recipe",
+            error=result.error, show_draft=True, draft_description=description, status_code=400,
+        )
+    return _render_form(
+        request, user, action="/recipes/new", model=_model_from_extracted(result.recipe),
+        heading="New recipe", notice="Drafted with AI - review the details below, then Save.",
+        show_draft=True, draft_description=description,
+    )
 
 
 @router.post("/new")

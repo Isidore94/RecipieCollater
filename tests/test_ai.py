@@ -93,6 +93,14 @@ def test_extract_parses_tool_use_and_prices_it() -> None:
     assert result.cost_micros == 1200 * 3 + 300 * 15  # sonnet rates, micro-USD
 
 
+def test_draft_uses_the_same_tool_path() -> None:
+    client = _Client(_Message([_Block(_VALID_PAYLOAD)], _Usage(400, 100)))
+    result = AnthropicExtractor(client, "claude-sonnet-5").draft("grandma's soup, simmer an hour")
+    assert result.recipe.title == "AI Soup"
+    assert result.provider == "anthropic"
+    assert result.input_tokens == 400
+
+
 def test_extract_without_tool_call_raises() -> None:
     client = _Client(_Message([], _Usage(10, 0)))
     with pytest.raises(AIError):

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.ai.base import AIError, AIExtraction
+from app.ai.base import DRAFT_SYSTEM, EXTRACT_SYSTEM, AIError, AIExtraction
 from app.ai.pricing import cost_micros
 from app.config import Settings
 from app.extraction import ExtractedRecipe
@@ -18,13 +18,6 @@ from app.extraction import ExtractedRecipe
 _TOOL_NAME = "save_recipe"
 _MAX_INPUT_CHARS = 60_000  # recipe pages are small once reduced to text; keep the prompt bounded
 _MAX_OUTPUT_TOKENS = 4096
-_SYSTEM = (
-    "You extract a single cooking recipe from the provided text, which may be a recipe web page "
-    "or a cooking video's title, description, and transcript. "
-    "Use only what the text states - never invent ingredients, steps, times, or yields. "
-    "If a field is absent, omit it. Copy each ingredient line verbatim into original_text. "
-    "If the text contains no recipe, return a title with empty ingredients and steps."
-)
 
 
 class AnthropicExtractor:
@@ -46,13 +39,19 @@ class AnthropicExtractor:
         return cls(client, settings.anthropic_model)
 
     def extract(self, content: str, *, source_url: str) -> AIExtraction:
-        schema = ExtractedRecipe.model_json_schema()
         prompt = f"Source URL: {source_url}\n\nPage text:\n{content[:_MAX_INPUT_CHARS]}"
+        return self._run(EXTRACT_SYSTEM, prompt)
+
+    def draft(self, description: str) -> AIExtraction:
+        return self._run(DRAFT_SYSTEM, description[:_MAX_INPUT_CHARS])
+
+    def _run(self, system: str, content: str) -> AIExtraction:
+        schema = ExtractedRecipe.model_json_schema()
         try:
             message = self._client.messages.create(
                 model=self.model,
                 max_tokens=_MAX_OUTPUT_TOKENS,
-                system=_SYSTEM,
+                system=system,
                 tools=[
                     {
                         "name": _TOOL_NAME,
@@ -61,7 +60,7 @@ class AnthropicExtractor:
                     }
                 ],
                 tool_choice={"type": "tool", "name": _TOOL_NAME},
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": content}],
             )
         except Exception as exc:  # SDK raises many error types; treat all as a call failure
             raise AIError(f"Anthropic request failed: {exc}") from exc

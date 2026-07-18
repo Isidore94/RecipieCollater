@@ -244,3 +244,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .star-rating .star-clear { background: none; border: none; box-shadow: none; color: var(--ink-soft); font-size: 12px; margin-left: 10px; cursor: pointer; }
 .notes-card h2 { margin: 0 0 8px; }
 .notes-input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-family: inherit; font-size: 14px; }
+
+/* AI-assisted manual entry */
+.draft-card { border-color: var(--brand); }
+.draft-input { width: 100%; margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-family: inherit; font-size: 14px; }
+.banner-ok { color: var(--ok-ink); background: var(--ok-bg); padding: 8px 12px; border-radius: 8px; }
