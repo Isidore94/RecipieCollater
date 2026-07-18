@@ -50,6 +50,57 @@ def find_timers(text: str) -> list[TimerSpec]:
     return timers
 
 
+# Words that appear in an ingredient line but are not the food itself - excluded so a step's
+# "you'll need" list matches on the actual food, not on 'diced'/'cup'/'fresh'.
+_ING_STOPWORDS: frozenset[str] = frozenset({
+    "and", "the", "for", "with", "plus", "more", "fresh", "large", "small", "medium",
+    "chopped", "diced", "sliced", "grated", "ground", "minced", "crushed", "taste", "virgin",
+    "extra", "optional", "needed", "room", "temperature", "cup", "cups", "tablespoon",
+    "tablespoons", "teaspoon", "teaspoons", "pound", "pounds", "ounce", "ounces", "gram", "grams",
+    "kilogram", "millilitre", "litre", "clove", "cloves", "can", "cans", "jar", "package",
+    "packages", "into", "cut", "peeled", "seeded", "drained", "rinsed", "about", "your",
+    "favorite", "good", "quality", "warm", "cold", "hot", "thinly", "finely", "roughly",
+})
+
+
+def _stem(word: str) -> str:
+    """A crude singular stem so 'onions' matches 'onion' and 'peas' matches 'pea'."""
+    if word.endswith("es") and len(word) > 4:
+        return word[:-2]
+    if word.endswith("s") and len(word) > 3:
+        return word[:-1]
+    return word
+
+
+def _food_terms(ing: recipes.IngredientView) -> set[str]:
+    """The significant food words of an ingredient (its parsed food, else its original text)."""
+    source = ing.food_name or ing.original_text or ""
+    return {
+        _stem(w)
+        for w in re.findall(r"[a-z]+", source.lower())
+        if len(w) >= 3 and w not in _ING_STOPWORDS
+    }
+
+
+def _step_ingredients(
+    instruction: str,
+    detail_ingredients: tuple[recipes.IngredientView, ...],
+    scaled: tuple[recipes.ScaledIngredient, ...],
+) -> tuple[str, ...]:
+    """Which scaled ingredients this step's text mentions (heuristic word match on the food name).
+
+    Recipes ingested by AI have no structured step<->ingredient links, so we scan the instruction
+    for each ingredient's food word(s). Imperfect but works on every existing recipe; the full list
+    stays one tap away for anything a step doesn't name.
+    """
+    step_stems = {_stem(w) for w in re.findall(r"[a-z]+", instruction.lower()) if len(w) >= 3}
+    return tuple(
+        scaled[i].display
+        for i, ing in enumerate(detail_ingredients)
+        if i < len(scaled) and (_food_terms(ing) & step_stems)
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class CookStep:
     number: int
@@ -59,6 +110,7 @@ class CookStep:
     video_seconds: int | None
     seek_available: bool
     timers: list[TimerSpec] = field(default_factory=list)
+    ingredients: tuple[str, ...] = ()  # scaled displays this step's text mentions
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +124,8 @@ class CookView:
 
 
 def build_cook_view(detail: recipes.RecipeDetail, servings: str) -> CookView:
-    """Assemble what cook mode needs: numbered steps with timers + a scaled ingredient list."""
+    """Assemble cook mode: numbered steps with per-step + full scaled ingredient lists."""
+    scaled = tuple(recipes.scale_ingredients(detail, servings))
     steps = tuple(
         CookStep(
             number=index + 1,
@@ -82,10 +135,10 @@ def build_cook_view(detail: recipes.RecipeDetail, servings: str) -> CookView:
             video_seconds=step.video_seconds,
             seek_available=bool(detail.video_id and step.video_seconds is not None),
             timers=find_timers(step.instruction),
+            ingredients=_step_ingredients(step.instruction, detail.ingredients, scaled),
         )
         for index, step in enumerate(detail.steps)
     )
-    scaled = tuple(recipes.scale_ingredients(detail, servings))
     return CookView(
         slug=detail.slug,
         title=detail.title,

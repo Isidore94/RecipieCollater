@@ -8,8 +8,8 @@
     <a href="/recipes/{{ recipe.slug }}/after-cook" class="btn-primary">I made this &rarr;</a>
   </header>
 
-  <details class="cook-ingredients card" open>
-    <summary>Ingredients &middot; {{ view.servings }} servings</summary>
+  <details class="cook-ingredients card">
+    <summary>All ingredients &middot; {{ view.servings }} servings</summary>
     <ul class="checklist">
       {% for ing in view.ingredients %}
       <li>
@@ -29,6 +29,11 @@
         <span class="cook-step-num">Step {{ step.number }} / {{ view.steps|length }}</span>
         {% if step.section %}<span class="chip-tag">{{ step.section }}</span>{% endif %}
       </div>
+      {% if step.ingredients %}
+      <ul class="cook-step-ings">
+        {% for ing in step.ingredients %}<li>{{ ing }}</li>{% endfor %}
+      </ul>
+      {% endif %}
       <p class="cook-step-text">{{ step.instruction }}</p>
       <div class="cook-step-tools">
         {% for t in step.timers %}

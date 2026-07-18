@@ -379,3 +379,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 /* Copy-for-Reminders (LAN shopping export) */
 .shop-reminders { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .reminders-box { flex-basis: 100%; min-height: 140px; font-family: var(--font-ui); font-size: 15px; margin-top: 8px; }
+
+/* Cook mode: "you'll need" ingredients for the current step */
+.cook-step-ings { list-style: none; padding: 10px 12px; margin: 0 0 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.cook-step-ings li { font-size: 15px; }
+.cook-step-ings li::before { content: "\2022"; color: var(--brand); margin-right: 7px; }

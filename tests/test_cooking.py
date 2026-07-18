@@ -46,6 +46,41 @@ def test_build_cook_view_scales_and_numbers(migrated_db: sqlite3.Connection) -> 
     assert "4 cups beans" in view.ingredients[0].display
 
 
+def test_step_ingredients_scope_to_the_step(migrated_db: sqlite3.Connection) -> None:
+    from app.services import recipes as recipes_service
+    from app.services.units import seed_core_units
+
+    seed_core_units(migrated_db)
+    rid = recipes_service.create_recipe(
+        migrated_db,
+        recipes_service.RecipeInput(
+            title="Sauce",
+            base_servings="4",
+            ingredients=[
+                recipes_service.IngredientInput(quantity_text="1", unit="each", food="onion"),
+                recipes_service.IngredientInput(
+                    quantity_text="2", unit="tablespoons", food="olive oil"
+                ),
+                recipes_service.IngredientInput(
+                    quantity_text="1", unit="teaspoon", food="salt", scaling_mode="fixed"
+                ),
+            ],
+            steps=[
+                recipes_service.StepInput(instruction="Saute the diced onion in olive oil."),
+                recipes_service.StepInput(instruction="Season and serve."),
+            ],
+        ),
+    )
+    detail = recipes_service.get_recipe(migrated_db, rid)
+    assert detail is not None
+    view = cooking.build_cook_view(detail, "4")
+
+    step1 = " ".join(view.steps[0].ingredients).lower()
+    assert "onion" in step1 and "olive oil" in step1
+    assert "salt" not in step1  # step 1 doesn't call for salt
+    assert view.steps[1].ingredients == ()  # "Season and serve" names no tracked ingredient
+
+
 def test_record_cook_logs_promotes_and_feeds_times(migrated_db: sqlite3.Connection) -> None:
     rid = _recipe(migrated_db)  # status defaults to inbox
     log_id = cooking.record_cook(
