@@ -65,6 +65,15 @@ def test_after_cook_rejects_bad_servings(admin_client: TestClient) -> None:
     assert resp.status_code == 400
 
 
+def test_after_cook_rejects_non_numeric_servings(admin_client: TestClient) -> None:
+    # A non-numeric amount must re-render 400, not 500 (QuantityError vs CookError).
+    _create(admin_client)
+    resp = admin_client.post(
+        "/recipes/stew/after-cook", data={"servings_made": "two"}, headers=SAME_ORIGIN
+    )
+    assert resp.status_code == 400
+
+
 def test_cookbook_staleness_sort(admin_client: TestClient) -> None:
     _create(admin_client)
     admin_client.post(

@@ -133,12 +133,21 @@ def record_cook(
         raise CookError("recipe not found")
 
     servings_made = _clean(data.servings_made)
-    if servings_made is not None and quantity.parse_quantity(servings_made) <= 0:
-        raise CookError("servings made must be greater than zero")
+    if servings_made is not None:
+        try:
+            if quantity.parse_quantity(servings_made) <= 0:
+                raise CookError("servings made must be greater than zero")
+        except quantity.QuantityError as exc:
+            raise CookError("servings made must be a number") from exc
     rating = None if not data.rating else max(1, min(10, int(data.rating)))
     elapsed = data.elapsed_minutes
     active = data.active_minutes
     notes = _clean(data.notes)
+
+    # Compute every planned amount before the first write, so a bad amount never leaves a
+    # half-written cook log (validate-before-write, like recipes._validate).
+    factor = recipes.scale_factor(detail.base_servings, servings_made or detail.base_servings)
+    snapshots = [(ing, _planned(ing, factor)) for ing in detail.ingredients]
     stamp = now_iso()
 
     cur = conn.execute(
@@ -150,13 +159,12 @@ def record_cook(
     )
     cook_log_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
 
-    factor = recipes.scale_factor(detail.base_servings, servings_made or detail.base_servings)
-    for ing in detail.ingredients:
+    for ing, planned_text in snapshots:
         conn.execute(
             """INSERT INTO cook_log_ingredients
                (cook_log_id, ingredient_id, original_text, food_id, planned_quantity_text)
                VALUES (?, ?, ?, ?, ?)""",
-            (cook_log_id, ing.id, ing.original_text, ing.food_id, _planned(ing, factor)),
+            (cook_log_id, ing.id, ing.original_text, ing.food_id, planned_text),
         )
 
     # Feed the "in our kitchen" time suggestion and mirror the rating onto the recipe.
@@ -178,11 +186,23 @@ def record_cook(
 
 
 def _planned(ing: recipes.IngredientView, factor: Decimal) -> str | None:
-    """The ingredient's planned amount at the cooked servings (blank when it doesn't scale)."""
-    if ing.quantity_text is None or ing.unit_name is None or ing.scaling_mode != "linear":
+    """The ingredient's planned amount at the cooked servings, scaled exactly as cook mode showed
+    it (fixed/to_taste and unmeasured lines are left verbatim). round_to_package must scale here
+    too, or the snapshot would record a different amount than the cook was actually shown."""
+    if (
+        ing.quantity_text is None
+        or ing.unit_name is None
+        or ing.scaling_mode in ("fixed", "to_taste")
+    ):
         return ing.quantity_text
+    package = (
+        quantity.parse_quantity(ing.package_quantity_text) if ing.package_quantity_text else None
+    )
     scaled = quantity.scale(
-        quantity.parse_quantity(ing.quantity_text), factor=factor, mode="linear", package=None
+        quantity.parse_quantity(ing.quantity_text),
+        factor=factor,
+        mode=ing.scaling_mode,
+        package=package,
     )
     return quantity.format_quantity(scaled) if scaled is not None else ing.quantity_text
 

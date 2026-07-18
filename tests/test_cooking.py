@@ -83,6 +83,50 @@ def test_record_cook_rejects_bad_servings(migrated_db: sqlite3.Connection) -> No
     assert migrated_db.execute("SELECT count(*) FROM cook_log").fetchone()[0] == 0
 
 
+def test_record_cook_rejects_non_numeric_servings(migrated_db: sqlite3.Connection) -> None:
+    # A non-numeric amount must surface as CookError (not the sibling QuantityError), so the
+    # router re-renders 400 instead of 500.
+    rid = _recipe(migrated_db)
+    with pytest.raises(cooking.CookError):
+        cooking.record_cook(
+            migrated_db, rid, cooking.CookCaptureInput(servings_made="two"), user_id=None
+        )
+    assert migrated_db.execute("SELECT count(*) FROM cook_log").fetchone()[0] == 0
+
+
+def test_record_cook_snapshots_round_to_package_scaled(migrated_db: sqlite3.Connection) -> None:
+    # The write-once planned snapshot must match what cook mode DISPLAYED, including package
+    # rounding: 300 g at 4 servings, cooked at 8, scales 2x to 600 then rounds up to a 400 g pack.
+    seed_core_units(migrated_db)
+    rid = recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="Sauce",
+            base_servings="4",
+            ingredients=[
+                recipes.IngredientInput(
+                    original_text="300 g tomatoes", quantity_text="300", unit="grams",
+                    food="tomatoes", scaling_mode="round_to_package",
+                    package_quantity_text="400", package_unit="grams",
+                )
+            ],
+            steps=[recipes.StepInput(instruction="Simmer.")],
+        ),
+    )
+    detail = recipes.get_recipe(migrated_db, rid)
+    assert detail is not None
+    displayed = cooking.build_cook_view(detail, "8").ingredients[0].display
+
+    log_id = cooking.record_cook(
+        migrated_db, rid, cooking.CookCaptureInput(servings_made="8"), user_id=None
+    )
+    planned = migrated_db.execute(
+        "SELECT planned_quantity_text FROM cook_log_ingredients WHERE cook_log_id = ?", (log_id,)
+    ).fetchone()[0]
+    assert planned == "800"  # 2 x 300 = 600, rounded up to one more 400 g package
+    assert planned in displayed  # snapshot agrees with what the cook was shown
+
+
 def test_staleness_orders_never_cooked_first(migrated_db: sqlite3.Connection) -> None:
     alpha = _recipe(migrated_db, title="Alpha")
     beta = _recipe(migrated_db, title="Beta")
