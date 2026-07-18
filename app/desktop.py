@@ -216,6 +216,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if "--smoke-test" in args:
         return run_smoke_test()
+    if "--backup" in args:
+        from app.manage import main as manage_main
+
+        return manage_main(["backup"])
+    if "--restore" in args:
+        from app.manage import main as manage_main
+
+        rest = args[args.index("--restore") + 1 :]
+        if len(rest) < 2:
+            print("usage: RecipeCollater.exe --restore <backup-folder> <empty-target-folder>")
+            return 2
+        return manage_main(["restore", rest[0], rest[1]])
     run_gui()
     return 0
 

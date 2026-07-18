@@ -55,6 +55,21 @@ Your recipes live in the `data` folder. Point `RC_DATA_DIR` in `.env` at your cu
 example already does), or copy that folder next to the exe. The app migrates the database
 forward automatically on first start and snapshots it beforehand.
 
+## Backups
+
+Set `RC_BACKUP_DIR` in `.env` to a folder on a **second drive** (e.g. an external HDD bay at
+`D:\RecipeCollaterBackups`). The worker writes a verified backup set there nightly - a consistent
+database snapshot plus images and artifacts, each checksummed and test-restored - and keeps the
+newest 14. The app refuses a backup destination on the same physical disk as your data, so a disk
+failure can't take both. Make one immediately with:
+
+```powershell
+RecipeCollater.exe --backup
+```
+
+Keep the PC awake overnight (or the nightly run is skipped until it next wakes). Restore a set with
+`RecipeCollater.exe --restore <backup-folder> <empty-target-folder>`.
+
 ## Command-line modes (for a service or debugging)
 
 ```
