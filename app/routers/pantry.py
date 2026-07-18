@@ -59,16 +59,18 @@ def _back(form: FormData) -> str:
 def index(
     request: Request,
     location: int | None = None,
+    q: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
     locations = pantry.list_locations(db)
     active = location if any(loc.id == location for loc in locations) else None
-    items = pantry.list_items(db, location_id=active)
+    items = pantry.list_items(db, location_id=active, query=q)
     restock_count = len(pantry.shopping_candidates(db))
     return render(
         request, "pantry/index.html", active_nav="pantry", user=user,
         locations=locations, active_location=active, items=items, restock_count=restock_count,
+        query=q or "",
     )
 
 
@@ -176,6 +178,20 @@ async def set_staple(
                 db, item_id, is_staple=_checked(form, "is_staple"),
                 min_quantity_text=_str(form, "min_quantity_text") or None, user_id=user.id,
             )
+        return RedirectResponse(_back(form), status_code=303)
+
+
+@router.post("/items/{item_id}/expiry")
+async def set_expiry(
+    request: Request,
+    item_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    async with request.form() as form:
+        with contextlib.suppress(pantry.PantryError):
+            pantry.set_expiry(db, item_id, _str(form, "expires_on") or None, user_id=user.id)
         return RedirectResponse(_back(form), status_code=303)
 
 

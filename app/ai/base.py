@@ -7,6 +7,19 @@ from typing import Protocol
 
 from app.extraction import ExtractedRecipe
 
+# Controlled tag vocabulary appended to every prompt. Free-text tag sprawl makes filter chips
+# useless and the Phase-5 assistant's hard-filters unreliable; a small fixed vocabulary keeps
+# "I have chicken, plan me dinner" answerable (docs/07 section 2 Cookbook filters).
+TAG_GUIDE = (
+    " Also fill tags (lowercase) with AT MOST one from each group that clearly applies: "
+    "meal: breakfast, lunch, dinner, side, dessert, snack, drink; "
+    "protein: chicken, beef, pork, seafood, lamb, turkey, vegetarian; "
+    "method: baked, grilled, stovetop, slow-cooked, instant-pot, air-fryer, no-cook; "
+    "effort: weeknight (under ~45 minutes hands-off-ish) or project (a weekend cook); "
+    "plus the cuisine as one lowercase word (e.g. italian, mexican, thai) when obvious. "
+    "Never more than 6 tags; omit a group rather than guess."
+)
+
 # System prompt for extracting a recipe from source text (a web page or a video transcript).
 EXTRACT_SYSTEM = (
     "You extract a single cooking recipe from the provided text, which may be a recipe web page "
@@ -14,6 +27,7 @@ EXTRACT_SYSTEM = (
     "Use only what the text states - never invent ingredients, steps, times, or yields. "
     "If a field is absent, omit it. Copy each ingredient line verbatim into original_text. "
     "If the text contains no recipe, return a title with empty ingredients and steps."
+    + TAG_GUIDE
 )
 
 # System prompt for drafting a recipe from a cook's plain-language description (manual entry).
@@ -24,6 +38,7 @@ DRAFT_SYSTEM = (
     "but do not invent a different dish or ingredients they did not mention. For each ingredient "
     "fill quantity_text, unit, and food separately (e.g. '2', 'cups', 'flour') and also put the "
     "whole line in original_text. If the description is vague, still return a best-effort recipe."
+    + TAG_GUIDE
 )
 
 

@@ -471,6 +471,25 @@ def set_staple(
         conn.commit()
 
 
+def set_expiry(
+    conn: sqlite3.Connection,
+    item_id: int,
+    expires_on: str | None,
+    *,
+    user_id: int | None = None,
+    commit: bool = True,
+) -> None:
+    """Set or clear an item's expiry date after creation. Metadata only - no adjustment row."""
+    _row(conn, item_id)  # raises on unknown item
+    clean = (expires_on or "").strip() or None
+    conn.execute(
+        "UPDATE pantry_items SET expires_on = ?, updated_at = ?, updated_by = ? WHERE id = ?",
+        (clean, now_iso(), user_id, item_id),
+    )
+    if commit:
+        conn.commit()
+
+
 def remove_item(
     conn: sqlite3.Connection,
     item_id: int,
@@ -601,16 +620,29 @@ _ITEM_SELECT = """
 """
 
 
-def list_items(conn: sqlite3.Connection, *, location_id: int | None = None) -> list[PantryItem]:
+def list_items(
+    conn: sqlite3.Connection,
+    *,
+    location_id: int | None = None,
+    query: str | None = None,
+) -> list[PantryItem]:
+    where: list[str] = []
+    params: list[object] = []
     if location_id is not None:
-        rows = conn.execute(
-            _ITEM_SELECT + " WHERE pi.location_id = ? ORDER BY pi.display_name COLLATE NOCASE",
-            (location_id,),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            _ITEM_SELECT + " ORDER BY l.sort_order, pi.display_name COLLATE NOCASE"
-        ).fetchall()
+        where.append("pi.location_id = ?")
+        params.append(location_id)
+    if query and query.strip():
+        where.append("pi.display_name LIKE ?")
+        params.append(f"%{query.strip()}%")
+    sql = _ITEM_SELECT
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += (
+        " ORDER BY pi.display_name COLLATE NOCASE"
+        if location_id is not None
+        else " ORDER BY l.sort_order, pi.display_name COLLATE NOCASE"
+    )
+    rows = conn.execute(sql, params).fetchall()
     return [_to_item(r) for r in rows]
 
 

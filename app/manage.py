@@ -99,6 +99,25 @@ def _cmd_schema_version() -> int:
     return 0
 
 
+def _cmd_backfill_tags(all_recipes: bool, limit: int | None) -> int:
+    """AI-tag recipes that predate the controlled tag vocabulary (Phase 4.6)."""
+    from app.services import tagging  # heavy AI imports stay out of the module top level
+
+    conn = connect(get_settings().db_path)
+    try:
+        results = tagging.backfill(conn, only_untagged=not all_recipes, limit=limit)
+    finally:
+        conn.close()
+    failed = [r for r in results if r.error]
+    for r in results:
+        line = f"{r.title}: {', '.join(r.tags) if r.tags else '(no tags)'}"
+        if r.error:
+            line += f"  ERROR: {r.error}"
+        print(line)
+    log.info("backfill_tags", tagged=len(results) - len(failed), failed=len(failed))
+    return 0 if not failed else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     configure_logging(console=get_settings().log_console)
     parser = argparse.ArgumentParser(prog="app.manage")
@@ -116,6 +135,9 @@ def main(argv: list[str] | None = None) -> int:
     p_restore = sub.add_parser("restore")
     p_restore.add_argument("backup_dir")
     p_restore.add_argument("target")
+    p_tags = sub.add_parser("backfill-tags")
+    p_tags.add_argument("--all", action="store_true", help="retag even recipes that have tags")
+    p_tags.add_argument("--limit", type=int, default=None)
 
     args = parser.parse_args(argv)
     match args.command:
@@ -133,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_verify_backup(args.backup_dir)
         case "restore":
             return _cmd_restore(args.backup_dir, args.target)
+        case "backfill-tags":
+            return _cmd_backfill_tags(args.all, args.limit)
         case _:  # pragma: no cover - argparse (required=True) enforces valid commands
             parser.error(f"unknown command: {args.command}")  # NoReturn
 

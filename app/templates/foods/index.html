@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Foods · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Foods</h1>
+  <a href="/pantry" class="btn-secondary">Pantry</a>
+</header>
+
+<p class="muted">Everything joins on foods &mdash; coverage, deductions, aisles, pack sizes.
+  Review imports, merge duplicates (&ldquo;chicken breasts&rdquo; into &ldquo;chicken
+  breast&rdquo;), and group cuts under a family so &ldquo;what can I make with chicken?&rdquo;
+  finds every cut.</p>
+
+{% if pending_count %}
+<p class="banner banner-ok">{{ pending_count }} imported food{{ 's' if pending_count != 1 }}
+  waiting for review &mdash; confirm them so trusted auto-deductions can apply.</p>
+{% endif %}
+
+<form method="get" class="library-search" role="search">
+  <input type="search" name="q" value="{{ query }}" placeholder="Find a food&hellip;"
+         aria-label="Find a food">
+  <button type="submit" class="btn-secondary">Search</button>
+  {% if query %}<a href="/foods" class="btn-secondary">Clear</a>{% endif %}
+</form>
+
+{% if foods %}
+<ul class="food-list">
+  {% for f in foods %}
+  <li class="card food-row">
+    <div class="food-head">
+      <span class="food-name">{{ f.name }}</span>
+      {% if f.status == 'pending' %}<span class="chip-tag chip-pending">pending</span>{% endif %}
+      {% if f.parent_name %}<span class="chip-tag" title="Food family">&#8593; {{ f.parent_name }}</span>{% endif %}
+      {% if f.category %}<span class="chip-tag">{{ f.category }}</span>{% endif %}
+      {% if f.purchase_label or f.purchase_quantity_text %}
+      <span class="chip-tag">
+        {{ f.purchase_label or 'pack' }}{% if f.purchase_quantity_text %} · {{ f.purchase_quantity_text }} {{ f.purchase_unit_name or '' }}{% endif %}
+      </span>
+      {% endif %}
+      <span class="muted food-usage">{{ f.recipe_count }} recipe{{ 's' if f.recipe_count != 1 }}
+        · {{ f.pantry_count }} pantry</span>
+      {% if f.status == 'pending' %}
+      <form method="post" action="/foods/{{ f.id }}/confirm" class="inline-post">
+        <input type="hidden" name="q" value="{{ query }}">
+        <button type="submit" class="btn-secondary">Confirm</button>
+      </form>
+      {% endif %}
+    </div>
+
+    <details class="food-manage">
+      <summary class="muted">edit</summary>
+      <form method="post" action="/foods/{{ f.id }}/details" class="food-form">
+        <input type="hidden" name="q" value="{{ query }}">
+        <label>Aisle <input name="category" value="{{ f.category or '' }}" placeholder="Baking, Produce&hellip;"></label>
+        <label>Bought as <input name="purchase_label" value="{{ f.purchase_label or '' }}" placeholder="bag" size="6"></label>
+        <label>Size <input name="purchase_quantity" value="{{ f.purchase_quantity_text or '' }}" placeholder="2" size="4" inputmode="decimal"></label>
+        <label>Unit <input name="purchase_unit" value="{{ f.purchase_unit_name or '' }}" placeholder="kg" size="4"></label>
+        <button type="submit" class="btn-secondary">Save</button>
+      </form>
+      <form method="post" action="/foods/{{ f.id }}/parent" class="food-form">
+        <input type="hidden" name="q" value="{{ query }}">
+        <label>Family
+          <select name="parent_id">
+            <option value="">&mdash; none &mdash;</option>
+            {% for other in foods %}{% if other.id != f.id %}
+            <option value="{{ other.id }}"{% if f.parent_food_id == other.id %} selected{% endif %}>{{ other.name }}</option>
+            {% endif %}{% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn-secondary">Set family</button>
+      </form>
+      <form method="post" action="/foods/{{ f.id }}/merge" class="food-form"
+            onsubmit="return confirm('Merge {{ f.name }} into the selected food? Every recipe, pantry item and list line moves over.');">
+        <input type="hidden" name="q" value="{{ query }}">
+        <label>Merge into
+          <select name="target_id">
+            <option value="">&mdash; pick the food to keep &mdash;</option>
+            {% for other in foods %}{% if other.id != f.id %}
+            <option value="{{ other.id }}">{{ other.name }}</option>
+            {% endif %}{% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn-danger">Merge</button>
+      </form>
+    </details>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No foods yet {% if query %}matching &ldquo;{{ query }}&rdquo;{% endif %} &mdash;
+  they appear as recipes and pantry items are added.</p>
+{% endif %}
+{% endblock %}

@@ -6,6 +6,7 @@
 <header class="page-head">
   <h1>Pantry</h1>
   <div class="head-actions">
+    <a href="/foods" class="btn-secondary">Foods</a>
     <a href="/shopping" class="btn-secondary">Shopping list</a>
     {% if active_location %}
     <a href="/pantry/stock-take/{{ active_location }}" class="btn-primary">Stock-take</a>
@@ -19,6 +20,14 @@
   <button type="submit" class="btn-secondary">Add to shopping list</button>
 </form>
 {% endif %}
+
+<form method="get" class="library-search" role="search">
+  {% if active_location %}<input type="hidden" name="location" value="{{ active_location }}">{% endif %}
+  <input type="search" name="q" value="{{ query }}" placeholder="Find in the pantry&hellip;"
+         aria-label="Find a pantry item">
+  <button type="submit" class="btn-secondary">Search</button>
+  {% if query %}<a href="{{ back }}" class="btn-secondary">Clear</a>{% endif %}
+</form>
 
 <div class="pantry-locbar">
   <nav class="library-nav pantry-locations" aria-label="Locations">
@@ -118,6 +127,13 @@
         {% if item.quantity_mode == 'exact' %}
         <input name="min_quantity_text" value="{{ item.min_quantity_text or '' }}" placeholder="min" class="pantry-min">
         {% endif %}
+        <button type="submit" class="btn-secondary">Save</button>
+      </form>
+      <form method="post" action="/pantry/items/{{ item.id }}/expiry" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <label class="pantry-expiry-edit">Expires
+          <input type="date" name="expires_on" value="{{ item.expires_on or '' }}">
+        </label>
         <button type="submit" class="btn-secondary">Save</button>
       </form>
       <form method="post" action="/pantry/items/{{ item.id }}/remove" class="pantry-menu-row">
