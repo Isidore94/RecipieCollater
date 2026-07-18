@@ -384,3 +384,101 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cook-step-ings { list-style: none; padding: 10px 12px; margin: 0 0 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .cook-step-ings li { font-size: 15px; }
 .cook-step-ings li::before { content: "\2022"; color: var(--brand); margin-right: 7px; }
+
+/* ---- Phase 4.6: GUI usability overhaul ---- */
+
+/* Nav badge (unchecked shopping items) */
+.tab, .rail-link { position: relative; }
+.tab-badge {
+  position: absolute; top: 4px; right: calc(50% - 22px); min-width: 16px; height: 16px;
+  padding: 0 4px; border-radius: 999px; background: var(--brand); color: var(--brand-ink);
+  font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+}
+.rail-link .tab-badge { position: static; margin-left: auto; }
+
+/* Home modules */
+.home-module { margin-bottom: 22px; }
+.home-module h2 { font-size: 18px; margin: 0 0 8px; }
+.home-module h2 .muted { font-family: var(--font-ui); font-size: 13px; font-weight: 400; margin-left: 6px; }
+.home-links { list-style: none; padding: 0; margin: 0; }
+.home-links li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
+
+/* Recipe cards: photo + meta chips */
+.recipe-thumb { width: 100%; max-height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; }
+.recipe-card-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 6px; }
+.chip-rating { font-weight: 700; }
+.chip-coverage.is-complete { color: var(--ok-ink); }
+@media (min-width: 640px) { .recipe-cards { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 980px) { .recipe-cards { grid-template-columns: repeat(3, 1fr); } }
+
+/* Cookbook filter chips */
+.filter-bar { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; margin-bottom: 10px; -webkit-overflow-scrolling: touch; }
+.filter-bar .chip { white-space: nowrap; text-decoration: none; color: var(--ink); flex: none; }
+.filter-bar .chip.is-on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.filter-bar .chip-action { border-color: var(--brand); color: var(--brand); }
+
+/* Coverage details: missing lines + learned subs */
+.coverage-missing { list-style: none; padding: 0; margin: 6px 0 0; }
+.coverage-missing li { padding: 2px 0; }
+.coverage-need { font-weight: 600; }
+
+/* Shopping list: provenance, check-the-amount, pack-size prompt */
+.shop-source { display: block; font-size: 12px; }
+.shop-item.needs-check .shop-text { border-left: 3px solid var(--brand); padding-left: 8px; }
+.shop-pack summary { font-size: 12px; cursor: pointer; list-style: none; }
+.shop-pack-form { display: flex; gap: 4px; align-items: center; margin-top: 6px; }
+.shop-pack-form input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+
+/* Trip builder */
+.trip-picks { list-style: none; padding: 0; margin: 10px 0 0; }
+.trip-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.trip-pick-label { flex: 1; min-width: 200px; }
+.trip-servings input { width: 52px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.trip-lines { list-style: none; padding: 0; margin: 0; }
+.trip-line { padding: 7px 0; border-bottom: 1px solid var(--line); }
+.trip-line.needs-check { border-left: 3px solid var(--brand); padding-left: 8px; }
+.trip-covered summary { cursor: pointer; color: var(--ok-ink); }
+.trip-covered ul { margin: 8px 0 0; padding-left: 20px; }
+
+/* Restock review */
+.restock-list { list-style: none; padding: 0; margin: 0 0 12px; }
+.restock-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.restock-action { font-size: 13px; color: var(--brand); }
+.restock-location { display: block; margin: 10px 0 0; font-size: 14px; }
+.restock-location select { margin-left: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+
+/* Foods upkeep */
+.food-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.food-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.food-name { font-weight: 600; }
+.food-usage { font-size: 12px; margin-left: auto; }
+.chip-pending { color: var(--err-ink); background: var(--err-bg); border-radius: 6px; padding: 2px 6px; }
+.food-manage summary { cursor: pointer; font-size: 13px; margin-top: 6px; }
+.food-form { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; margin-top: 10px; }
+.food-form label { font-size: 12px; color: var(--ink-soft); }
+.food-form input, .food-form select { display: block; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+
+/* Cook-mode deviation quick capture */
+.cook-ing { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cook-ing label { flex: 1; min-width: 200px; }
+.cook-ing.is-skipped > label span { text-decoration: line-through; color: var(--ink-soft); }
+.dev-btn { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; min-height: auto; }
+.dev-btn.is-on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.dev-text { flex-basis: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.cook-dev-hint { font-size: 12px; margin: 8px 0 0; }
+
+/* After-cook deviations */
+.after-devs summary { cursor: pointer; font-weight: 600; margin: 12px 0 4px; }
+.after-devs summary .muted { font-weight: 400; font-size: 13px; }
+.dev-list { list-style: none; padding: 0; margin: 8px 0 10px; }
+.dev-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; align-items: center; padding: 4px 0; }
+.dev-row .dev-name { font-size: 14px; }
+@media (max-width: 640px) { .dev-row { grid-template-columns: 1fr; } }
+
+/* Cook log: what actually happened */
+.cook-log-devs { list-style: none; padding: 0; margin: 4px 0; font-size: 14px; color: var(--ink-soft); }
+.cook-log-devs li::before { content: "\21B3"; margin-right: 6px; color: var(--brand); }
+
+/* Pantry extras */
+.pantry-expiry-edit { font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
+.pantry-expiry-edit input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }

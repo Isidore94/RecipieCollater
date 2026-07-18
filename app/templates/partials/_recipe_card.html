@@ -1,0 +1,23 @@
+{# One recipe card (docs/07 section 1: the core visual unit - photo, title, chips).
+   Context: r (needs .slug/.title; optional .image_path/.rating/.tier/.total_minutes/.tldr),
+   optional cov (RecipeCoverage) and sub (extra muted line). #}
+<li class="card recipe-card">
+  <a href="/recipes/{{ r.slug }}" class="recipe-card-link">
+    {% if r.image_path %}
+    <img class="recipe-thumb" src="/recipes/{{ r.slug }}/image" alt="" loading="lazy">
+    {% endif %}
+    <h2>{{ r.title }}</h2>
+  </a>
+  <p class="recipe-card-meta">
+    {% if r.rating %}<span class="chip-tag chip-rating">&#9733; {{ r.rating }}/10</span>{% endif %}
+    {% if r.tier %}<span class="chip-tag">{{ r.tier }}</span>{% endif %}
+    {% if r.total_minutes %}<span class="chip-tag">{{ r.total_minutes }} min</span>{% endif %}
+    {% if cov and cov.total %}
+    <span class="chip-tag chip-coverage{% if cov.complete %} is-complete{% endif %}">
+      {% if cov.complete %}&#10003; have all {{ cov.total }}{% else %}have {{ cov.have }}/{{ cov.total }}{% endif %}
+    </span>
+    {% endif %}
+  </p>
+  {% if r.tldr %}<p class="muted">{{ r.tldr }}</p>{% endif %}
+  {% if sub %}<p class="muted">{{ sub }}</p>{% endif %}
+</li>

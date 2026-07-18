@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>What&rsquo;s cooking?</h1>
+  <a href="/can-make" class="btn-primary">&#10024; What can I make?</a>
+</header>
+
+{% if home.tonight %}
+<section class="home-module">
+  <h2>Tonight&rsquo;s ideas <span class="muted">favourites that have rested</span></h2>
+  <ul class="recipe-cards">
+    {% for pick in home.tonight %}
+    {% with r = pick, sub = ('Last made ' ~ pick.last_cooked[:10]) if pick.last_cooked else 'Never made yet' %}
+    {% include "partials/_recipe_card.html" %}
+    {% endwith %}
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if home.use_it_up %}
+<section class="home-module">
+  <h2>Use it up <span class="muted">pantry items expiring soon</span></h2>
+  <ul class="home-links">
+    {% for u in home.use_it_up %}
+    <li><a href="/recipes/{{ u.slug }}">{{ u.title }}</a>
+      <span class="muted">uses {{ u.uses }} expiring item{{ 's' if u.uses != 1 }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if home.almost %}
+<section class="home-module">
+  <h2>One ingredient away</h2>
+  <ul class="home-links">
+    {% for entry in home.almost %}
+    <li>
+      <a href="/recipes/{{ entry.summary.slug }}">{{ entry.summary.title }}</a>
+      {% if entry.coverage.missing %}
+      <span class="muted">need {{ entry.coverage.missing[0].name }}</span>
+      <form method="post" action="/shopping/from-recipe/{{ entry.summary.slug }}" class="inline-post">
+        <button type="submit" class="btn-link">+ shopping</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if home.new_to_try %}
+<section class="home-module">
+  <h2>New to try <span class="muted">from the inbox</span></h2>
+  <ul class="recipe-cards">
+    {% for r in home.new_to_try %}
+    {% include "partials/_recipe_card.html" %}
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if not home.tonight and not home.use_it_up and not home.almost and not home.new_to_try %}
+<p class="muted">Nothing here yet &mdash; <a href="/inbox">add your first recipe</a> and it&rsquo;ll
+  start showing up.</p>
+{% endif %}
+{% endblock %}

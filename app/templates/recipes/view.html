@@ -41,14 +41,25 @@
 </div>
 
 {% if coverage and coverage.total %}
-<p class="coverage no-print{% if coverage.complete %} is-complete{% endif %}">
+<div class="coverage no-print{% if coverage.complete %} is-complete{% endif %}">
   {% if coverage.complete %}
-  &#10003; You have all {{ coverage.total }} tracked ingredients
+  <p>&#10003; You have all {{ coverage.total }} tracked ingredients</p>
   {% else %}
-  You have {{ coverage.have }} of {{ coverage.total }} ingredients
-  {% if coverage.missing %}<span class="muted">&mdash; need {{ coverage.missing | join(', ') }}</span>{% endif %}
+  <p>You have {{ coverage.have }} of {{ coverage.total }} ingredients</p>
+  <ul class="coverage-missing">
+    {% for m in coverage.missing %}
+    <li>
+      <span class="coverage-need">need {{ m.name }}</span>
+      {% if m.subs %}
+      <span class="muted">&mdash; subs:
+        {% for s in m.subs %}{{ s.text }}{% if s.have %} &#10003;{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+      </span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
   {% endif %}
-</p>
+</div>
 {% endif %}
 
 <section class="card">
@@ -84,7 +95,11 @@
 {% if recipe.tags %}
 <section class="card">
   <h2>Tags</h2>
-  <ul class="chip-list">{% for tag in recipe.tags %}<li class="chip">{{ tag }}</li>{% endfor %}</ul>
+  <ul class="chip-list">
+    {% for tag in recipe.tags %}
+    <li><a class="chip" href="/cookbook?tag={{ tag | urlencode }}">{{ tag }}</a></li>
+    {% endfor %}
+  </ul>
 </section>
 {% endif %}
 
@@ -112,6 +127,25 @@
         {%- if c.active_minutes %} &middot; {{ c.active_minutes }} min hands-on{% endif -%}
         {%- if c.elapsed_minutes %} &middot; {{ c.elapsed_minutes }} min total{% endif -%}
       </div>
+      {% endif %}
+      {% if c.deviations or c.additions %}
+      <ul class="cook-log-devs">
+        {% for d in c.deviations %}
+        <li>
+          {{ d.display }}
+          {% if d.kind == 'substituted' and d.food_id and d.used_text and not d.remembered %}
+          <form method="post" action="/recipes/{{ recipe.slug }}/remember-sub" class="inline-post no-print">
+            <input type="hidden" name="food_id" value="{{ d.food_id }}">
+            <input type="hidden" name="text" value="{{ d.used_text }}">
+            <button type="submit" class="btn-link" title="Suggest this sub next time">remember this sub</button>
+          </form>
+          {% elif d.kind == 'substituted' and d.remembered %}
+          <span class="muted">(remembered)</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+        {% if c.additions %}<li>added {{ c.additions }}</li>{% endif %}
+      </ul>
       {% endif %}
       {% if c.notes %}<div class="cook-log-note">{{ c.notes }}</div>{% endif %}
     </li>

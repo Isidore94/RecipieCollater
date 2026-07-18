@@ -53,6 +53,9 @@
              {% if active_nav == item.key %}aria-current="page"{% endif %}>
             <span class="rail-icon" aria-hidden="true" data-icon="{{ item.icon }}"></span>
             <span class="rail-label">{{ item.label }}</span>
+            {% if item.key == 'shopping' %}
+            <span hx-get="/shopping/badge" hx-trigger="load" hx-swap="outerHTML"></span>
+            {% endif %}
           </a>
         </li>
         {% endfor %}
@@ -96,6 +99,9 @@
          {% if active_nav == item.key %}aria-current="page"{% endif %}>
         <span class="tab-icon" aria-hidden="true" data-icon="{{ item.icon }}"></span>
         <span class="tab-label">{{ item.label }}</span>
+        {% if item.key == 'shopping' %}
+        <span hx-get="/shopping/badge" hx-trigger="load" hx-swap="outerHTML"></span>
+        {% endif %}
       </a>
       {% endfor %}
     </nav>

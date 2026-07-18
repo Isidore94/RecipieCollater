@@ -38,11 +38,37 @@
 <form method="get" class="library-search" role="search">
   <input type="search" name="q" value="{{ query }}"
          placeholder="Search titles, ingredients, tags&hellip;" aria-label="Search recipes">
+  {% if filter_tag %}<input type="hidden" name="tag" value="{{ filter_tag }}">{% endif %}
+  {% if filter_tier %}<input type="hidden" name="tier" value="{{ filter_tier }}">{% endif %}
+  {% if filter_maxmin %}<input type="hidden" name="maxmin" value="{{ filter_maxmin }}">{% endif %}
+  {% if filter_rating %}<input type="hidden" name="rating" value="{{ filter_rating }}">{% endif %}
   <button type="submit" class="btn-secondary">Search</button>
   {% if query %}<a href="?" class="btn-secondary">Clear</a>{% endif %}
 </form>
 
 {% if status == 'cookbook' %}
+{% macro filter_url(tag=None, tier=None, maxmin=None, rating=None) -%}
+  {%- set t = filter_tag if tag is none else tag -%}
+  {%- set ti = filter_tier if tier is none else tier -%}
+  {%- set mm = filter_maxmin if maxmin is none else maxmin -%}
+  {%- set ra = filter_rating if rating is none else rating -%}
+  /cookbook?q={{ query | urlencode }}{% if t %}&amp;tag={{ t | urlencode }}{% endif %}{% if ti %}&amp;tier={{ ti }}{% endif %}{% if mm %}&amp;maxmin={{ mm }}{% endif %}{% if ra %}&amp;rating={{ ra }}{% endif %}
+{%- endmacro %}
+<div class="filter-bar no-print">
+  <a href="/can-make" class="chip chip-action">&#10024; What can I make?</a>
+  <a href="{{ filter_url(rating='8' if filter_rating != '8' else '') }}"
+     class="chip{% if filter_rating == '8' %} is-on{% endif %}">&#9733; 8+</a>
+  <a href="{{ filter_url(maxmin='45' if filter_maxmin != '45' else '') }}"
+     class="chip{% if filter_maxmin == '45' %} is-on{% endif %}">&le; 45 min</a>
+  {% for t in ['meal_prep', 'family', 'company'] %}
+  <a href="{{ filter_url(tier=t if filter_tier != t else '') }}"
+     class="chip{% if filter_tier == t %} is-on{% endif %}">{{ t.replace('_', ' ') }}</a>
+  {% endfor %}
+  {% for tc in tags %}
+  <a href="{{ filter_url(tag=tc.name if filter_tag != tc.name else '') }}"
+     class="chip{% if filter_tag == tc.name %} is-on{% endif %}">{{ tc.name }}</a>
+  {% endfor %}
+</div>
 <p class="sort-toggle no-print">
   {% if stale_sort or use_it_up is defined %}
   <a href="/cookbook" class="btn-secondary">All recipes</a>
@@ -67,21 +93,28 @@
 <p class="muted">Nothing in the pantry is expiring soon. &#127881;</p>
 {% endif %}
 
-{% elif recipes %}
+{% elif stale_sort %}
 <ul class="recipe-cards">
   {% for r in recipes %}
   <li class="card recipe-card">
     <a href="/recipes/{{ r.slug }}"><h2>{{ r.title }}</h2></a>
-    {% if r.tldr %}<p class="muted">{{ r.tldr }}</p>{% endif %}
-    {% if r.tier %}<span class="chip-tag">{{ r.tier }}</span>{% endif %}
     {% if r.last_cooked %}<p class="muted">Last cooked {{ r.last_cooked[:10] }} &middot; {{ r.cook_count }}&times;</p>
-    {% elif stale_sort %}<p class="muted">Not cooked yet</p>{% endif %}
+    {% else %}<p class="muted">Not cooked yet</p>{% endif %}
   </li>
+  {% endfor %}
+</ul>
+
+{% elif recipes %}
+<ul class="recipe-cards">
+  {% for r in recipes %}
+  {% with cov = coverage.get(r.id) if coverage is defined else None %}
+  {% include "partials/_recipe_card.html" %}
+  {% endwith %}
   {% endfor %}
 </ul>
 {% else %}
 <p class="muted">
-  {% if query %}No matches for &ldquo;{{ query }}&rdquo;.
+  {% if query or filter_tag or filter_tier or filter_maxmin or filter_rating %}No matches.
   {% else %}Nothing here yet. <a href="/recipes/new">Add your first recipe.</a>{% endif %}
 </p>
 {% endif %}

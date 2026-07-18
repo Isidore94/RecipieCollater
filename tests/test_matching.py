@@ -24,6 +24,12 @@ def _recipe(conn: sqlite3.Connection, foods: list[str]) -> int:
     )
 
 
+def _slug(conn: sqlite3.Connection, recipe_id: int) -> str:
+    detail = recipes.get_recipe(conn, recipe_id)
+    assert detail is not None
+    return detail.slug
+
+
 def _have(conn: sqlite3.Connection, food: str, *, expires: str | None = None) -> int:
     loc = pantry.create_location(conn, "Pantry")
     return pantry.add_item(
@@ -43,7 +49,7 @@ def test_coverage_counts_have_and_missing(migrated_db: sqlite3.Connection) -> No
 
     cov = matching.recipe_coverage(migrated_db, rid)
     assert (cov.have, cov.total) == (2, 3)
-    assert cov.missing == ["flour"]
+    assert cov.missing_names == ["flour"]
     assert cov.complete is False
 
 
@@ -93,8 +99,8 @@ def test_use_it_up_ranks_by_expiring_items(migrated_db: sqlite3.Connection) -> N
 
     ranking = matching.use_it_up(migrated_db)
     slugs = [u.slug for u in ranking]
-    both_slug = recipes.get_recipe(migrated_db, both).slug
-    one_slug = recipes.get_recipe(migrated_db, one).slug
+    both_slug = _slug(migrated_db, both)
+    one_slug = _slug(migrated_db, one)
     assert slugs.index(both_slug) < slugs.index(one_slug)  # 2-expiring recipe ranks first
     assert ranking[0].uses == 2
 
@@ -113,7 +119,7 @@ def test_recipe_view_shows_coverage(
     seed_core_units(migrated_db)
     rid = _recipe(migrated_db, ["eggs", "milk"])
     _have(migrated_db, "eggs")
-    slug = recipes.get_recipe(migrated_db, rid).slug
+    slug = _slug(migrated_db, rid)
     assert "of 2 ingredients" in admin_client.get(f"/recipes/{slug}").text
 
 

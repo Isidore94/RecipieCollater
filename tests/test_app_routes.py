@@ -43,16 +43,17 @@ def test_protected_page_redirects_without_session(client: TestClient) -> None:
     assert r.headers["location"] == "/welcome"
 
 
-def test_root_redirects(admin_client: TestClient) -> None:
+def test_root_renders_home(admin_client: TestClient) -> None:
+    # Phase 4.6: "/" is the discovery Home screen, not a redirect to the inbox chore list.
     r = admin_client.get("/", follow_redirects=False)
-    assert r.status_code == 307
-    assert r.headers["location"] == "/inbox"
+    assert r.status_code == 200
+    assert "What can I make?" in r.text
 
 
 def test_setup_then_access(admin_client: TestClient) -> None:
     r = admin_client.get("/inbox")
     assert r.status_code == 200
-    assert "Test Recipes" in r.text
+    assert "Inbox" in r.text
 
 
 def test_second_setup_is_refused(admin_client: TestClient) -> None:

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}What can I make? · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>What can I make?</h1>
+  <a href="/cookbook" class="btn-secondary">Cookbook</a>
+</header>
+
+<form method="get" class="library-search" role="search">
+  <input type="search" name="q" value="{{ query }}" placeholder="chicken, pasta&hellip;"
+         aria-label="Filter recipes">
+  {% if filter_tag %}<input type="hidden" name="tag" value="{{ filter_tag }}">{% endif %}
+  <button type="submit" class="btn-secondary">Search</button>
+  {% if query %}<a href="/can-make{% if filter_tag %}?tag={{ filter_tag | urlencode }}{% endif %}" class="btn-secondary">Clear</a>{% endif %}
+</form>
+
+{% if tags %}
+<div class="filter-bar no-print">
+  {% for tc in tags %}
+  <a href="/can-make?q={{ query | urlencode }}{% if filter_tag != tc.name %}&amp;tag={{ tc.name | urlencode }}{% endif %}"
+     class="chip{% if filter_tag == tc.name %} is-on{% endif %}">{{ tc.name }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if groups.ready %}
+<section class="home-module">
+  <h2>&#10003; Ready now <span class="muted">everything&rsquo;s in the pantry</span></h2>
+  <ul class="recipe-cards">
+    {% for entry in groups.ready %}
+    {% with r = entry.summary, cov = entry.coverage %}
+    {% include "partials/_recipe_card.html" %}
+    {% endwith %}
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% macro shortfall(entries, heading) %}
+{% if entries %}
+<section class="home-module">
+  <h2>{{ heading }}</h2>
+  <ul class="home-links">
+    {% for entry in entries %}
+    <li>
+      <a href="/recipes/{{ entry.summary.slug }}">{{ entry.summary.title }}</a>
+      <span class="muted">need {{ entry.coverage.missing_names | join(', ') }}</span>
+      <form method="post" action="/shopping/from-recipe/{{ entry.summary.slug }}" class="inline-post">
+        <button type="submit" class="btn-link">+ shopping</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endmacro %}
+{{ shortfall(groups.missing_one, 'One ingredient short') }}
+{{ shortfall(groups.missing_two, 'Two ingredients short') }}
+
+{% if not groups.ready and not groups.missing_one and not groups.missing_two %}
+<p class="muted">No pantry matches yet. Stock the <a href="/pantry">pantry</a> (even roughly
+  &mdash; full/half/low is enough) and this page starts answering.</p>
+{% endif %}
+{% endblock %}
