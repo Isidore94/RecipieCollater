@@ -5,6 +5,34 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### Phase 4.6 — GUI usability overhaul (2026-07-18)
+
+Schema v12 (migration 012). The shopping list learns how food is bought, the cook log learns
+what actually happened, and discovery makes the cookbook answer "what can I make?".
+
+- **Shopping speaks "store"**: per-food purchase info (pack word + size, asked inline once);
+  package ceiling on measured lines; gauge/binary staple-lane foods list without cooking
+  amounts; unmeasurable lines flagged "check the amount" instead of silently dropped; fixed
+  lines shop unscaled; per-line recipe provenance; Shopping in the nav with a count badge.
+- **Trip builder** (`/shopping/plan`): multi-recipe preview with covered-by-pantry
+  transparency and per-line opt-out; pantry subtracted once against the aggregate.
+- **Restock review**: "Done shopping" turns checked lines into pantry restocks
+  (gauge→full / have / +purchased amount / start tracking) before clearing them.
+- **After-cook deviations**: omitted/substituted/adjusted per line + additions, quick-marked
+  in cook mode and pre-filled; rendered on the cook-log timeline; deductions honor them;
+  "remember this sub" feeds a learned `food_substitutes` table that resurfaces as
+  suggestions on missing coverage lines.
+- **Discovery**: Home screen at `/` (tonight's rested favourites, use-it-up,
+  one-ingredient-away, new-to-try); `/can-make` shortfall groups; cookbook filter chips
+  (tag/tier/rating/max-time) composing with search; clickable tags; photo/rating/coverage
+  on recipe cards.
+- **Food hygiene**: `/foods` upkeep screen (confirm pending imports, merge duplicates, set
+  aisle/pack/family); ingested foods arrive `pending`; food families via `parent_food_id`;
+  recipe edits carry pantry mappings/deduction trust onto unchanged lines.
+- **AI tags**: controlled vocabulary (meal/protein/method/effort/cuisine) in both provider
+  prompts + `python -m app.manage backfill-tags`.
+- Pantry: post-creation expiry editing and a search box.
+
 ### Phase 0 — Deployable foundation
 
 The application skeleton the household can install, pair devices with, and operate —

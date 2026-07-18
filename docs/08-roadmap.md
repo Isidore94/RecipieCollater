@@ -87,6 +87,42 @@ Before each phase:
 - No custom offline outbox/sync in v1.
 - **Exit criteria:** ten real recipes complete a first-cook review; repeated trusted cooks require no unnecessary confirmation; wrong mappings never auto-deduct; Undo/history work; pantry remains useful through a month of casual use; one weekly shop succeeds through native/text export.
 
+## Phase 4.6 — GUI usability overhaul (inserted 2026-07-18)
+
+A user-directed pass between pantry mechanics (4) and planning (5): make the built machinery
+genuinely usable day-to-day, and lay the deterministic groundwork the Phase-5 assistant needs.
+
+- **Shopping speaks "store", not "recipe"**: purchase info (pack word + size) lives on foods;
+  measured lines ceiling to packages at display time; gauge/binary "staple-lane" foods never
+  show cooking amounts (either covered by the pantry or listed as "Flour — 1 bag"); unmeasurable
+  lines land flagged "check the amount" instead of being silently dropped; fixed-scaling lines
+  shop at their unscaled amount; provenance ("for Chili") renders on lines.
+- **Trip builder**: pick several recipes → one preview (to-buy by aisle, covered-by-pantry,
+  to-taste) with per-line opt-out; pantry stock is subtracted once against the aggregate.
+- **Restock loop-closer**: "Done shopping" proposes pantry restocks from checked lines
+  (gauge→full, binary→have, exact +purchased amount, optional new tracked items) so the pantry
+  stays truthful after every trip.
+- **After-cook deviations**: structured capture of omitted/substituted/adjusted lines (+ free-text
+  additions), pre-filled from cook-mode quick marks (localStorage); rendered in the cook-log
+  timeline; deductions honor them (omitted lines never deduct; adjusted lines deduct the actual
+  amount); substitutions can be remembered into `food_substitutes` and resurface as suggestions
+  on missing coverage lines.
+- **Discovery**: "/" is a Home screen (tonight's rested favourites, use-it-up, one-ingredient-away,
+  new-to-try); `/can-make` groups the cookbook by pantry shortfall (the assistant's future
+  candidate-set builder, proven as GUI first); cookbook filter chips (tag/tier/rating/max-time)
+  compose with FTS; tags are clickable; recipe cards show photo/rating/coverage.
+- **Food hygiene**: `/foods` screen (review pending imported foods, merge duplicates, set aisle /
+  pack size / family); ingested foods now arrive `pending` (auto-deduction stays gated until
+  reviewed); food families (`parent_food_id`) let discovery match "chicken" to any cut.
+- **Controlled tag vocabulary** in both AI prompts (meal/protein/method/effort/cuisine) plus a
+  `backfill-tags` manage command for recipes that predate it.
+- Nav: Home/Cookbook/Pantry/Shopping/Inbox (Plan/Chat tabs return with Phase 5); recipe edits
+  carry pantry mappings/trust onto unchanged lines instead of silently un-learning them.
+- **Exit criteria:** a weekly shop can be planned from ≥2 recipes with a previewed, pantry-aware
+  list whose staple lines carry no cooking amounts; checking off a trip restocks the pantry in
+  one review; a cook with a substitution shows up in the log and skips the right deduction;
+  "what can I make?" answers correctly from the live pantry.
+
 ## Phase 5 — Meal planning and assistant
 
 - Phase-owned migrations for meal plans, saved menus, household preferences, AI conversations, versioned proposals, and usage records.

@@ -13,11 +13,24 @@ One responsive web app, mobile-first, installable as a PWA on both platforms. It
 
 ## 2. Navigation
 
-Bottom tab bar on mobile (thumb-reachable), left rail on desktop:
+Bottom tab bar on mobile (thumb-reachable), left rail on desktop.
+
+Interim tab set (Phase 4.6, until Phase 5 ships Plan/Chat):
 
 | Tab | Contents |
 |---|---|
-| **Inbox** (Test Recipes) | Triage queue: processing states, new arrivals, review flags. Badge with count. Paste box lives here. |
+| **Home** | Discovery: tonight's rested favourites, use-it-up, one-ingredient-away, new-to-try, "✨ what can I make?". |
+| **Cookbook** | The curated library: search + filter chips (tier, tags, max time, rating), sorts, `/can-make`. |
+| **Pantry** | Location chips + item grid, search, stock-take mode, staples view; links to `/foods` upkeep. |
+| **Shopping** | The active list (badge with remaining count), trip builder, restock review. |
+| **Inbox** | Triage queue: processing states, new arrivals, review flags. Paste box lives here. |
+
+Final tab set once Phase 5 lands (Plan absorbs the shopping list behind a segmented control;
+Chat returns):
+
+| Tab | Contents |
+|---|---|
+| **Inbox** | Triage queue: processing states, new arrivals, review flags. Badge with count. Paste box lives here. |
 | **Cookbook** | The curated library: search, filters (tier, tags, max time, rating, "have ingredients", last-cooked), sort. |
 | **Pantry** | Location chips + item grid, stock-take mode, staples view. |
 | **Plan** | Week board + shopping list (segmented control between them), saved menus. |
@@ -33,7 +46,7 @@ Global: instant-search overlay (FTS5, keystroke-fast on LAN), "+" action (paste 
 - **Ingredients list**: checkbox per line (mise-en-place state, local to device), quantity + unit + food + note; ingredient-group headers ("For the sauce"); low-confidence parses show a dotted underline inviting a one-tap fix; pending-food chips ask "is 'green onion' the same as scallion?".
 - **Steps**: numbered cards; durations inside step text are auto-linked → tap spawns a named timer; steps with `video_seconds` show a tiny play glyph → seeks the embedded player.
 - **Cook mode** button → full-screen step-by-step: one step per screen, huge type, swipe/tap to advance, persistent timer tray, ingredient amounts inline-expandable per step, embedded YouTube player collapsed at top for video recipes. **Screen wake**: the silent-looping-video technique (NoSleep pattern) is the default — it works over plain HTTP on iOS Safari; `navigator.wakeLock` is tried opportunistically in a try/catch (it needs a secure context, so it only activates if the optional HTTPS upgrade is installed) and re-acquired on `visibilitychange`.
-- **After-cook capture**: rating, actual active + elapsed time, "what did you actually use?" quick-adjust list, and notes. Pantry deductions appear as a compact review on the first cook; confirmed mappings are remembered and the user may enable auto-apply for this recipe next time. Any skipped/ambiguous lines are explicit. This flow is also the inbox promotion gate.
+- **After-cook capture**: rating, actual active + elapsed time, "what did you actually use?" quick-adjust list (per-line omitted / substituted / adjusted + free-text additions, pre-filled from cook-mode skip/sub quick marks stored in localStorage), and notes. Deviations are structured data: they render in the cook-log timeline, deductions honor them (an omitted line never deducts; an adjusted line deducts the actual amount), and a substitution can be remembered into the household's learned subs, which resurface on missing-ingredient coverage lines. Pantry deductions appear as a compact review on the first cook; confirmed mappings are remembered and the user may enable auto-apply for this recipe next time. Any skipped/ambiguous lines are explicit. This flow is also the inbox promotion gate.
 - **Cook log** timeline at the bottom of the sheet: every make with who/when/rating/notes.
 - Ask-AI drawer: recipe-scoped Q&A (substitutions, technique), clearly presented as advice rather than an automatic recipe edit.
 
@@ -57,6 +70,9 @@ Global: instant-search overlay (FTS5, keystroke-fast on LAN), "+" action (paste 
 
 ### Shopping list
 - V1 web list is server-rendered with big checkboxes, aisle groups, provenance, manual add, and checked-items-at-bottom behavior while on home Wi-Fi.
+- **The list speaks "store", not "recipe"** (Phase 4.6): purchase info (pack word + size) lives on foods and is asked for inline the first time a food hits the list; measured lines ceiling to packages ("Flour — 2 bags (need 3 cups)"); foods tracked as gauge/binary never show cooking amounts — either the pantry covers them (reported, collapsed) or they land as a quantity-less "1 bag" line; unmeasurable ingredient lines land flagged "check the amount" — nothing is ever silently dropped.
+- **Trip builder** (`/shopping/plan`): pick recipes + servings → one preview with to-buy by aisle, a covered-by-pantry section, per-line opt-out; pantry stock is subtracted once against the aggregate need; applying recomputes server-side.
+- **Done shopping → restock review**: checked lines propose pantry updates (gauge→full, have, +purchased amount, optionally start tracking new items) so cooking's deductions and shopping's restocks close the loop.
 - A prominent **Take shopping list with me** action offers copy, system share, printable text, and the documented Apple Shortcut/native-list export.
 - Do not imply offline web sync. If later built, its UI must expose last-synced time and conflicts rather than pretending a stale local list is current.
 
