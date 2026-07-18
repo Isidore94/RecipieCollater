@@ -42,6 +42,17 @@
   {% if query %}<a href="?" class="btn-secondary">Clear</a>{% endif %}
 </form>
 
+{% if status == 'cookbook' %}
+<p class="sort-toggle no-print">
+  {% if stale_sort %}
+  <a href="/cookbook" class="btn-secondary">Most recent</a>
+  <span class="muted">Sorted by longest since you cooked it</span>
+  {% else %}
+  <a href="/cookbook?sort=stale" class="btn-secondary">Haven&rsquo;t made in a while</a>
+  {% endif %}
+</p>
+{% endif %}
+
 {% if recipes %}
 <ul class="recipe-cards">
   {% for r in recipes %}
@@ -49,6 +60,8 @@
     <a href="/recipes/{{ r.slug }}"><h2>{{ r.title }}</h2></a>
     {% if r.tldr %}<p class="muted">{{ r.tldr }}</p>{% endif %}
     {% if r.tier %}<span class="chip-tag">{{ r.tier }}</span>{% endif %}
+    {% if r.last_cooked %}<p class="muted">Last cooked {{ r.last_cooked[:10] }} &middot; {{ r.cook_count }}&times;</p>
+    {% elif stale_sort %}<p class="muted">Not cooked yet</p>{% endif %}
   </li>
   {% endfor %}
 </ul>

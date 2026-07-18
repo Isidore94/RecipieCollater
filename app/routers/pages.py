@@ -16,7 +16,7 @@ from starlette.datastructures import FormData
 from app.auth import current_user, require_csrf
 from app.deps import get_db
 from app.routers.ingest_api import schedule_processing
-from app.services import ingest
+from app.services import cooking, ingest
 from app.services import recipes as recipe_service
 from app.services.users import User
 from app.templating import render
@@ -165,9 +165,16 @@ def inbox_jobs(
 def cookbook(
     request: Request,
     q: str | None = None,
+    sort: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
+    if sort == "stale":
+        return render(
+            request, "recipes/browse.html", active_nav="cookbook", user=user,
+            tab_title="Cookbook", status="cookbook", query="", stale_sort=True,
+            recipes=cooking.list_recipes_by_staleness(db, status="cookbook"),
+        )
     return _render_library(request, db, user, "cookbook", "Cookbook", q)
 
 

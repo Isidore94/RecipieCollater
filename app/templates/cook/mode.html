@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Cooking: {{ recipe.title }} · RecipeCollater{% endblock %}
+{% block content %}
+<div class="cook" data-recipe="{{ recipe.slug }}">
+  <header class="cook-head">
+    <a href="/recipes/{{ recipe.slug }}" class="btn-secondary">Exit</a>
+    <h1>{{ recipe.title }}</h1>
+    <a href="/recipes/{{ recipe.slug }}/after-cook" class="btn-primary">I made this &rarr;</a>
+  </header>
+
+  <details class="cook-ingredients card" open>
+    <summary>Ingredients &middot; {{ view.servings }} servings</summary>
+    <ul class="checklist">
+      {% for ing in view.ingredients %}
+      <li>
+        <label>
+          <input type="checkbox" class="cook-check" data-key="ing-{{ loop.index }}">
+          <span>{{ ing.display }}</span>
+        </label>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+
+  <div class="cook-steps">
+    {% for step in view.steps %}
+    <section class="cook-step card" data-step="{{ step.number }}">
+      <div class="cook-step-head">
+        <span class="cook-step-num">Step {{ step.number }} / {{ view.steps|length }}</span>
+        {% if step.section %}<span class="chip-tag">{{ step.section }}</span>{% endif %}
+      </div>
+      <p class="cook-step-text">{{ step.instruction }}</p>
+      <div class="cook-step-tools">
+        {% for t in step.timers %}
+        <button type="button" class="timer-btn" data-seconds="{{ t.seconds }}" data-label="{{ t.label }}">
+          &#9201; {{ t.label }}
+        </button>
+        {% endfor %}
+        {% if step.seek_available %}
+        <a class="btn-secondary" target="_blank" rel="noopener"
+           href="https://www.youtube.com/watch?v={{ view.video_id }}&amp;t={{ step.video_seconds }}s">
+          &#9654; Watch this step</a>
+        {% endif %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+  <nav class="cook-nav no-print">
+    <button type="button" class="btn-secondary" data-cook-prev>&larr; Back</button>
+    <span class="cook-progress" data-cook-progress></span>
+    <button type="button" class="btn-primary" data-cook-next>Next &rarr;</button>
+  </nav>
+
+  <div class="timer-tray" data-timer-tray aria-live="polite"></div>
+</div>
+<script src="/static/js/cook.js" defer></script>
+{% endblock %}

@@ -250,3 +250,37 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .draft-card { border-color: var(--brand); }
 .draft-input { width: 100%; margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-family: inherit; font-size: 14px; }
 .banner-ok { color: var(--ok-ink); background: var(--ok-bg); padding: 8px 12px; border-radius: 8px; }
+
+/* Cook mode */
+.cook-cta { display: flex; gap: 8px; margin: 4px 0 14px; }
+.cook-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.cook-head h1 { flex: 1; font-size: 20px; margin: 0; }
+.cook-ingredients summary { font-weight: 600; cursor: pointer; }
+.checklist { list-style: none; padding: 0; margin: 10px 0 0; }
+.checklist li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.checklist label { display: flex; gap: 10px; align-items: baseline; cursor: pointer; }
+.checklist input:checked + span { color: var(--ink-soft); text-decoration: line-through; }
+.cook-step-num { font-weight: 600; color: var(--ink-soft); }
+.cook-step-text { font-size: 20px; line-height: 1.5; margin: 8px 0; }
+.cook-step-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.timer-btn { background: var(--paper); color: var(--brand); border: 1px solid var(--brand); border-radius: 999px; padding: 6px 14px; font-size: 14px; cursor: pointer; }
+.cook-nav { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.cook-nav .cook-progress { flex: 1; text-align: center; color: var(--ink-soft); font-weight: 600; }
+.timer-tray { position: sticky; bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.timer-chip { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; box-shadow: var(--shadow); }
+.timer-chip.is-done { border-color: var(--brand); color: var(--brand); }
+.timer-cancel { background: none; border: none; box-shadow: none; color: var(--ink-soft); font-size: 16px; cursor: pointer; padding: 0 2px; }
+
+/* After-cook + cook log */
+.after-cook fieldset { border: none; padding: 0; margin: 0 0 12px; }
+.rating-scale { display: flex; flex-wrap: wrap; gap: 4px; }
+.rate-opt { display: inline-flex; }
+.rate-opt input { position: absolute; opacity: 0; }
+.rate-opt span { display: inline-block; min-width: 30px; text-align: center; padding: 6px 0; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.rate-opt input:checked + span { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.promote-opt { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.cook-log-list { list-style: none; padding: 0; margin: 0; }
+.cook-log-list li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.cook-log-when strong { color: var(--brand); }
+.cook-log-note { margin-top: 4px; }
+.sort-toggle { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }

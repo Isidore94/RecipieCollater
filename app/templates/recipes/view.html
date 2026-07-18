@@ -31,6 +31,11 @@
   {% endif %}
 </form>
 
+<p class="cook-cta no-print">
+  <a href="/recipes/{{ recipe.slug }}/cook" class="btn-primary">Cook this &rarr;</a>
+  <a href="/recipes/{{ recipe.slug }}/after-cook" class="btn-secondary">I made this</a>
+</p>
+
 <section class="card">
   <div class="scaler no-print">
     <span class="muted">Servings:</span>
@@ -73,6 +78,30 @@
   {% if recipe.source_url %}<a href="{{ recipe.source_url }}" rel="noopener">{{ recipe.source_name or recipe.source_url }}</a>
   {% else %}{{ recipe.source_name }}{% endif %}
 </p>
+{% endif %}
+
+{% if cook_log %}
+<section class="card cook-log">
+  <h2>Cook log</h2>
+  <ul class="cook-log-list">
+    {% for c in cook_log %}
+    <li>
+      <div class="cook-log-when">
+        {{ c.cooked_at[:10] }}{% if c.cook_name %} &middot; {{ c.cook_name }}{% endif %}
+        {% if c.rating %} &middot; <strong>{{ c.rating }}/10</strong>{% endif %}
+      </div>
+      {% if c.servings_made or c.active_minutes or c.elapsed_minutes %}
+      <div class="muted cook-log-meta">
+        {%- if c.servings_made %}{{ c.servings_made }} servings{% endif -%}
+        {%- if c.active_minutes %} &middot; {{ c.active_minutes }} min hands-on{% endif -%}
+        {%- if c.elapsed_minutes %} &middot; {{ c.elapsed_minutes }} min total{% endif -%}
+      </div>
+      {% endif %}
+      {% if c.notes %}<div class="cook-log-note">{{ c.notes }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
 {% endif %}
 
 <section class="card notes-card">

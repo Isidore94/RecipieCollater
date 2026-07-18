@@ -22,7 +22,7 @@ from app.auth import current_user, require_csrf
 from app.config import get_settings
 from app.deps import get_db
 from app.extraction import ExtractedRecipe
-from app.services import ai_draft, quantity, recipes
+from app.services import ai_draft, cooking, quantity, recipes
 from app.services.users import User
 from app.templating import render
 
@@ -352,6 +352,7 @@ def view(
         request, "recipes/view.html", user=user, recipe=detail,
         scaled=recipes.scale_ingredients(detail, target), servings=target,
         base_servings=detail.base_servings, presets=_presets(detail.base_servings),
+        cook_log=cooking.list_cook_log(db, detail.id),
     )
 
 
