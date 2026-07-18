@@ -295,6 +295,35 @@ async def draft(
     )
 
 
+@router.post("/photo-draft")
+async def photo_draft(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    """Transcribe a photographed recipe (cookbook page/card) into the prefilled form (Phase 6)."""
+    async with request.form() as form:
+        upload = form.get("photo")
+        image = await upload.read() if isinstance(upload, UploadFile) and upload.filename else None
+    if not image:
+        return _render_form(
+            request, user, action="/recipes/new", model=_model(), heading="New recipe",
+            error="Choose a photo of the recipe first.", show_draft=True, status_code=400,
+        )
+    result = ai_draft.draft_from_photo(db, image)
+    if result.recipe is None:
+        return _render_form(
+            request, user, action="/recipes/new", model=_model(), heading="New recipe",
+            error=result.error, show_draft=True, status_code=400,
+        )
+    return _render_form(
+        request, user, action="/recipes/new", model=_model_from_extracted(result.recipe),
+        heading="New recipe", notice="Read from your photo - review the details below, then Save.",
+        show_draft=True,
+    )
+
+
 @router.post("/new")
 async def create(
     request: Request,

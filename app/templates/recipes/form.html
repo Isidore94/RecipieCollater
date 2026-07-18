@@ -30,6 +30,11 @@
       placeholder="e.g. Grandma's chili &mdash; brown a pound of ground beef, add a can of kidney beans, a can of diced tomatoes, chili powder and cumin, simmer about 90 minutes. Serves 6.">{{ draft_description }}</textarea>
     <button type="submit" class="btn-secondary">Draft with AI</button>
   </form>
+  <form method="post" action="/recipes/photo-draft" enctype="multipart/form-data" class="draft-photo">
+    <label for="recipe-photo">&hellip; or snap a cookbook page / recipe card</label>
+    <input id="recipe-photo" name="photo" type="file" accept="image/*" capture="environment">
+    <button type="submit" class="btn-secondary">Read from photo</button>
+  </form>
 </section>
 {% endif %}
 

@@ -16,12 +16,51 @@ from app.config import get_settings
 from app.extraction import ExtractedRecipe
 
 _OPERATION = "manual_draft"
+_PHOTO_OPERATION = "recipe_photo"
 
 
 @dataclass(frozen=True, slots=True)
 class DraftResult:
     recipe: ExtractedRecipe | None
     error: str | None
+
+
+def draft_from_photo(conn: sqlite3.Connection, image: bytes) -> DraftResult:
+    """Transcribe a photographed recipe (cookbook page / card) into a draft for the form to
+    prefill. Budget-gated and logged like every AI call; nothing is created until the user Saves."""
+    from app.services import receipts  # reuse the bounded-JPEG normalizer (lazy: Pillow)
+
+    settings = get_settings()
+    provider = ai.get_provider(settings)
+    if provider is None:
+        return DraftResult(None, "Reading a recipe photo needs an API key on the server.")
+    if not ai_usage.within_budget(conn, settings):
+        ai_usage.log_usage(
+            conn, provider=provider.provider, model=provider.model, operation=_PHOTO_OPERATION,
+            job_id=None, status="blocked", error="daily or monthly AI spend cap reached",
+        )
+        return DraftResult(None, "Today's AI spend limit has been reached - try again later.")
+    try:
+        image_jpeg = receipts._prepare_image(image)
+    except receipts.ReceiptError as exc:
+        return DraftResult(None, str(exc))
+    try:
+        result = provider.recipe_from_photo(image_jpeg)
+    except ai.AIError as exc:
+        ai_usage.log_usage(
+            conn, provider=provider.provider, model=provider.model, operation=_PHOTO_OPERATION,
+            job_id=None, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
+        )
+        return DraftResult(None, "Couldn't read that photo - try a clearer, straight-on shot.")
+    ai_usage.log_usage(
+        conn, provider=result.provider, model=result.model, operation=_PHOTO_OPERATION,
+        job_id=None, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros, status="ok",
+    )
+    if not result.recipe.ingredients:
+        return DraftResult(None, "No recipe found in that photo.")
+    return DraftResult(result.recipe, None)
 
 
 def draft_from_description(conn: sqlite3.Connection, description: str) -> DraftResult:

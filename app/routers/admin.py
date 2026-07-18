@@ -16,11 +16,23 @@ from fastapi.responses import RedirectResponse
 from app.auth import require_admin, require_csrf
 from app.config import get_settings
 from app.deps import get_db
-from app.services import credentials, onboarding, sessions, tokens
+from app.services import admin_stats, credentials, onboarding, sessions, tokens
 from app.services.users import User, create_user, get_user, get_user_by_name, list_users
 from app.templating import render
 
 router = APIRouter(prefix="/admin")
+
+
+@router.get("/dashboard")
+def dashboard(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> Response:
+    return render(
+        request, "admin/dashboard.html", active_nav=None, user=admin,
+        stats=admin_stats.gather(db, get_settings()),
+    )
 
 
 def _devices_context(db: sqlite3.Connection, **extra: Any) -> dict[str, Any]:

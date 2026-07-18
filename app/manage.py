@@ -99,6 +99,20 @@ def _cmd_schema_version() -> int:
     return 0
 
 
+def _cmd_export_cookbook(dest: str) -> int:
+    """Write every recipe as JSON + Markdown under <dest> (Phase 6 nightly export)."""
+    from app.services import cookbook_export
+
+    conn = connect(get_settings().db_path)
+    try:
+        count = cookbook_export.export_all(conn, Path(dest))
+    finally:
+        conn.close()
+    log.info("export_cookbook", dest=dest, recipes=count)
+    print(f"Exported {count} recipes to {dest}")
+    return 0
+
+
 def _cmd_backfill_tags(all_recipes: bool, limit: int | None) -> int:
     """AI-tag recipes that predate the controlled tag vocabulary (Phase 4.6)."""
     from app.services import tagging  # heavy AI imports stay out of the module top level
@@ -138,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     p_tags = sub.add_parser("backfill-tags")
     p_tags.add_argument("--all", action="store_true", help="retag even recipes that have tags")
     p_tags.add_argument("--limit", type=int, default=None)
+    p_export = sub.add_parser("export-cookbook")
+    p_export.add_argument("dest")
 
     args = parser.parse_args(argv)
     match args.command:
@@ -157,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_restore(args.backup_dir, args.target)
         case "backfill-tags":
             return _cmd_backfill_tags(args.all, args.limit)
+        case "export-cookbook":
+            return _cmd_export_cookbook(args.dest)
         case _:  # pragma: no cover - argparse (required=True) enforces valid commands
             parser.error(f"unknown command: {args.command}")  # NoReturn
 

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · RecipeCollater{% endblock %}
+{% block content %}
+{% macro usd(micros) %}${{ '%.2f' % (micros / 1000000) }}{% endmacro %}
+
+<header class="page-head">
+  <h1>Dashboard</h1>
+  <a href="/admin/devices" class="btn-secondary">Devices</a>
+</header>
+
+<div class="stat-grid">
+  <div class="card stat">
+    <span class="stat-num">{{ stats.cookbook_count }}</span>
+    <span class="stat-label">recipes in cookbook <span class="muted">({{ stats.recipe_count }} total)</span></span>
+  </div>
+  <div class="card stat">
+    <span class="stat-num">{{ stats.pantry_item_count }}</span>
+    <span class="stat-label">pantry items</span>
+  </div>
+  <div class="card stat{% if not stats.worker_ok %} stat-bad{% endif %}">
+    <span class="stat-num">{{ 'OK' if stats.worker_ok else 'DOWN' }}</span>
+    <span class="stat-label">worker
+      {% if stats.worker_age_seconds is not none %}<span class="muted">({{ '%.0f'|format(stats.worker_age_seconds) }}s ago)</span>{% endif %}
+    </span>
+  </div>
+  <div class="card stat{% if stats.queue_failed %} stat-warn{% endif %}">
+    <span class="stat-num">{{ stats.queue_pending }} / {{ stats.queue_failed }}</span>
+    <span class="stat-label">queue pending / failed</span>
+  </div>
+</div>
+
+<section class="card">
+  <h2>AI spend</h2>
+  <p>Today <strong>{{ usd(stats.spend_today_micros) }}</strong> of {{ usd(stats.daily_cap_micros) }} cap
+     · Month <strong>{{ usd(stats.spend_month_micros) }}</strong> of {{ usd(stats.monthly_cap_micros) }} cap</p>
+  {% if stats.provider_spend %}
+  <table class="data">
+    <thead><tr><th>Provider</th><th>Today</th><th>This month</th></tr></thead>
+    <tbody>
+      {% for p in stats.provider_spend %}
+      <tr><td>{{ p.provider }}</td><td>{{ usd(p.today_micros) }}</td><td>{{ usd(p.month_micros) }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No AI calls logged yet.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>System</h2>
+  <ul class="sys-list">
+    <li>Schema version <strong>{{ stats.schema_version }}</strong></li>
+    <li>Database <strong>{{ '%.1f'|format(stats.db_bytes / 1048576) }} MB</strong></li>
+    <li>Last backup
+      {% if stats.last_backup %}<strong>{{ stats.last_backup }}</strong>
+        <span class="chip-tag">{{ 'healthy' if stats.last_backup_healthy else 'UNVERIFIED' }}</span>
+      {% else %}<span class="muted">none yet</span>{% endif %}
+    </li>
+    <li>yt-dlp <strong>{{ stats.ytdlp_version or 'not loaded' }}</strong></li>
+  </ul>
+</section>
+
+{% if stats.recent_failures %}
+<section class="card">
+  <h2>Recent ingest failures</h2>
+  <ul class="fail-list">
+    {% for f in stats.recent_failures %}
+    <li class="fail-item">
+      <span class="chip-tag">{{ f.error_category or 'error' }}</span>
+      <span class="fail-url">{{ f.url }}</span>
+      {% if f.error_message %}<span class="muted fail-msg">{{ f.error_message }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}
