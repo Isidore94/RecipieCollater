@@ -21,10 +21,17 @@ TAG_GUIDE = (
 )
 
 # System prompt for extracting a recipe from source text (a web page or a video transcript).
+# The transcript clause matters: the most common YouTube recipe format is an ingredient list in
+# the description with the METHOD only spoken on camera. Reconstructing steps from the spoken
+# method is extraction, not invention - without saying so, a conservative model returns
+# ingredients with no steps and the recipe is lost.
 EXTRACT_SYSTEM = (
     "You extract a single cooking recipe from the provided text, which may be a recipe web page "
     "or a cooking video's title, description, and transcript. "
     "Use only what the text states - never invent ingredients, steps, times, or yields. "
+    "When the input includes a spoken video transcript, DO reconstruct the cooking steps from "
+    "what the cook says and does, paraphrased into clear ordered steps - that is extraction, "
+    "not invention; ingredient amounts must still come from stated quantities. "
     "If a field is absent, omit it. Copy each ingredient line verbatim into original_text. "
     "If the text contains no recipe, return a title with empty ingredients and steps."
     + TAG_GUIDE

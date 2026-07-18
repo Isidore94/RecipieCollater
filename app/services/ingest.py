@@ -181,6 +181,24 @@ def enqueue_job(
         ).fetchone()
         if existing is None:
             raise
+        if existing["status"] == "failed":
+            # Re-pasting a failed URL is the user saying "try again" (a fetch may have been
+            # transient, or extraction has improved since). Requeue it - returning the dead
+            # job left the URL permanently stuck.
+            conn.execute(
+                "UPDATE ingest_jobs SET status = 'queued', error_category = NULL, "
+                "error_message = NULL, updated_at = datetime('now') WHERE id = ?",
+                (existing["id"],),
+            )
+            if html:
+                store_artifact(conn, int(existing["id"]), "supplied_html", html.encode("utf-8"))
+                conn.execute(
+                    "UPDATE ingest_jobs SET has_html = 1 WHERE id = ?", (existing["id"],)
+                )
+            conn.commit()
+            requeued = get_job(conn, int(existing["id"]))
+            assert requeued is not None
+            return requeued, True  # created=True so the caller schedules processing
         return _row_to_job(existing), False
     job_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
     if html:

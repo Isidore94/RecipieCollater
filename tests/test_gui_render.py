@@ -125,3 +125,17 @@ def test_food_name_cannot_break_out_of_merge_confirm(
     assert page.status_code == 200
     assert "Merge this food into the selected one" in page.text  # static confirm text
     assert "confirm('Merge x" not in page.text  # the name never enters the JS string
+
+
+def test_inline_rename_roundtrip(
+    admin_client: TestClient, migrated_db: sqlite3.Connection
+) -> None:
+    slug = _setup_world(migrated_db)
+    page = admin_client.get(f"/recipes/{slug}")
+    assert f"/recipes/{slug}/rename" in page.text
+    resp = admin_client.post(
+        f"/recipes/{slug}/rename", data={"title": "Tuesday Chili"},
+        headers=SAME_ORIGIN, follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "Tuesday Chili" in admin_client.get(f"/recipes/{slug}").text

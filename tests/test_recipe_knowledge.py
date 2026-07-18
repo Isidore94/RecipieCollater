@@ -123,3 +123,58 @@ def test_hinted_pantry_item_is_deletable(migrated_db: sqlite3.Connection) -> Non
     assert pantry.get_item(migrated_db, item) is None
     row = _flour_row(migrated_db, rid)
     assert row["pantry_item_hint"] is None  # the dangling mapping was cleared
+
+
+def test_set_title_renames_without_touching_slug(migrated_db: sqlite3.Connection) -> None:
+    import pytest
+
+    seed_core_units(migrated_db)
+    rid = recipes.create_recipe(migrated_db, _input())
+    before = recipes.get_recipe(migrated_db, rid)
+    assert before is not None
+    assert recipes.set_title(migrated_db, rid, "Weeknight Bread") is True
+    after = recipes.get_recipe(migrated_db, rid)
+    assert after is not None
+    assert after.title == "Weeknight Bread"
+    assert after.slug == before.slug  # bookmarks and cook-log links keep working
+    with pytest.raises(recipes.RecipeError):
+        recipes.set_title(migrated_db, rid, "   ")
+    # the new title is searchable (FTS triggers fire on UPDATE)
+    assert any(
+        r.id == rid for r in recipes.list_recipes(migrated_db, query="weeknight bread")
+    )
+
+
+def test_edit_preserves_step_video_metadata(migrated_db: sqlite3.Connection) -> None:
+    """The edit form posts steps as plain lines; unchanged instructions must keep their
+    video_seconds ("Watch this step" deep links) and timing metadata."""
+    seed_core_units(migrated_db)
+    rid = recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="Video dish", base_servings="4",
+            ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="egg")],
+            steps=[
+                recipes.StepInput(instruction="Sear the beef.", minutes=5, video_seconds=90),
+                recipes.StepInput(instruction="Simmer everything.", video_seconds=300),
+            ],
+        ),
+    )
+    # A form-shaped edit: same step text, but no metadata (the textarea only carries lines).
+    recipes.update_recipe(
+        migrated_db, rid,
+        recipes.RecipeInput(
+            title="Video dish (renamed)", base_servings="4",
+            ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="egg")],
+            steps=[
+                recipes.StepInput(instruction="Sear the beef."),
+                recipes.StepInput(instruction="Simmer everything."),
+                recipes.StepInput(instruction="Serve with rice."),  # a new step, no metadata
+            ],
+        ),
+    )
+    detail = recipes.get_recipe(migrated_db, rid)
+    assert detail is not None
+    assert detail.steps[0].video_seconds == 90 and detail.steps[0].minutes == 5
+    assert detail.steps[1].video_seconds == 300
+    assert detail.steps[2].video_seconds is None

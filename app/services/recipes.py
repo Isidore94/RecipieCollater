@@ -397,13 +397,48 @@ def update_recipe(
            WHERE ri.recipe_id = ?""",
         (recipe_id,),
     ).fetchall()
+    old_steps = conn.execute(
+        "SELECT instruction, section, minutes, video_seconds FROM recipe_steps "
+        "WHERE recipe_id = ? ORDER BY sort_order",
+        (recipe_id,),
+    ).fetchall()
     conn.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
     conn.execute("DELETE FROM recipe_steps WHERE recipe_id = ?", (recipe_id,))
     conn.execute("DELETE FROM recipe_tags WHERE recipe_id = ?", (recipe_id,))
     _insert_children(conn, recipe_id, data)
     _carry_over_pantry_knowledge(conn, recipe_id, old_lines, cook_refs)
+    _carry_over_step_metadata(conn, recipe_id, old_steps)
     conn.commit()
     return True
+
+
+def _carry_over_step_metadata(
+    conn: sqlite3.Connection, recipe_id: int, old_steps: list[sqlite3.Row]
+) -> None:
+    """The edit form posts steps as plain text lines, which would silently strip the section,
+    minutes, and video_seconds a YouTube import carried ("Watch this step" deep links). Copy
+    that metadata back onto re-inserted steps whose instruction text is unchanged."""
+    consumed: set[int] = set()
+    new_rows = conn.execute(
+        "SELECT id, instruction, section, minutes, video_seconds FROM recipe_steps "
+        "WHERE recipe_id = ? ORDER BY sort_order",
+        (recipe_id,),
+    ).fetchall()
+    for new in new_rows:
+        if new["section"] is not None or new["minutes"] is not None \
+                or new["video_seconds"] is not None:
+            continue  # the caller supplied real metadata; keep it
+        for index, old in enumerate(old_steps):
+            if index in consumed:
+                continue
+            if old["instruction"] == new["instruction"]:
+                consumed.add(index)
+                conn.execute(
+                    "UPDATE recipe_steps SET section = ?, minutes = ?, video_seconds = ? "
+                    "WHERE id = ?",
+                    (old["section"], old["minutes"], old["video_seconds"], int(new["id"])),
+                )
+                break
 
 
 def _carry_over_pantry_knowledge(
@@ -500,6 +535,21 @@ def set_status(conn: sqlite3.Connection, recipe_id: int, status: str) -> bool:
 
 def delete_recipe(conn: sqlite3.Connection, recipe_id: int) -> bool:
     cur = conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def set_title(conn: sqlite3.Connection, recipe_id: int, title: str) -> bool:
+    """Rename a recipe in place - nothing else changes, and the slug (its URL identity, what
+    device bookmarks and cook-log links point at) deliberately stays put. Built for imported
+    YouTube titles ("This Chili Recipe Might Just Change Your Life!" -> "Weeknight chili")."""
+    clean = title.strip()
+    if not clean:
+        raise RecipeError("a recipe needs a title")
+    cur = conn.execute(
+        "UPDATE recipes SET title = ?, updated_at = ? WHERE id = ?",
+        (clean, now_iso(), recipe_id),
+    )
     conn.commit()
     return cur.rowcount > 0
 

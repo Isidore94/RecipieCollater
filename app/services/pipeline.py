@@ -186,9 +186,13 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     ingest.store_artifact(conn, job.id, "youtube_metadata", data.to_json().encode("utf-8"))
 
     ingest.set_status(conn, job.id, "extracting")
+    # require_steps=False: a video with an ingredient list but a spoken-only method is still a
+    # recipe worth keeping - the video IS the steps (the sheet keeps the link; cook mode still
+    # gives the ingredient checklist). docs/04 section 6 is amended accordingly.
     applied = _ai_extract_and_apply(
         conn, job, data.prompt_text(),
         extractor="youtube", source_type="youtube", operation="extract_youtube",
+        require_steps=False,
     )
     if not applied:
         ingest.set_status(
@@ -219,6 +223,7 @@ def _ai_extract_and_apply(
     extractor: str,
     source_type: str,
     operation: str = "extract_web",
+    require_steps: bool = True,
 ) -> bool:
     """Budget-gated LLM extraction that applies the recipe on success; always logs to ai_usage_log.
 
@@ -250,7 +255,10 @@ def _ai_extract_and_apply(
         job_id=job.id, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
         cost_micros=result.cost_micros, status="ok",
     )
-    if not result.recipe.is_complete():
+    usable = result.recipe.is_complete() or (
+        not require_steps and bool(result.recipe.ingredients)
+    )
+    if not usable:
         return False
     ingest.set_status(conn, job.id, "normalizing")
     apply_extraction(

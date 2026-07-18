@@ -76,5 +76,9 @@ class ExtractedRecipe(BaseModel):
         return cleaned
 
     def is_complete(self) -> bool:
-        """A recipe worth saving has both ingredients and steps (docs/04 6)."""
+        """A recipe worth saving has both ingredients and steps (docs/04 section 5).
+
+        The YouTube path deliberately relaxes this to ingredients-only (the video carries the
+        method) - see pipeline._ai_extract_and_apply(require_steps=False).
+        """
         return bool(self.ingredients and self.steps)

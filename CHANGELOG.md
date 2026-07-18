@@ -19,6 +19,18 @@ Schema v13 (migration 013). A grocery trip becomes pantry restocks in one review
   tracking new foods, and checks purchases off the shopping list. "Scan receipt" entry
   points on Pantry and Shopping.
 
+### YouTube ingestion + title fixes (2026-07-18)
+
+- Inline recipe rename on the sheet (imported YouTube titles are clickbait); the slug/URL
+  never changes.
+- YouTube videos whose recipe lives in the description with a spoken-only method now import:
+  the extraction prompt explicitly permits reconstructing steps from the transcript, and the
+  YouTube path accepts ingredients-only recipes (the video carries the method — docs/04
+  amendment).
+- Re-pasting a failed URL requeues the job instead of returning the dead one.
+- Full-form edits keep step metadata (video_seconds "Watch this step" links, minutes,
+  sections) for unchanged step text.
+
 ### Phase 4.6 — GUI usability overhaul (2026-07-18)
 
 Schema v12 (migration 012). The shopping list learns how food is bought, the cook log learns

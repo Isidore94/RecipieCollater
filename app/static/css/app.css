@@ -490,3 +490,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .receipt-line { align-items: center; }
 .receipt-raw { flex: 1 1 240px; }
 .receipt-food { flex: 0 1 180px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+
+/* Inline title rename (imported YouTube titles are clickbait) */
+.title-block { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.title-block h1 { margin: 0; }
+.title-rename summary { cursor: pointer; list-style: none; color: var(--ink-soft); font-size: 15px; }
+.title-rename-form { display: flex; gap: 6px; margin-top: 6px; }
+.title-rename-form input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); min-width: 260px; }

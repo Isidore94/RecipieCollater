@@ -260,3 +260,52 @@ def test_pipeline_attaches_extracted_image(
     recipe = recipes.get_recipe(migrated_db, done.recipe_id)
     assert recipe is not None
     assert recipe.image_path == f"{done.recipe_id}/image.webp"
+
+
+def test_youtube_saves_ingredients_only_recipe(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The dominant YouTube format: ingredient list in the description, method spoken on
+    camera. That is a recipe worth keeping - the video carries the steps (docs/04 amendment)."""
+    monkeypatch.setenv("RC_ANTHROPIC_API_KEY", "test-key")
+    config.reset_settings_cache()
+    job, _ = ingest.enqueue_job(migrated_db, "https://www.youtube.com/watch?v=chili123")
+    data = youtube.YoutubeData(
+        video_id="chili123", title="This Chili Might Change Your Life!",
+        description="Chili Recipe:\n3 pounds ground beef\n2 ancho chilis",
+        uploader="ThatDude", thumbnail_url=None, duration_seconds=600, captions=None,
+    )
+    monkeypatch.setattr("app.services.youtube.fetch", lambda url: data)
+    no_steps = ExtractedRecipe(
+        title="Life-Changing Chili",
+        ingredients=[ExtractedIngredient(original_text="3 pounds ground beef")],
+        steps=[],
+    )
+    monkeypatch.setattr("app.ai.get_provider", lambda settings: _FakeExtractor(no_steps))
+
+    pipeline.run_job(migrated_db, job)
+
+    done = ingest.get_job(migrated_db, job.id)
+    assert done is not None and done.status == "done" and done.recipe_id is not None
+    recipe = recipes.get_recipe(migrated_db, done.recipe_id)
+    assert recipe is not None
+    assert len(recipe.ingredients) == 1 and len(recipe.steps) == 0
+    assert recipe.video_id == "chili123"  # the method lives in the video
+
+
+def test_web_ai_still_requires_steps(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ingredients-only relaxation is YouTube-scoped; a web page without steps stays
+    no_recipe (there is no video to carry the method)."""
+    job, _ = ingest.enqueue_job(
+        migrated_db, "https://example.test/thin-page", html="<html><body>hi</body></html>"
+    )
+    no_steps = ExtractedRecipe(
+        title="Thin", ingredients=[ExtractedIngredient(original_text="1 egg")], steps=[]
+    )
+    monkeypatch.setattr("app.ai.get_provider", lambda settings: _FakeExtractor(no_steps))
+    pipeline.run_job(migrated_db, job)
+    done = ingest.get_job(migrated_db, job.id)
+    assert done is not None and done.status == "failed"
+    assert done.error_category == "no_recipe"

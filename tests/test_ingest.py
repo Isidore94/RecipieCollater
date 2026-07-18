@@ -74,3 +74,22 @@ def test_lifecycle_and_active_jobs(migrated_db: sqlite3.Connection) -> None:
     assert done.status == "failed"
     assert done.error_category == "fetch_blocked"
     assert ingest.list_active_jobs(migrated_db) == []
+
+
+def test_repasting_a_failed_url_requeues_it(migrated_db: sqlite3.Connection) -> None:
+    """A failed URL must not be permanently stuck: pasting it again means "try again"."""
+    job, created = ingest.enqueue_job(migrated_db, "https://example.test/flaky")
+    assert created is True
+    ingest.set_status(
+        migrated_db, job.id, "failed", error_category="no_recipe", error_message="nope"
+    )
+
+    again, created_again = ingest.enqueue_job(migrated_db, "https://example.test/flaky")
+    assert created_again is True  # so the router schedules processing again
+    assert again.id == job.id  # same job row, reset - not a duplicate
+    assert again.status == "queued"
+    assert again.error_category is None and again.error_message is None
+
+    # a job that is NOT failed still behaves idempotently
+    third, created_third = ingest.enqueue_job(migrated_db, "https://example.test/flaky")
+    assert created_third is False and third.status == "queued"

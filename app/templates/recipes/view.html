@@ -2,7 +2,16 @@
 {% block title %}{{ recipe.title }} · RecipeCollater{% endblock %}
 {% block content %}
 <header class="page-head">
-  <h1>{{ recipe.title }}</h1>
+  <div class="title-block">
+    <h1>{{ recipe.title }}</h1>
+    <details class="title-rename no-print">
+      <summary title="Rename this recipe" aria-label="Rename this recipe">&#9998;</summary>
+      <form method="post" action="/recipes/{{ recipe.slug }}/rename" class="title-rename-form">
+        <input name="title" value="{{ recipe.title }}" required aria-label="New title">
+        <button type="submit" class="btn-secondary">Rename</button>
+      </form>
+    </details>
+  </div>
   <p class="muted">
     <span class="chip-tag">{{ recipe.status }}</span>
     {% if recipe.tier %} · {{ recipe.tier }}{% endif %}

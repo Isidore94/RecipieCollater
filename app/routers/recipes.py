@@ -473,6 +473,22 @@ async def change_status(
     return RedirectResponse(f"/recipes/{slug}", status_code=303)
 
 
+@router.post("/{slug}/rename")
+async def rename(
+    request: Request,
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    """Title-only rename (imported YouTube titles are clickbait); the slug/URL stays stable."""
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is not None:
+        with contextlib.suppress(ValueError):
+            recipes.set_title(db, detail.id, _text(await request.form(), "title"))
+    return RedirectResponse(f"/recipes/{slug}", status_code=303)
+
+
 @router.post("/{slug}/rating")
 async def rate(
     request: Request,

@@ -137,6 +137,8 @@ class ExtractedRecipe(BaseModel):
 
 The TLDR prompt instruction matches the product spec: *"Summarize the whole method in 1–3 casual sentences, e.g. 'Cut some aromatics, cook them down with some chilies, blend down some tomatoes, throw them in, reduce, then add butter and parmesan and serve with boiled pasta.'"*
 
+**Completeness (amended 2026-07-18):** a web extraction must produce both ingredients and steps to be saved. A **YouTube** extraction is accepted with ingredients alone — the dominant video format is an ingredient list in the description with the method spoken on camera, and the video itself carries the steps (the recipe keeps its link; cook mode still provides the ingredient checklist). The extraction prompt explicitly permits reconstructing steps from a spoken transcript (paraphrase is extraction, not invention), so steps are usually still produced when captions exist.
+
 ## 6. Ingredient normalization (deterministic-first, LLM-second)
 
 After extraction, every ingredient line is resolved against the foods/units vocabulary:
