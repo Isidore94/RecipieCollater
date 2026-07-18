@@ -79,9 +79,11 @@ def apply_extraction(
     if existing is not None:
         recipe_id = int(existing["id"])
     else:
+        # Ingested foods arrive as 'pending': matching/shopping work immediately, but auto
+        # deductions wait until the food is reviewed on /foods (docs/07 pending-food chips).
         recipe_id = recipes.create_recipe(
             conn, to_recipe_input(conn, extracted, source_type=source_type, source_url=job.url),
-            created_by=job.submitted_by,
+            created_by=job.submitted_by, food_status="pending",
         )
 
     cur = conn.execute(

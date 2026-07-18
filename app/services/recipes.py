@@ -155,6 +155,10 @@ class RecipeSummary:
     tier: str | None
     tldr: str | None
     updated_at: str
+    rating: int | None = None
+    image_path: str | None = None
+    total_minutes: int | None = None
+    base_servings: str = "4"
 
 
 # --------------------------------------------------------------------------------------
@@ -189,7 +193,15 @@ def _unique_slug(conn: sqlite3.Connection, title: str) -> str:
     return slug
 
 
-def _resolve_food_id(conn: sqlite3.Connection, name: str | None) -> int | None:
+def _resolve_food_id(
+    conn: sqlite3.Connection, name: str | None, *, food_status: str = "confirmed"
+) -> int | None:
+    """Resolve a food by alias/name, creating one if new.
+
+    ``food_status`` is the status a NEWLY created food gets: user-typed foods are 'confirmed';
+    ingestion passes 'pending' so imported foods go through the review-before-trust flow
+    (docs/07 section 3 pending-food chips) instead of silently becoming canonical.
+    """
     key = _clean(name)
     if key is None:
         return None
@@ -199,7 +211,7 @@ def _resolve_food_id(conn: sqlite3.Connection, name: str | None) -> int | None:
     row = conn.execute("SELECT id FROM foods WHERE name = ? COLLATE NOCASE", (key,)).fetchone()
     if row is not None:
         return int(row["id"])
-    cur = conn.execute("INSERT INTO foods (name, status) VALUES (?, 'confirmed')", (key,))
+    cur = conn.execute("INSERT INTO foods (name, status) VALUES (?, ?)", (key, food_status))
     return _last_id(cur)
 
 
@@ -263,7 +275,9 @@ def _validate(conn: sqlite3.Connection, data: RecipeInput) -> None:
                     )
 
 
-def _insert_children(conn: sqlite3.Connection, recipe_id: int, data: RecipeInput) -> None:
+def _insert_children(
+    conn: sqlite3.Connection, recipe_id: int, data: RecipeInput, *, food_status: str = "confirmed"
+) -> None:
     for order, ing in enumerate(data.ingredients):
         unit_text = _clean(ing.unit)
         unit_obj = units.resolve_unit(conn, unit_text) if unit_text else None
@@ -277,7 +291,8 @@ def _insert_children(conn: sqlite3.Connection, recipe_id: int, data: RecipeInput
             (
                 recipe_id, order, _clean(ing.section), _compose_original(ing),
                 _clean(ing.quantity_text), unit_obj.id if unit_obj else None,
-                _resolve_food_id(conn, ing.food), _clean(ing.note), ing.scaling_mode,
+                _resolve_food_id(conn, ing.food, food_status=food_status), _clean(ing.note),
+                ing.scaling_mode,
                 _clean(ing.package_quantity_text), package_obj.id if package_obj else None,
             ),
         )
@@ -311,7 +326,11 @@ def _insert_children(conn: sqlite3.Connection, recipe_id: int, data: RecipeInput
 
 
 def create_recipe(
-    conn: sqlite3.Connection, data: RecipeInput, *, created_by: int | None = None
+    conn: sqlite3.Connection,
+    data: RecipeInput,
+    *,
+    created_by: int | None = None,
+    food_status: str = "confirmed",
 ) -> int:
     _validate(conn, data)
     stamp = now_iso()
@@ -330,7 +349,7 @@ def create_recipe(
         ),
     )
     recipe_id = _last_id(cur)
-    _insert_children(conn, recipe_id, data)
+    _insert_children(conn, recipe_id, data, food_status=food_status)
     conn.commit()
     return recipe_id
 
@@ -358,12 +377,84 @@ def update_recipe(
             _clean(data.source_url), _clean(data.source_name), now_iso(), recipe_id,
         ),
     )
+    # Ingredient rows are replaced wholesale, but the pantry knowledge earned on them - which
+    # pantry item a line deducts from, whether deduction is off, and deduction trust - must
+    # survive an edit for lines that didn't change. Otherwise editing a typo in the title
+    # silently un-learns every mapping and the next cook re-asks all the questions.
+    old_lines = conn.execute(
+        """SELECT food_id, unit_id, quantity_text, scaling_mode, deduct_from_pantry,
+                  pantry_item_hint, deduction_trusted_at, deduction_trust_signature
+           FROM recipe_ingredients WHERE recipe_id = ? ORDER BY sort_order""",
+        (recipe_id,),
+    ).fetchall()
     conn.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
     conn.execute("DELETE FROM recipe_steps WHERE recipe_id = ?", (recipe_id,))
     conn.execute("DELETE FROM recipe_tags WHERE recipe_id = ?", (recipe_id,))
     _insert_children(conn, recipe_id, data)
+    _carry_over_pantry_knowledge(conn, recipe_id, old_lines)
     conn.commit()
     return True
+
+
+def _carry_over_pantry_knowledge(
+    conn: sqlite3.Connection, recipe_id: int, old_lines: list[sqlite3.Row]
+) -> None:
+    """Copy hint/deduction/trust onto re-inserted lines whose deduction-relevant fields are
+    unchanged. Trust signatures hash (food, unit, quantity, scaling, hint), so an exactly-matched
+    line keeps a still-valid signature; any real change misses the match and trust stays revoked.
+    """
+    consumed: set[int] = set()
+    new_rows = conn.execute(
+        "SELECT id, food_id, unit_id, quantity_text, scaling_mode FROM recipe_ingredients "
+        "WHERE recipe_id = ? ORDER BY sort_order",
+        (recipe_id,),
+    ).fetchall()
+    for new in new_rows:
+        for index, old in enumerate(old_lines):
+            if index in consumed:
+                continue
+            if (
+                old["food_id"] == new["food_id"]
+                and old["unit_id"] == new["unit_id"]
+                and old["quantity_text"] == new["quantity_text"]
+                and old["scaling_mode"] == new["scaling_mode"]
+            ):
+                consumed.add(index)
+                conn.execute(
+                    """UPDATE recipe_ingredients
+                       SET deduct_from_pantry = ?, pantry_item_hint = ?,
+                           deduction_trusted_at = ?, deduction_trust_signature = ?
+                       WHERE id = ?""",
+                    (
+                        old["deduct_from_pantry"], old["pantry_item_hint"],
+                        old["deduction_trusted_at"], old["deduction_trust_signature"],
+                        int(new["id"]),
+                    ),
+                )
+                break
+
+
+def add_tags(
+    conn: sqlite3.Connection, recipe_id: int, tags: list[str], *, commit: bool = True
+) -> int:
+    """Attach tags to an existing recipe (created if new); returns how many were linked."""
+    added = 0
+    for raw_tag in tags:
+        tag = _clean(raw_tag)
+        if tag is None:
+            continue
+        conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+        tag_row = conn.execute(
+            "SELECT id FROM tags WHERE name = ? COLLATE NOCASE", (tag,)
+        ).fetchone()
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO recipe_tags (recipe_id, tag_id) VALUES (?, ?)",
+            (recipe_id, int(tag_row["id"])),
+        )
+        added += cur.rowcount
+    if commit:
+        conn.commit()
+    return added
 
 
 def set_status(conn: sqlite3.Connection, recipe_id: int, status: str) -> bool:
@@ -502,33 +593,98 @@ def _summary(row: sqlite3.Row) -> RecipeSummary:
     return RecipeSummary(
         id=int(row["id"]), slug=row["slug"], title=row["title"], status=row["status"],
         tier=row["tier"], tldr=row["tldr"], updated_at=row["updated_at"],
+        rating=row["rating"], image_path=row["image_path"],
+        total_minutes=row["total_minutes"], base_servings=row["base_servings"],
     )
 
 
+# Kept as two pure literals (not an f-string build) so ruff's SQL-injection check can see
+# that user input only ever travels through bound params.
+_SUMMARY_SELECT_FTS = (
+    "SELECT r.id, r.slug, r.title, r.status, r.tier, r.tldr, r.updated_at, r.rating, "
+    "r.image_path, r.total_minutes, r.base_servings "
+    "FROM recipe_fts f JOIN recipes r ON r.id = f.rowid WHERE recipe_fts MATCH ?"
+)
+_SUMMARY_SELECT_PLAIN = (
+    "SELECT r.id, r.slug, r.title, r.status, r.tier, r.tldr, r.updated_at, r.rating, "
+    "r.image_path, r.total_minutes, r.base_servings FROM recipes r"
+)
+
+
 def list_recipes(
-    conn: sqlite3.Connection, *, status: str | None = None, query: str | None = None
+    conn: sqlite3.Connection,
+    *,
+    status: str | None = None,
+    query: str | None = None,
+    tag: str | None = None,
+    tier: str | None = None,
+    max_minutes: int | None = None,
+    min_rating: int | None = None,
 ) -> list[RecipeSummary]:
-    params: list[str] = []
+    """Search + filter the library. Filters compose with each other and with FTS search
+    (docs/07 section 2: tier / tags / max time / rating filters on the Cookbook)."""
+    params: list[str | int] = []
+    where: list[str] = []
+    if status:
+        where.append("r.status = ?")
+        params.append(status)
+    if tag and tag.strip():
+        where.append(
+            "EXISTS (SELECT 1 FROM recipe_tags rt JOIN tags t ON t.id = rt.tag_id "
+            "WHERE rt.recipe_id = r.id AND t.name = ? COLLATE NOCASE)"
+        )
+        params.append(tag.strip())
+    if tier and tier in VALID_TIER:
+        where.append("r.tier = ?")
+        params.append(tier)
+    if max_minutes is not None and max_minutes > 0:
+        where.append("COALESCE(r.our_minutes, r.total_minutes) <= ?")
+        params.append(max_minutes)
+    if min_rating is not None and min_rating > 0:
+        where.append("r.rating >= ?")
+        params.append(min_rating)
+
     if query and query.strip():
         match = _fts_query(query)
         if not match:
             return []
-        sql = (
-            "SELECT r.id, r.slug, r.title, r.status, r.tier, r.tldr, r.updated_at "
-            "FROM recipe_fts f JOIN recipes r ON r.id = f.rowid WHERE recipe_fts MATCH ?"
-        )
-        params.append(match)
-        if status:
-            sql += " AND r.status = ?"
-            params.append(status)
+        sql = _SUMMARY_SELECT_FTS
+        params.insert(0, match)
+        if where:
+            sql += " AND " + " AND ".join(where)
         sql += " ORDER BY rank"
     else:
-        sql = "SELECT id, slug, title, status, tier, tldr, updated_at FROM recipes"
-        if status:
-            sql += " WHERE status = ?"
-            params.append(status)
-        sql += " ORDER BY updated_at DESC, id DESC"
+        sql = _SUMMARY_SELECT_PLAIN
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY r.updated_at DESC, r.id DESC"
     return [_summary(r) for r in conn.execute(sql, params).fetchall()]
+
+
+@dataclass(frozen=True, slots=True)
+class TagCount:
+    name: str
+    count: int
+
+
+def list_tags(
+    conn: sqlite3.Connection, *, status: str | None = None, limit: int = 12
+) -> list[TagCount]:
+    """The most-used tags (for the Cookbook filter chips)."""
+    params: list[str | int] = []
+    sql = (
+        "SELECT t.name, COUNT(*) AS n FROM tags t "
+        "JOIN recipe_tags rt ON rt.tag_id = t.id JOIN recipes r ON r.id = rt.recipe_id "
+    )
+    if status:
+        sql += "WHERE r.status = ? "
+        params.append(status)
+    sql += "GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE LIMIT ?"
+    params.append(limit)
+    return [
+        TagCount(name=r["name"], count=int(r["n"]))
+        for r in conn.execute(sql, params).fetchall()
+    ]
 
 
 # --------------------------------------------------------------------------------------
