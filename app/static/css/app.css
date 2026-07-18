@@ -344,3 +344,25 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .deduct-skipped { margin-top: 12px; }
 .deduct-skipped summary { cursor: pointer; }
 .deduct-skipped ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px; }
+
+/* Shopping list (Phase 4d) */
+.head-actions { display: flex; gap: 8px; }
+.pantry-restock { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.shop-add { display: flex; gap: 8px; margin-bottom: 12px; }
+.shop-add input { flex: 1; }
+.shop-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.shop-tools form { margin: 0; }
+.shop-count { margin: 0 0 8px; }
+.shop-aisle { margin-bottom: 16px; }
+.shop-aisle-name { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin: 0 0 6px; }
+.shop-list { list-style: none; padding: 0; margin: 0; }
+.shop-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.shop-item.is-checked .shop-text { text-decoration: line-through; color: var(--ink-soft); }
+.shop-check button, .shop-remove button { background: transparent; color: var(--ink); border: none; min-height: auto; padding: 4px 6px; font-size: 18px; }
+.shop-text { flex: 1; }
+.btn-link { color: var(--ink-soft); }
+.inline-post { display: inline; margin: 0; }
+@media print {
+  .shop-check button { color: #000; }
+  .shop-tools, .shop-remove, .shop-add { display: none !important; }
+}

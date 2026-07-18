@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Shopping list · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Shopping list</h1>
+  <a href="/pantry" class="btn-secondary">Pantry</a>
+</header>
+
+<form method="post" action="/shopping/add" class="shop-add">
+  <input name="text" required placeholder="Add an item&hellip;" aria-label="Add an item" autocomplete="off">
+  <button type="submit" class="btn-primary">Add</button>
+</form>
+
+<div class="shop-tools no-print">
+  <form method="post" action="/shopping/add-staples">
+    <button type="submit" class="btn-secondary">Add low staples</button>
+  </form>
+  <a href="/shopping/export.txt" class="btn-secondary" target="_blank" rel="noopener">Text</a>
+  <a href="/shopping/export.json" class="btn-secondary" target="_blank" rel="noopener">JSON</a>
+  <button type="button" class="btn-secondary" onclick="window.print()">Print</button>
+  {% if remaining < total %}
+  <form method="post" action="/shopping/clear-checked">
+    <button type="submit" class="btn-secondary">Clear checked</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if aisles %}
+<p class="muted shop-count">{{ remaining }} of {{ total }} left</p>
+{% for aisle, items in aisles %}
+<section class="shop-aisle">
+  <h2 class="shop-aisle-name">{{ aisle }}</h2>
+  <ul class="shop-list">
+    {% for item in items %}
+    <li class="shop-item{% if item.checked %} is-checked{% endif %}">
+      <form method="post" action="/shopping/items/{{ item.id }}/toggle" class="shop-check">
+        <button type="submit" aria-label="{{ 'Uncheck' if item.checked else 'Check off' }}">
+          {{ '☑' if item.checked else '☐' }}
+        </button>
+      </form>
+      <span class="shop-text">{{ item.label }}</span>
+      <form method="post" action="/shopping/items/{{ item.id }}/remove" class="shop-remove no-print">
+        <button type="submit" class="btn-link" aria-label="Remove">&times;</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% else %}
+<p class="muted">Your list is empty. Add items above, pull in low staples, or use &ldquo;Add missing to shopping&rdquo; on a recipe.</p>
+{% endif %}
+{% endblock %}

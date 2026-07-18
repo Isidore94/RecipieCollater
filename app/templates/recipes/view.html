@@ -34,6 +34,10 @@
 <p class="cook-cta no-print">
   <a href="/recipes/{{ recipe.slug }}/cook" class="btn-primary">Cook this &rarr;</a>
   <a href="/recipes/{{ recipe.slug }}/after-cook" class="btn-secondary">I made this</a>
+  <form method="post" action="/shopping/from-recipe/{{ recipe.slug }}" class="inline-post">
+    <input type="hidden" name="servings" value="{{ servings or recipe.base_servings }}">
+    <button type="submit" class="btn-secondary">Add missing to shopping</button>
+  </form>
 </p>
 
 <section class="card">

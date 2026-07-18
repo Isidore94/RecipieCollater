@@ -33,6 +33,7 @@ from app.routers import (
     pages,
     pantry,
     recipes,
+    shopping,
     shortcut,
 )
 from app.services.units import seed_core_units
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
     app.include_router(recipes.router)
     app.include_router(cooking.router)
     app.include_router(pantry.router)
+    app.include_router(shopping.router)
     app.include_router(pages.router)
 
     return app

@@ -5,13 +5,19 @@
 
 <header class="page-head">
   <h1>Pantry</h1>
-  {% if active_location %}
-  <a href="/pantry/stock-take/{{ active_location }}" class="btn-primary">Stock-take</a>
-  {% endif %}
+  <div class="head-actions">
+    <a href="/shopping" class="btn-secondary">Shopping list</a>
+    {% if active_location %}
+    <a href="/pantry/stock-take/{{ active_location }}" class="btn-primary">Stock-take</a>
+    {% endif %}
+  </div>
 </header>
 
 {% if restock_count %}
-<p class="pantry-restock muted">{{ restock_count }} staple{{ 's' if restock_count != 1 }} to restock.</p>
+<form method="post" action="/shopping/add-staples" class="pantry-restock">
+  <span class="muted">{{ restock_count }} staple{{ 's' if restock_count != 1 }} low or out.</span>
+  <button type="submit" class="btn-secondary">Add to shopping list</button>
+</form>
 {% endif %}
 
 <nav class="library-nav pantry-locations" aria-label="Locations">
