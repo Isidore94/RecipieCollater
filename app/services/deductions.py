@@ -410,7 +410,7 @@ def batch_summary(conn: sqlite3.Connection, batch_id: str) -> list[str]:
 
 
 def cook_recipe_id(conn: sqlite3.Connection, cook_log_id: int) -> int | None:
-    """The recipe a cook_log belongs to (None if the id is unknown) - guards a bad FK from a form."""
+    """The recipe a cook_log belongs to (None if unknown) - guards a bad FK from a form."""
     row = conn.execute("SELECT recipe_id FROM cook_log WHERE id = ?", (cook_log_id,)).fetchone()
     return int(row["recipe_id"]) if row else None
 
