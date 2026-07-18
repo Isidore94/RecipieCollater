@@ -10,6 +10,14 @@ from app.services import pantry
 from app.services.units import seed_core_units
 
 
+def _item(conn: sqlite3.Connection, item_id: int) -> pantry.PantryItem:
+    """get_item, narrowed: these tests always address an item that must exist."""
+    item = pantry.get_item(conn, item_id)
+    assert item is not None
+    return item
+
+
+
 def _loc(conn: sqlite3.Connection, name: str = "Pantry", *, freezer: bool = False) -> int:
     return pantry.create_location(conn, name, is_freezer=freezer)
 
@@ -45,7 +53,7 @@ def test_add_exact_item_computes_canonical(migrated_db: sqlite3.Connection) -> N
             food="canned tomatoes", quantity_text="3", unit="each",
         ),
     )
-    item = pantry.get_item(migrated_db, item_id)
+    item = _item(migrated_db, item_id)
     assert item is not None
     assert item.quantity_mode == "exact"
     assert item.canonical_quantity == 3000  # 3 each -> 3000 milli-each
@@ -58,7 +66,7 @@ def test_add_exact_item_computes_canonical(migrated_db: sqlite3.Connection) -> N
 def test_gauge_defaults_full_and_cycles(migrated_db: sqlite3.Connection) -> None:
     loc = _loc(migrated_db)
     item_id = _add(migrated_db, "Flour", loc)
-    assert pantry.get_item(migrated_db, item_id).gauge == "full"
+    assert _item(migrated_db, item_id).gauge == "full"
     assert pantry.cycle_gauge(migrated_db, item_id) == "half"
     assert pantry.cycle_gauge(migrated_db, item_id) == "low"
     assert pantry.cycle_gauge(migrated_db, item_id) == "out"
@@ -70,9 +78,9 @@ def test_gauge_defaults_full_and_cycles(migrated_db: sqlite3.Connection) -> None
 def test_binary_toggle(migrated_db: sqlite3.Connection) -> None:
     loc = _loc(migrated_db)
     item_id = _add(migrated_db, "Ketchup", loc, "binary")
-    assert pantry.get_item(migrated_db, item_id).have == 1  # defaults to have
+    assert _item(migrated_db, item_id).have == 1  # defaults to have
     assert pantry.toggle_have(migrated_db, item_id) is False
-    assert pantry.get_item(migrated_db, item_id).have == 0
+    assert _item(migrated_db, item_id).have == 0
 
 
 def test_set_and_step_exact_track_delta(migrated_db: sqlite3.Connection) -> None:
@@ -86,14 +94,14 @@ def test_set_and_step_exact_track_delta(migrated_db: sqlite3.Connection) -> None
         ),
     )
     pantry.set_exact(migrated_db, item_id, "800")
-    item = pantry.get_item(migrated_db, item_id)
+    item = _item(migrated_db, item_id)
     assert item.quantity_text == "800"
     assert item.canonical_quantity == 800_000  # 800 g -> mg
     last = _adjustments(migrated_db, item_id)[-1]
     assert last["canonical_delta"] == -200_000  # dropped 200 g
 
     pantry.step_exact(migrated_db, item_id, "-1000")  # clamp at zero, not negative
-    assert pantry.get_item(migrated_db, item_id).quantity_text == "0"
+    assert _item(migrated_db, item_id).quantity_text == "0"
 
 
 def test_step_rejects_bad_amount(migrated_db: sqlite3.Connection) -> None:
@@ -128,7 +136,7 @@ def test_remove_spoiled_empties_and_logs(migrated_db: sqlite3.Connection) -> Non
         ),
     )
     pantry.remove_item(migrated_db, item_id, reason="spoiled")
-    item = pantry.get_item(migrated_db, item_id)
+    item = _item(migrated_db, item_id)
     assert item is not None and item.quantity_text == "0"  # emptied, row kept
     assert _adjustments(migrated_db, item_id)[-1]["reason"] == "spoiled"
 
@@ -162,9 +170,9 @@ def test_staple_thresholds_drive_shopping_candidates(migrated_db: sqlite3.Connec
     pantry.set_staple(migrated_db, oil, is_staple=True)
     pantry.set_gauge(migrated_db, oil, "out")
 
-    assert pantry.get_item(migrated_db, rice).needs_restock is False  # 1000 >= 500
+    assert _item(migrated_db, rice).needs_restock is False  # 1000 >= 500
     pantry.set_exact(migrated_db, rice, "400")  # now below threshold
-    assert pantry.get_item(migrated_db, rice).needs_restock is True
+    assert _item(migrated_db, rice).needs_restock is True
 
     names = {i.display_name for i in pantry.shopping_candidates(migrated_db)}
     assert names == {"Rice", "Oil"}

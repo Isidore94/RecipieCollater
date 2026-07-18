@@ -15,6 +15,14 @@ from app.services.units import seed_core_units
 from tests.conftest import SAME_ORIGIN
 
 
+def _item(conn: sqlite3.Connection, item_id: int) -> pantry.PantryItem:
+    """get_item, narrowed: these tests always address an item that must exist."""
+    item = pantry.get_item(conn, item_id)
+    assert item is not None
+    return item
+
+
+
 def _add(conn: sqlite3.Connection, name: str, loc: int, mode: str = "gauge", **kw: object) -> int:
     return pantry.add_item(
         conn,
@@ -52,9 +60,9 @@ def test_adjust_gauge_and_cycle(admin_client: TestClient, migrated_db: sqlite3.C
         f"/pantry/items/{item}/adjust",
         data={"action": "gauge", "gauge": "out"}, headers=SAME_ORIGIN,
     )
-    assert pantry.get_item(migrated_db, item).gauge == "out"
+    assert _item(migrated_db, item).gauge == "out"
     admin_client.post(f"/pantry/items/{item}/adjust", data={"action": "cycle"}, headers=SAME_ORIGIN)
-    assert pantry.get_item(migrated_db, item).gauge == "full"  # out -> wraps to full
+    assert _item(migrated_db, item).gauge == "full"  # out -> wraps to full
 
 
 def test_step_exact_item(admin_client: TestClient, migrated_db: sqlite3.Connection) -> None:
@@ -70,7 +78,7 @@ def test_step_exact_item(admin_client: TestClient, migrated_db: sqlite3.Connecti
     admin_client.post(
         f"/pantry/items/{item}/adjust", data={"action": "step", "delta": "-1"}, headers=SAME_ORIGIN
     )
-    assert pantry.get_item(migrated_db, item).quantity_text == "2"
+    assert _item(migrated_db, item).quantity_text == "2"
 
 
 def test_toggle_binary_item(admin_client: TestClient, migrated_db: sqlite3.Connection) -> None:
@@ -79,7 +87,7 @@ def test_toggle_binary_item(admin_client: TestClient, migrated_db: sqlite3.Conne
     admin_client.post(
         f"/pantry/items/{item}/adjust", data={"action": "toggle"}, headers=SAME_ORIGIN
     )
-    assert pantry.get_item(migrated_db, item).have == 0
+    assert _item(migrated_db, item).have == 0
 
 
 def test_remove_item_spoiled(admin_client: TestClient, migrated_db: sqlite3.Connection) -> None:
@@ -88,7 +96,7 @@ def test_remove_item_spoiled(admin_client: TestClient, migrated_db: sqlite3.Conn
     admin_client.post(
         f"/pantry/items/{item}/remove", data={"reason": "spoiled"}, headers=SAME_ORIGIN
     )
-    assert pantry.get_item(migrated_db, item).have == 0
+    assert _item(migrated_db, item).have == 0
     reason = migrated_db.execute(
         "SELECT reason FROM pantry_adjustments ORDER BY id DESC LIMIT 1"
     ).fetchone()["reason"]

@@ -11,6 +11,14 @@ from app.services.units import seed_core_units
 from tests.conftest import SAME_ORIGIN
 
 
+def _item(conn: sqlite3.Connection, item_id: int) -> pantry.PantryItem:
+    """get_item, narrowed: these tests always address an item that must exist."""
+    item = pantry.get_item(conn, item_id)
+    assert item is not None
+    return item
+
+
+
 def _seed(conn: sqlite3.Connection) -> tuple[str, int, int]:
     """A recipe using 200 g flour + a pantry with 1000 g flour. Returns slug, ingredient, item."""
     seed_core_units(conn)
@@ -76,7 +84,7 @@ def test_apply_deducts_and_undo_restores(
         headers=SAME_ORIGIN, follow_redirects=False,
     )
     assert apply.status_code == 303 and "applied=" in apply.headers["location"]
-    assert pantry.get_item(migrated_db, item).quantity_text == "800"
+    assert _item(migrated_db, item).quantity_text == "800"
 
     batch = migrated_db.execute(
         "SELECT batch_id FROM pantry_adjustments WHERE reason = 'cook' LIMIT 1"
@@ -86,7 +94,7 @@ def test_apply_deducts_and_undo_restores(
         headers=SAME_ORIGIN, follow_redirects=False,
     )
     assert undo.status_code == 303
-    assert pantry.get_item(migrated_db, item).quantity_text == "1000"  # restored
+    assert _item(migrated_db, item).quantity_text == "1000"  # restored
 
 
 def test_auto_apply_when_trusted(
@@ -105,7 +113,7 @@ def test_auto_apply_when_trusted(
         },
         headers=SAME_ORIGIN,
     )
-    assert pantry.get_item(migrated_db, item).quantity_text == "800"
+    assert _item(migrated_db, item).quantity_text == "800"
 
     # Second cook -> auto-applies straight to the summary, no review step.
     resp = admin_client.post(
@@ -113,7 +121,7 @@ def test_auto_apply_when_trusted(
         headers=SAME_ORIGIN, follow_redirects=False,
     )
     assert "applied=" in resp.headers["location"]
-    assert pantry.get_item(migrated_db, item).quantity_text == "600"  # deducted again automatically
+    assert _item(migrated_db, item).quantity_text == "600"  # deducted again automatically
 
 
 def test_double_submit_apply_no_double_deduct(
@@ -128,7 +136,7 @@ def test_double_submit_apply_no_double_deduct(
     body = {"cook_log_id": str(cook_id), "servings": "4", "line": str(ing_id)}
     admin_client.post(f"/recipes/{slug}/deductions", data=body, headers=SAME_ORIGIN)
     admin_client.post(f"/recipes/{slug}/deductions", data=body, headers=SAME_ORIGIN)  # resubmit
-    assert pantry.get_item(migrated_db, item).quantity_text == "800"  # deducted once
+    assert _item(migrated_db, item).quantity_text == "800"  # deducted once
 
 
 def test_bad_cook_log_id_does_not_500(
@@ -142,7 +150,7 @@ def test_bad_cook_log_id_does_not_500(
         headers=SAME_ORIGIN, follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert pantry.get_item(migrated_db, item).quantity_text == "1000"  # nothing deducted
+    assert _item(migrated_db, item).quantity_text == "1000"  # nothing deducted
 
 
 def test_bad_servings_returns_400(

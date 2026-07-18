@@ -8,6 +8,14 @@ from app.services import cooking, deductions, pantry, recipes
 from app.services.units import seed_core_units
 
 
+def _item(conn: sqlite3.Connection, item_id: int) -> pantry.PantryItem:
+    """get_item, narrowed: these tests always address an item that must exist."""
+    item = pantry.get_item(conn, item_id)
+    assert item is not None
+    return item
+
+
+
 def _ing(qty: str, unit: str, food: str) -> recipes.IngredientInput:
     return recipes.IngredientInput(quantity_text=qty, unit=unit, food=food)
 
@@ -44,7 +52,7 @@ def test_propose_and_apply_exact(migrated_db: sqlite3.Connection) -> None:
     assert line.used_canonical == 200_000  # 200 g at base servings
 
     deductions.apply(migrated_db, rid, None, line_ids={line.ingredient_id})
-    assert pantry.get_item(migrated_db, item).quantity_text == "800"  # 1000 - 200
+    assert _item(migrated_db, item).quantity_text == "800"  # 1000 - 200
 
 
 def test_deduction_scales_with_servings(migrated_db: sqlite3.Connection) -> None:
@@ -56,7 +64,7 @@ def test_deduction_scales_with_servings(migrated_db: sqlite3.Connection) -> None
     line = _line(deductions.propose(migrated_db, rid, servings_made="8"), "flour")
     assert line.used_canonical == 400_000  # 4->8 servings doubles the 200 g
     deductions.apply(migrated_db, rid, None, line_ids={line.ingredient_id}, servings_made="8")
-    assert pantry.get_item(migrated_db, item).quantity_text == "600"
+    assert _item(migrated_db, item).quantity_text == "600"
 
 
 def test_skips_fixed_to_taste_and_package(migrated_db: sqlite3.Connection) -> None:
@@ -78,15 +86,15 @@ def test_skips_fixed_to_taste_and_package(migrated_db: sqlite3.Connection) -> No
     )
     proposal = deductions.propose(migrated_db, rid)
     assert all(line.kind == "skip" for line in proposal.lines)
-    assert "fixed" in _line(proposal, "salt").reason
-    assert "package" in _line(proposal, "flour").reason
+    assert "fixed" in (_line(proposal, "salt").reason or "")
+    assert "package" in (_line(proposal, "flour").reason or "")
 
 
 def test_skip_when_not_in_pantry(migrated_db: sqlite3.Connection) -> None:
     seed_core_units(migrated_db)
     rid = _recipe(migrated_db, [_ing("2", "each", "eggs")])
     line = _line(deductions.propose(migrated_db, rid), "eggs")
-    assert line.kind == "skip" and "pantry" in line.reason
+    assert line.kind == "skip" and "pantry" in (line.reason or "")
 
 
 def test_dimension_mismatch_skipped(migrated_db: sqlite3.Connection) -> None:
@@ -95,7 +103,7 @@ def test_dimension_mismatch_skipped(migrated_db: sqlite3.Connection) -> None:
     loc = pantry.create_location(migrated_db, "Fridge")
     _exact_item(migrated_db, loc, "milk", "1000", "grams")  # tracked by mass, recipe by volume
     line = _line(deductions.propose(migrated_db, rid), "milk")
-    assert line.kind == "skip" and "match" in line.reason
+    assert line.kind == "skip" and "match" in (line.reason or "")
 
 
 def test_gauge_only_steps_when_opted_in(migrated_db: sqlite3.Connection) -> None:
@@ -113,7 +121,7 @@ def test_gauge_only_steps_when_opted_in(migrated_db: sqlite3.Connection) -> None
     assert line.eligible is False  # not opted into step-down -> not auto-eligible
     # applying it anyway (a manual review tap) steps the gauge down one level
     deductions.apply(migrated_db, rid, None, line_ids={line.ingredient_id})
-    assert pantry.get_item(migrated_db, item).gauge == "half"
+    assert _item(migrated_db, item).gauge == "half"
 
 
 def test_trust_enables_auto_and_edit_revokes(migrated_db: sqlite3.Connection) -> None:
@@ -161,11 +169,11 @@ def test_apply_then_undo_restores(migrated_db: sqlite3.Connection) -> None:
 
     line = _line(deductions.propose(migrated_db, rid), "flour")
     result = deductions.apply(migrated_db, rid, None, line_ids={line.ingredient_id})
-    assert pantry.get_item(migrated_db, item).quantity_text == "800"
+    assert _item(migrated_db, item).quantity_text == "800"
 
     reversed_count = deductions.undo(migrated_db, result.batch_id)
     assert reversed_count == 1
-    assert pantry.get_item(migrated_db, item).quantity_text == "1000"  # restored
+    assert _item(migrated_db, item).quantity_text == "1000"  # restored
 
 
 def test_apply_ignores_lines_not_selected(migrated_db: sqlite3.Connection) -> None:
@@ -183,8 +191,8 @@ def test_apply_ignores_lines_not_selected(migrated_db: sqlite3.Connection) -> No
 
     flour_line = _line(deductions.propose(migrated_db, rid), "flour")
     deductions.apply(migrated_db, rid, None, line_ids={flour_line.ingredient_id})  # only flour
-    assert pantry.get_item(migrated_db, flour).quantity_text == "800"
-    assert pantry.get_item(migrated_db, sugar).quantity_text == "500"  # untouched
+    assert _item(migrated_db, flour).quantity_text == "800"
+    assert _item(migrated_db, sugar).quantity_text == "500"  # untouched
 
 
 # --- Regression tests for the Phase 4 adversarial review findings ---
@@ -200,9 +208,9 @@ def test_undo_is_idempotent(migrated_db: sqlite3.Connection) -> None:
     result = deductions.apply(migrated_db, rid, None, line_ids={line.ingredient_id})
 
     assert deductions.undo(migrated_db, result.batch_id) == 1
-    assert pantry.get_item(migrated_db, item).quantity_text == "1000"
+    assert _item(migrated_db, item).quantity_text == "1000"
     assert deductions.undo(migrated_db, result.batch_id) == 0  # replay is a no-op
-    assert pantry.get_item(migrated_db, item).quantity_text == "1000"  # not over-restored
+    assert _item(migrated_db, item).quantity_text == "1000"  # not over-restored
 
 
 def test_apply_is_idempotent_per_cook(migrated_db: sqlite3.Connection) -> None:
@@ -217,7 +225,7 @@ def test_apply_is_idempotent_per_cook(migrated_db: sqlite3.Connection) -> None:
     first = deductions.apply(migrated_db, rid, cook_id, line_ids={line.ingredient_id})
     second = deductions.apply(migrated_db, rid, cook_id, line_ids={line.ingredient_id})
     assert first.batch_id == second.batch_id  # same batch returned, not a new deduction
-    assert pantry.get_item(migrated_db, item).quantity_text == "800"  # deducted once only
+    assert _item(migrated_db, item).quantity_text == "800"  # deducted once only
 
 
 def test_gauge_item_stepped_once_per_cook(migrated_db: sqlite3.Connection) -> None:
@@ -233,7 +241,7 @@ def test_gauge_item_stepped_once_per_cook(migrated_db: sqlite3.Connection) -> No
     )
     ids = {ln.ingredient_id for ln in deductions.propose(migrated_db, rid).deductible_lines}
     deductions.apply(migrated_db, rid, None, line_ids=ids)
-    assert pantry.get_item(migrated_db, item).gauge == "half"  # full -> half once, not full -> low
+    assert _item(migrated_db, item).gauge == "half"  # full -> half once, not full -> low
 
 
 def test_cross_unit_deduction_display(migrated_db: sqlite3.Connection) -> None:
@@ -243,4 +251,4 @@ def test_cross_unit_deduction_display(migrated_db: sqlite3.Connection) -> None:
     loc = pantry.create_location(migrated_db, "Pantry")
     _exact_item(migrated_db, loc, "oil", "500", "ml")  # pantry tracks oil in ml
     line = _line(deductions.propose(migrated_db, rid), "oil")
-    assert "ml" in line.used_text and "tbsp" not in line.used_text
+    assert "ml" in (line.used_text or "") and "tbsp" not in (line.used_text or "")
