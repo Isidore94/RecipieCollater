@@ -5,6 +5,20 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### Phase 4.7 — Receipt capture (2026-07-18)
+
+Schema v13 (migration 013). A grocery trip becomes pantry restocks in one review.
+
+- Receipt photo (vision) or pasted Instacart/Costco order (text) parsed once by the AI
+  provider into persisted lines; both adapters gained a forced `save_receipt` tool call,
+  with the photo sent as a base64 image (uploads normalized to bounded JPEG via Pillow).
+- Store-text generalization anchored to the household's own foods list, corrected inline at
+  review, and LEARNED: applied lines write their receipt phrasing into `food_aliases`, so
+  the same store resolves deterministically on the next trip.
+- Apply (idempotent, review-first) restocks matched pantry items, optionally starts
+  tracking new foods, and checks purchases off the shopping list. "Scan receipt" entry
+  points on Pantry and Shopping.
+
 ### Phase 4.6 — GUI usability overhaul (2026-07-18)
 
 Schema v12 (migration 012). The shopping list learns how food is bought, the cook log learns

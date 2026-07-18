@@ -34,6 +34,24 @@ class ExtractedStep(BaseModel):
     minutes: int | None = None
 
 
+class ExtractedReceiptItem(BaseModel):
+    """One purchased grocery item off a receipt photo or a pasted online order."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    original_text: str
+    name: str | None = None  # the product, expanded ('Kirkland organic chicken breast')
+    food: str | None = None  # short generic kitchen name a recipe would use ('chicken breast')
+    quantity_text: str | None = None  # units bought ('2')
+    size_text: str | None = None  # one unit's pack size when shown ('15 oz', '2 kg')
+
+
+class ExtractedReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ExtractedReceiptItem] = Field(default_factory=list)
+
+
 class ExtractedRecipe(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

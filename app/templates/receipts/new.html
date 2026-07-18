@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Scan a receipt · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Scan a receipt</h1>
+  <a href="/pantry" class="btn-secondary">Pantry</a>
+</header>
+
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
+
+<p class="muted">One photo (or a pasted Instacart/Costco order) restocks the pantry in one
+  review. Store abbreviations are learned as you confirm them, so the same store gets faster
+  every trip.</p>
+
+<form method="post" action="/receipts" enctype="multipart/form-data" class="card receipt-form">
+  <label for="photo">Receipt photo</label>
+  <input id="photo" name="photo" type="file" accept="image/*" capture="environment">
+
+  <p class="muted receipt-or">&mdash; or &mdash;</p>
+
+  <label for="order_text">Paste an online order</label>
+  <textarea id="order_text" name="order_text" rows="8" class="notes-input"
+            placeholder="Open your Instacart / Costco order confirmation, select everything, copy, paste here."></textarea>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Read it &rarr;</button>
+  </div>
+</form>
+{% endblock %}

@@ -34,6 +34,7 @@ from app.routers import (
     onboarding,
     pages,
     pantry,
+    receipts,
     recipes,
     shopping,
     shortcut,
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(pantry.router)
     app.include_router(shopping.router)
     app.include_router(foods.router)
+    app.include_router(receipts.router)
     app.include_router(pages.router)
 
     return app

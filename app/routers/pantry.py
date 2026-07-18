@@ -60,6 +60,7 @@ def index(
     request: Request,
     location: int | None = None,
     q: str | None = None,
+    notice: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
@@ -70,7 +71,7 @@ def index(
     return render(
         request, "pantry/index.html", active_nav="pantry", user=user,
         locations=locations, active_location=active, items=items, restock_count=restock_count,
-        query=q or "",
+        query=q or "", notice=notice,
     )
 
 

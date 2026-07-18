@@ -123,6 +123,25 @@ genuinely usable day-to-day, and lay the deterministic groundwork the Phase-5 as
   one review; a cook with a substitution shows up in the log and skips the right deduction;
   "what can I make?" answers correctly from the live pantry.
 
+## Phase 4.7 — Receipt capture (inserted 2026-07-18)
+
+- One vision/text provider call turns a receipt photo (or a pasted Instacart/Costco order) into
+  reviewable purchase lines; the parse is persisted (it cost money and is not reproducible), and
+  apply is the only pantry writer (review-first, like deductions/restock).
+- **Generalization is learned, not re-guessed**: the model maps store text to a short generic
+  kitchen name anchored to the household's existing foods list; every applied line writes its
+  receipt phrasing into `food_aliases`, so repeat stores resolve deterministically. Names
+  generalize to the level recipes speak at ("black beans" stays distinct from "chickpeas";
+  roll-ups live in food families).
+- Applying restocks matched pantry items (gauge→full, binary→have, exact +units×pack-size),
+  optionally starts tracking new foods, and checks purchases off the shopping list.
+- Barcode scanning was considered and DEFERRED: live in-browser scanning needs the HTTPS
+  upgrade (getUserMedia secure-context), and the Apple-Shortcut scan route can be added later
+  against the same restock machinery.
+- **Exit criteria:** a real Costco/grocery receipt photo restocks the pantry in one review; a
+  pasted Instacart order does the same; a second receipt from the same store resolves its
+  repeated lines without model disagreement (aliases hit first).
+
 ## Phase 5 — Meal planning and assistant
 
 - Phase-owned migrations for meal plans, saved menus, household preferences, AI conversations, versioned proposals, and usage records.

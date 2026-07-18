@@ -6,6 +6,7 @@
 <header class="page-head">
   <h1>Pantry</h1>
   <div class="head-actions">
+    <a href="/receipts/new" class="btn-primary">Scan receipt</a>
     <a href="/foods" class="btn-secondary">Foods</a>
     <a href="/shopping" class="btn-secondary">Shopping list</a>
     {% if active_location %}
@@ -13,6 +14,8 @@
     {% endif %}
   </div>
 </header>
+
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
 
 {% if restock_count %}
 <form method="post" action="/shopping/add-staples" class="pantry-restock">

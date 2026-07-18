@@ -1,11 +1,11 @@
-"""Provider-agnostic types for AI recipe extraction."""
+"""Provider-agnostic types for AI recipe and receipt extraction."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.extraction import ExtractedRecipe
+from app.extraction import ExtractedReceipt, ExtractedRecipe
 
 # Controlled tag vocabulary appended to every prompt. Free-text tag sprawl makes filter chips
 # useless and the Phase-5 assistant's hard-filters unreliable; a small fixed vocabulary keeps
@@ -39,6 +39,25 @@ DRAFT_SYSTEM = (
     "fill quantity_text, unit, and food separately (e.g. '2', 'cups', 'flour') and also put the "
     "whole line in original_text. If the description is vague, still return a best-effort recipe."
     + TAG_GUIDE
+)
+
+
+# System prompt for reading a grocery receipt photo or a pasted online order (Phase 4.7).
+# The generalization rule is the heart of it: receipts speak in store abbreviations and brands;
+# recipes and the pantry speak in short generic food names. The household's existing food list is
+# supplied in the user content so the model converges on THIS kitchen's vocabulary.
+RECEIPT_SYSTEM = (
+    "You read a grocery receipt (photographed) or a pasted online grocery order and list the "
+    "FOOD items that were bought. For each item fill: original_text = the item's line exactly as "
+    "printed, without the price; name = the product with abbreviations expanded "
+    "('KS ORG CHKN BRST' -> 'Kirkland organic chicken breast'); food = the short, generic, "
+    "lowercase kitchen name a recipe would use, stripped of brand, size, packaging and marketing "
+    "words ('black beans', 'chicken breast', 'olive oil') - when a HOUSEHOLD FOODS list is "
+    "provided and one of its names fits the item, use that exact name; quantity_text = how many "
+    "units were bought ('2', default '1'); size_text = one unit's pack size when shown "
+    "('15 oz', '2 kg'). Skip tax, deposits, refunds, coupons, bag fees, loyalty/points lines and "
+    "clearly non-food items (detergent, batteries). If nothing is a grocery item, return an "
+    "empty items list."
 )
 
 
@@ -80,8 +99,20 @@ class AIExtraction:
     cost_micros: int
 
 
+@dataclass(frozen=True, slots=True)
+class AIReceipt:
+    """A successful receipt/order parse plus the accounting needed to log spend."""
+
+    receipt: ExtractedReceipt
+    provider: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_micros: int
+
+
 class RecipeExtractor(Protocol):
-    """What the pipeline and manual-draft path need from any AI provider."""
+    """What the pipeline, manual-draft, and receipt paths need from any AI provider."""
 
     provider: str
     model: str
@@ -89,3 +120,5 @@ class RecipeExtractor(Protocol):
     def extract(self, content: str, *, source_url: str) -> AIExtraction: ...
 
     def draft(self, description: str) -> AIExtraction: ...
+
+    def receipt(self, content: str, *, image_jpeg: bytes | None = None) -> AIReceipt: ...

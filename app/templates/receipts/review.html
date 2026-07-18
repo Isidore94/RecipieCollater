@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Receipt review · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>What came home?</h1>
+  <a href="/pantry" class="btn-secondary">Cancel</a>
+</header>
+
+{% if review.status != 'pending' %}
+<p class="banner banner-ok">This receipt was already {{ review.status }}.</p>
+<a href="/receipts/new" class="btn-primary">Scan another</a>
+
+{% elif not review.lines %}
+<p class="muted card">No grocery items found on that receipt.</p>
+<div class="form-actions">
+  <a href="/receipts/new" class="btn-primary">Try again</a>
+  <form method="post" action="/receipts/{{ review.receipt_id }}/discard" class="inline-post">
+    <button type="submit" class="btn-secondary">Discard</button>
+  </form>
+</div>
+
+{% else %}
+<p class="muted">Untick anything wrong. Fix a name to teach the pantry your word for it
+  (&ldquo;black beans&rdquo;, not the brand) &mdash; the store&rsquo;s phrasing is remembered
+  so next time this matches automatically.</p>
+
+<form method="post" action="/receipts/{{ review.receipt_id }}/apply" class="card receipt-review">
+  <ul class="restock-list">
+    {% for line in review.lines %}
+    <li class="restock-item receipt-line">
+      <label class="check receipt-raw">
+        <input type="checkbox" name="line" value="{{ line.line_id }}" checked>
+        <span>{{ line.original_text }}
+          {% if line.quantity_text and line.quantity_text != '1' %}
+          <span class="muted">&times;{{ line.quantity_text }}</span>{% endif %}
+          {% if line.size_text %}<span class="muted">{{ line.size_text }}</span>{% endif %}
+        </span>
+      </label>
+      <input name="food_{{ line.line_id }}" value="{{ line.food_name }}"
+             class="receipt-food" aria-label="Generic food name for {{ line.original_text }}">
+      <span class="restock-action">
+        {% if line.action_text %}{{ line.pantry_item_name }} &rarr; {{ line.action_text }}
+        {% elif line.is_new_food %}<span class="muted">new &mdash; will track</span>
+        {% else %}<span class="muted">not in the pantry &mdash; will track</span>{% endif %}
+        {% if line.checks_off %}<span class="chip-tag" title="Checks this off the shopping list">&#10003; list</span>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if locations %}
+  <label class="restock-location">New items go in
+    <select name="track_location">
+      {% for loc in locations %}<option value="{{ loc.id }}">{{ loc.name }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Restock the pantry</button>
+  </div>
+</form>
+<form method="post" action="/receipts/{{ review.receipt_id }}/discard" class="inline-post no-print">
+  <button type="submit" class="btn-link">Discard this receipt</button>
+</form>
+{% endif %}
+{% endblock %}
