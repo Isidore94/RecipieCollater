@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Preferences · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Household preferences</h1>
+  <a href="/plan" class="btn-secondary">Plan</a>
+</header>
+
+<p class="muted">These guide the assistant. <strong>Allergies</strong> and <strong>exclusions</strong>
+  are hard limits &mdash; it never suggests a recipe that hits them. The rest are soft hints.</p>
+
+{% set groups = [
+  ('allergy', 'Allergies (hard)', 'peanut, shellfish…'),
+  ('exclude', 'Never suggest (hard)', 'pork, cilantro…'),
+  ('dislike', 'Dislikes (soft)', 'olives…'),
+  ('diet', 'Diet (soft)', 'vegetarian, low-carb…'),
+  ('equipment', 'Equipment', 'slow cooker, air fryer…'),
+  ('cuisine_love', 'Cuisines we love', 'thai, italian…'),
+] %}
+
+<div class="pref-groups">
+  {% for kind, label, hint in groups %}
+  <section class="card pref-group">
+    <h2>{{ label }}</h2>
+    <ul class="chip-list pref-chips">
+      {% for row in rows if row.kind == kind %}
+      <li class="chip pref-chip">{{ row.value }}
+        <form method="post" action="/preferences/{{ row.id }}/remove" class="inline-post">
+          <button type="submit" class="btn-link" aria-label="Remove {{ row.value }}">&times;</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="/preferences/add" class="pref-add">
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <input name="value" placeholder="{{ hint }}" aria-label="Add to {{ label }}">
+      <button type="submit" class="btn-secondary">Add</button>
+    </form>
+  </section>
+  {% endfor %}
+</div>
+
+<section class="card">
+  <h2>Planning defaults</h2>
+  <form method="post" action="/preferences/scalars" class="form-grid">
+    <div>
+      <label for="max_weekday_minutes">Weeknight time budget (min)</label>
+      <input id="max_weekday_minutes" name="max_weekday_minutes" inputmode="numeric"
+             value="{{ scalars.get('max_weekday_minutes', '') }}">
+    </div>
+    <div>
+      <label for="max_weekend_minutes">Weekend time budget (min)</label>
+      <input id="max_weekend_minutes" name="max_weekend_minutes" inputmode="numeric"
+             value="{{ scalars.get('max_weekend_minutes', '') }}">
+    </div>
+    <div>
+      <label for="default_servings">Default servings</label>
+      <input id="default_servings" name="default_servings" inputmode="decimal"
+             value="{{ scalars.get('default_servings', '') }}">
+    </div>
+    <div>
+      <label for="tier_mix">Weekly tier mix</label>
+      <input id="tier_mix" name="tier_mix" placeholder="3 meal-prep, 2 family…"
+             value="{{ scalars.get('tier_mix', '') }}">
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Save defaults</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

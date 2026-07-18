@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Plan · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Week of {{ week_start }}</h1>
+  <div class="head-actions">
+    <a href="/preferences" class="btn-secondary">Preferences</a>
+    <a href="/plan/export.ics?start={{ week_start }}" class="btn-secondary">iCal</a>
+  </div>
+</header>
+
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+
+<nav class="week-nav no-print">
+  <a href="/plan?start={{ prev_week }}" class="btn-secondary">&larr; Prev</a>
+  <a href="/plan?start={{ this_week }}" class="btn-secondary">This week</a>
+  <a href="/plan?start={{ next_week }}" class="btn-secondary">Next &rarr;</a>
+</nav>
+
+<div class="plan-tools no-print">
+  <form method="post" action="/plan/shopping">
+    <input type="hidden" name="week_start" value="{{ week_start }}">
+    <button type="submit" class="btn-primary">Add week to shopping list</button>
+  </form>
+  <a href="/shopping" class="btn-secondary">Shopping{% if shopping_remaining %} ({{ shopping_remaining }}){% endif %}</a>
+</div>
+
+<div class="week-board">
+  {% for col in columns %}
+  <section class="day-col{% if col.is_today %} is-today{% endif %}">
+    <h2 class="day-head">{{ col.weekday }} <span class="muted">{{ col.plan_date[5:] }}</span></h2>
+    <ul class="day-entries">
+      {% for e in col.entries %}
+      <li class="plan-entry{% if e.entry_type == 'note' %} is-note{% endif %}">
+        <div class="plan-entry-body">
+          {% if e.recipe_slug %}
+          <a href="/recipes/{{ e.recipe_slug }}">{{ e.label }}</a>
+          {% else %}<span>{{ e.label }}</span>{% endif %}
+          <span class="muted plan-slot">{{ e.slot }}{% if e.servings_text %} · {{ e.servings_text }}{% endif %}</span>
+        </div>
+        <form method="post" action="/plan/entry/{{ e.id }}/remove" class="inline-post no-print">
+          <input type="hidden" name="week_start" value="{{ week_start }}">
+          <button type="submit" class="btn-link" aria-label="Remove">&times;</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    <details class="day-add no-print">
+      <summary>+ Add</summary>
+      <form method="post" action="/plan/entry" class="day-add-form">
+        <input type="hidden" name="week_start" value="{{ week_start }}">
+        <input type="hidden" name="plan_date" value="{{ col.plan_date }}">
+        <label class="visually-hidden" for="recipe-{{ col.plan_date }}">Recipe</label>
+        <select name="recipe_id" id="recipe-{{ col.plan_date }}">
+          <option value="">— recipe —</option>
+          {% for r in cookbook %}<option value="{{ r.id }}">{{ r.title }}</option>{% endfor %}
+        </select>
+        <input name="note" placeholder="or a note (leftovers, takeout)" aria-label="Note">
+        <div class="day-add-row">
+          <input name="slot" value="dinner" aria-label="Slot" size="7">
+          <input name="servings" placeholder="serves" aria-label="Servings" size="5" inputmode="decimal">
+          <button type="submit" class="btn-secondary">Add</button>
+        </div>
+      </form>
+    </details>
+  </section>
+  {% endfor %}
+</div>
+
+<section class="card menus-card no-print">
+  <h2>Saved menus</h2>
+  <div class="menus-row">
+    <form method="post" action="/plan/save-menu" class="inline-form">
+      <input type="hidden" name="week_start" value="{{ week_start }}">
+      <input name="name" placeholder="Save this week as…" aria-label="Menu name">
+      <button type="submit" class="btn-secondary">Save</button>
+    </form>
+  </div>
+  {% if menus %}
+  <ul class="menu-list">
+    {% for m in menus %}
+    <li class="menu-item">
+      <span>{{ m.name }} <span class="muted">{{ m.entry_count }} meal{{ 's' if m.entry_count != 1 }}</span></span>
+      <form method="post" action="/plan/apply-menu" class="inline-post">
+        <input type="hidden" name="week_start" value="{{ week_start }}">
+        <input type="hidden" name="menu_id" value="{{ m.id }}">
+        <button type="submit" class="btn-secondary">Apply to this week</button>
+      </form>
+      <form method="post" action="/plan/menu/{{ m.id }}/delete" class="inline-post">
+        <input type="hidden" name="week_start" value="{{ week_start }}">
+        <button type="submit" class="btn-link" aria-label="Delete menu">&times;</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No saved menus yet. Plan a week, then save it as a reusable template.</p>
+  {% endif %}
+</section>
+
+<p class="muted no-print plan-assistant-hint">Want help? Ask the
+  <a href="/chat">assistant</a> to &ldquo;plan next week&rsquo;s dinners&rdquo;.</p>
+{% endblock %}
