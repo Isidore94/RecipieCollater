@@ -289,6 +289,9 @@ def plan_recipe(
         raise ShoppingError("recipe not found")
     factor = recipes.scale_factor(detail.base_servings, servings or detail.base_servings)
     lines: list[PlannedLine] = []
+    # Pantry stock a previous line of THIS recipe already claimed, per (food, dimension) -
+    # a recipe using flour in two lines must not have both lines count the same bag.
+    consumed: dict[tuple[int, str | None], int] = {}
     for ing in detail.ingredients:
         name = ing.food_name or ing.original_text
         if ing.scaling_mode == "to_taste":
@@ -338,7 +341,11 @@ def plan_recipe(
                     )
                 )
                 continue
-            needed -= exact_total
+            stock_key = (ing.food_id, ing.unit_dimension)
+            available = max(0, exact_total - consumed.get(stock_key, 0))
+            claimed = min(available, needed)
+            consumed[stock_key] = consumed.get(stock_key, 0) + claimed
+            needed -= claimed
             if needed <= 0:
                 lines.append(
                     PlannedLine(
@@ -544,19 +551,20 @@ class AddOutcome:
 
 def _write_line(
     conn: sqlite3.Connection, list_id: int, line: PlannedLine, recipe_id: int
-) -> None:
+) -> int | None:
     if line.kind == "measured":
-        _add_measured(
+        return _add_measured(
             conn, list_id, food_id=line.food_id, display_text=line.display_text,
             quantity_text=line.quantity_text, unit_id=line.unit_id, canonical=line.canonical,
             source_type="recipe", recipe_id=recipe_id, label=line.original_text,
         )
-    elif line.kind in ("staple", "check"):
-        _add_quantityless(
+    if line.kind in ("staple", "check"):
+        return _add_quantityless(
             conn, list_id, food_id=line.food_id, display_text=line.display_text,
             needs_check=(line.kind == "check"), source_type="recipe", recipe_id=recipe_id,
             label=line.original_text,
         )
+    return None
 
 
 def add_from_recipe(
@@ -707,19 +715,19 @@ def build_trip(
     covered: list[str] = []
     to_taste: list[str] = []
     to_buy: list[TripLine] = []
-    # Aggregate measured needs per (food, dimension); collect titles per key for provenance.
+    # Aggregate measured needs per (food, dimension); collect titles per bucket for provenance.
     totals: dict[tuple[int, str | None], int] = {}
     meta: dict[tuple[int, str | None], PlannedLine] = {}
-    titles: dict[str, list[str]] = {}
+    bucket_titles: dict[tuple[int, str | None], list[str]] = {}
+    check_titles: dict[str, list[str]] = {}
     seen_quantityless: set[str] = set()
+    staple_foods_listed: set[int] = set()
 
-    def note_title(key: str, title: str) -> None:
-        bucket = titles.setdefault(key, [])
+    def note(bucket: list[str], title: str) -> None:
         if title not in bucket:
             bucket.append(title)
 
     for line, title in raw:
-        note_title(line.key, title)
         if line.kind == "to_taste":
             if line.display_text not in to_taste:
                 to_taste.append(line.display_text)
@@ -728,9 +736,13 @@ def build_trip(
             bucket_key = (line.food_id, dim)
             totals[bucket_key] = totals.get(bucket_key, 0) + (line.canonical or 0)
             meta.setdefault(bucket_key, line)
+            note(bucket_titles.setdefault(bucket_key, []), title)
+        elif line.kind == "check":
+            note(check_titles.setdefault(line.key, []), title)
 
     for (food_id, dim), total in totals.items():
         line = meta[(food_id, dim)]
+        titles = bucket_titles.get((food_id, dim), [])
         has_gb, gb_nonempty, exact_total = _pantry_profile(conn, food_id, dim)
         if gb_nonempty:
             covered.append(line.display_text)
@@ -740,8 +752,12 @@ def build_trip(
             covered.append(line.display_text)
             continue
         if has_gb:
+            # One staple line per food, even when recipes measure it in several dimensions.
+            if food_id in staple_foods_listed:
+                continue
+            staple_foods_listed.add(food_id)
             staple = PlannedLine(
-                key=line.key, kind="staple", ingredient_id=line.ingredient_id,
+                key=f"f:{food_id}", kind="staple", ingredient_id=line.ingredient_id,
                 food_id=food_id, display_text=line.display_text,
                 original_text=line.original_text, quantity_text=None, unit_id=None,
                 canonical=None,
@@ -749,8 +765,10 @@ def build_trip(
             to_buy.append(_trip_line(conn, staple, titles))
             continue
         factor = _unit_factor(conn, line.unit_id)
+        # The key carries the dimension: one food measured by mass AND volume yields two
+        # distinct lines whose preview checkboxes must not collide.
         adjusted = PlannedLine(
-            key=line.key, kind="measured", ingredient_id=line.ingredient_id,
+            key=f"f:{food_id}:{dim or '-'}", kind="measured", ingredient_id=line.ingredient_id,
             food_id=food_id, display_text=line.display_text, original_text=line.original_text,
             quantity_text=quantity.format_quantity(quantity.from_canonical(needed, factor)),
             unit_id=line.unit_id, canonical=needed,
@@ -766,7 +784,7 @@ def build_trip(
             if gb_nonempty:
                 covered.append(line.display_text)
                 continue
-        to_buy.append(_trip_line(conn, line, titles))
+        to_buy.append(_trip_line(conn, line, check_titles.get(line.key, [])))
 
     return TripPreview(
         picks=resolved_picks, to_buy=to_buy, covered=covered, to_taste=to_taste
@@ -774,7 +792,7 @@ def build_trip(
 
 
 def _trip_line(
-    conn: sqlite3.Connection, line: PlannedLine, titles: dict[str, list[str]]
+    conn: sqlite3.Connection, line: PlannedLine, recipe_titles: list[str]
 ) -> TripLine:
     unit = units.get_unit(conn, line.unit_id) if line.unit_id else None
     return TripLine(
@@ -782,7 +800,7 @@ def _trip_line(
         original_text=line.original_text, quantity_text=line.quantity_text,
         unit_id=line.unit_id, unit_name=unit.name if unit else None, canonical=line.canonical,
         aisle=_food_category(conn, line.food_id),
-        recipe_titles=tuple(titles.get(line.key, [])),
+        recipe_titles=tuple(recipe_titles),
         purchase_note=_purchase_note(conn, line),
     )
 
@@ -808,16 +826,22 @@ def apply_trip(
     for line in preview.to_buy:
         if line.key in excluded:
             continue
-        recipe_id = next(
-            (rid for rid, title in title_by_id.items() if title in line.recipe_titles),
-            preview.picks[0][0] if preview.picks else 0,
-        )
+        contributing = [
+            rid for rid, title in title_by_id.items() if title in line.recipe_titles
+        ] or ([preview.picks[0][0]] if preview.picks else [])
         planned = PlannedLine(
             key=line.key, kind=line.kind, ingredient_id=0, food_id=line.food_id,
             display_text=line.display_text, original_text=line.original_text,
             quantity_text=line.quantity_text, unit_id=line.unit_id, canonical=line.canonical,
         )
-        _write_line(conn, list_id, planned, recipe_id)
+        item_id = _write_line(conn, list_id, planned, contributing[0] if contributing else 0)
+        # Every contributing recipe shows in provenance, not just the first.
+        if item_id is not None:
+            for rid in contributing[1:]:
+                _record_source(
+                    conn, item_id, source_type="recipe", recipe_id=rid,
+                    label=line.original_text,
+                )
         added += 1
     if commit:
         conn.commit()
@@ -905,10 +929,15 @@ def apply_restock(
     restock_item_ids: set[int],
     create_item_ids: set[int],
     create_location_id: int | None,
+    clear_item_ids: set[int] | None = None,
     user_id: int | None = None,
 ) -> list[str]:
     """Apply the chosen restocks (reason='restock'), create the chosen new pantry items
-    (gauge, full - refine later in the pantry), then clear every checked line."""
+    (gauge, full - refine later in the pantry), then clear the checked lines.
+
+    ``clear_item_ids`` scopes the clear to the lines the review form actually presented, so an
+    item someone else checks off between render and submit is not swept away unseen; None
+    (service-level callers) clears every checked line, matching "Clear checked"."""
     summary: list[str] = []
     for line in restock_candidates(conn, list_id):
         if line.item_id in restock_item_ids and line.pantry_item_id is not None:
@@ -952,9 +981,16 @@ def apply_restock(
             )
             if new_id:
                 summary.append(f"{line.display_text} → tracked (full)")
-    conn.execute(
-        "DELETE FROM shopping_list_items WHERE list_id = ? AND checked = 1", (list_id,)
-    )
+    if clear_item_ids is None:
+        conn.execute(
+            "DELETE FROM shopping_list_items WHERE list_id = ? AND checked = 1", (list_id,)
+        )
+    else:
+        for item_id in clear_item_ids:
+            conn.execute(
+                "DELETE FROM shopping_list_items WHERE list_id = ? AND checked = 1 AND id = ?",
+                (list_id, item_id),
+            )
     conn.commit()
     return summary
 

@@ -211,11 +211,15 @@ async def restock_apply(
         create_ids = {
             int(v) for v in form.getlist("create") if isinstance(v, str) and v.isdigit()
         }
+        seen_ids = {
+            int(v) for v in form.getlist("seen") if isinstance(v, str) and v.isdigit()
+        }
         location_raw = _str(form, "create_location")
         location_id = int(location_raw) if location_raw.isdigit() else None
     summary = shopping.apply_restock(
         db, shopping.active_list(db), restock_item_ids=restock_ids,
-        create_item_ids=create_ids, create_location_id=location_id, user_id=user.id,
+        create_item_ids=create_ids, create_location_id=location_id,
+        clear_item_ids=seen_ids or None, user_id=user.id,
     )
     notice = f"Pantry updated: {', '.join(summary)}" if summary else "List cleared"
     return _notice_redirect(notice)

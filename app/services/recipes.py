@@ -382,28 +382,43 @@ def update_recipe(
     # survive an edit for lines that didn't change. Otherwise editing a typo in the title
     # silently un-learns every mapping and the next cook re-asks all the questions.
     old_lines = conn.execute(
-        """SELECT food_id, unit_id, quantity_text, scaling_mode, deduct_from_pantry,
+        """SELECT id, food_id, unit_id, quantity_text, scaling_mode, deduct_from_pantry,
                   pantry_item_hint, deduction_trusted_at, deduction_trust_signature
            FROM recipe_ingredients WHERE recipe_id = ? ORDER BY sort_order""",
+        (recipe_id,),
+    ).fetchall()
+    # Cook-log snapshots reference these ingredient rows (deviations key off ingredient_id, and
+    # the FK is ON DELETE SET NULL) - capture the linkage BEFORE the delete nulls it, so
+    # matched lines can be re-pointed and a recorded "left it out" still guards its deduction.
+    cook_refs = conn.execute(
+        """SELECT cli.id AS cli_id, cli.ingredient_id
+           FROM cook_log_ingredients cli
+           JOIN recipe_ingredients ri ON ri.id = cli.ingredient_id
+           WHERE ri.recipe_id = ?""",
         (recipe_id,),
     ).fetchall()
     conn.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
     conn.execute("DELETE FROM recipe_steps WHERE recipe_id = ?", (recipe_id,))
     conn.execute("DELETE FROM recipe_tags WHERE recipe_id = ?", (recipe_id,))
     _insert_children(conn, recipe_id, data)
-    _carry_over_pantry_knowledge(conn, recipe_id, old_lines)
+    _carry_over_pantry_knowledge(conn, recipe_id, old_lines, cook_refs)
     conn.commit()
     return True
 
 
 def _carry_over_pantry_knowledge(
-    conn: sqlite3.Connection, recipe_id: int, old_lines: list[sqlite3.Row]
+    conn: sqlite3.Connection,
+    recipe_id: int,
+    old_lines: list[sqlite3.Row],
+    cook_refs: list[sqlite3.Row],
 ) -> None:
     """Copy hint/deduction/trust onto re-inserted lines whose deduction-relevant fields are
-    unchanged. Trust signatures hash (food, unit, quantity, scaling, hint), so an exactly-matched
-    line keeps a still-valid signature; any real change misses the match and trust stays revoked.
+    unchanged, and re-point cook-log snapshots at the matched new rows. Trust signatures hash
+    (food, unit, quantity, scaling, hint), so an exactly-matched line keeps a still-valid
+    signature; any real change misses the match and trust stays revoked.
     """
     consumed: set[int] = set()
+    id_map: dict[int, int] = {}  # old ingredient id -> new ingredient id
     new_rows = conn.execute(
         "SELECT id, food_id, unit_id, quantity_text, scaling_mode FROM recipe_ingredients "
         "WHERE recipe_id = ? ORDER BY sort_order",
@@ -420,6 +435,7 @@ def _carry_over_pantry_knowledge(
                 and old["scaling_mode"] == new["scaling_mode"]
             ):
                 consumed.add(index)
+                id_map[int(old["id"])] = int(new["id"])
                 conn.execute(
                     """UPDATE recipe_ingredients
                        SET deduct_from_pantry = ?, pantry_item_hint = ?,
@@ -432,6 +448,13 @@ def _carry_over_pantry_knowledge(
                     ),
                 )
                 break
+    for ref in cook_refs:
+        new_id = id_map.get(int(ref["ingredient_id"]))
+        if new_id is not None:
+            conn.execute(
+                "UPDATE cook_log_ingredients SET ingredient_id = ? WHERE id = ?",
+                (new_id, int(ref["cli_id"])),
+            )
 
 
 def add_tags(

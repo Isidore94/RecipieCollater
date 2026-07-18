@@ -164,3 +164,39 @@ def test_after_cook_form_posts_deviations(
     entry = cooking.list_cook_log(migrated_db, detail.id)[0]
     assert entry.additions == "extra lime"
     assert any("greek yogurt" in d.display for d in entry.deviations)
+
+
+def test_deviation_survives_recipe_edit(migrated_db: sqlite3.Connection) -> None:
+    """Editing the recipe between the cook and the deduction review must not lose the
+    recorded 'left it out' - the snapshot is re-pointed at the matched new line."""
+    seed_core_units(migrated_db)
+    detail = _sour_cream_recipe(migrated_db)
+    onion_id = detail.ingredients[1].id
+    cook_id = cooking.record_cook(
+        migrated_db, detail.id,
+        cooking.CookCaptureInput(
+            deviations={onion_id: cooking.DeviationInput(kind="omitted")}
+        ),
+    )
+    # Edit with the SAME ingredient lines (e.g. a title/notes tweak resubmits the form).
+    recipes.update_recipe(
+        migrated_db, detail.id,
+        recipes.RecipeInput(
+            title="Tacos v2", base_servings="4",
+            ingredients=[
+                recipes.IngredientInput(quantity_text="200", unit="grams", food="sour cream"),
+                recipes.IngredientInput(quantity_text="1", unit="each", food="onion"),
+            ],
+        ),
+    )
+    loc = pantry.create_location(migrated_db, "Fridge")
+    pantry.add_item(
+        migrated_db,
+        pantry.PantryItemInput(
+            display_name="Onions", location_id=loc, quantity_mode="exact",
+            food="onion", quantity_text="3", unit="each",
+        ),
+    )
+    proposal = deductions.propose(migrated_db, detail.id, cook_log_id=cook_id)
+    onion_line = next(line for line in proposal.lines if "onion" in line.label)
+    assert onion_line.kind == "skip" and "left it out" in (onion_line.reason or "")

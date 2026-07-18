@@ -144,3 +144,21 @@ def test_list_foods_pending_first_with_counts(migrated_db: sqlite3.Connection) -
     foods.confirm_food(migrated_db, listing[0].id)
     assert all(f.status == "confirmed" for f in foods.list_foods(migrated_db))
     assert [f.name for f in foods.list_foods(migrated_db, query="jic")] == ["jicama"]
+
+
+def test_merge_never_leaves_a_self_parent(migrated_db: sqlite3.Connection) -> None:
+    """Merging a family root into one of its children must not make the child its own parent."""
+    seed_core_units(migrated_db)
+    _recipe(migrated_db, "chicken")
+    _recipe(migrated_db, "chicken breast")
+    chicken = _food_id(migrated_db, "chicken")
+    breast = _food_id(migrated_db, "chicken breast")
+    foods.set_parent(migrated_db, breast, chicken)
+
+    foods.merge_foods(migrated_db, chicken, breast)  # merge the ROOT into the child
+
+    row = migrated_db.execute(
+        "SELECT parent_food_id FROM foods WHERE id = ?", (breast,)
+    ).fetchone()
+    assert row["parent_food_id"] is None  # not itself
+    foods.set_parent(migrated_db, breast, None)  # and set_parent still works

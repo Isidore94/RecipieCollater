@@ -102,3 +102,26 @@ def test_purchase_prompt_roundtrip(
     assert resp.status_code == 303
     info = foods.get_purchase(migrated_db, food_id)
     assert info is not None and info.label == "tub"
+
+
+def test_food_name_cannot_break_out_of_merge_confirm(
+    admin_client: TestClient, migrated_db: sqlite3.Connection
+) -> None:
+    """Stored XSS guard: an ingested food named to escape a JS string must stay inert - the
+    confirm() text is static and never interpolates the food name."""
+    seed_core_units(migrated_db)
+    recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="Evil", base_servings="4",
+            ingredients=[
+                recipes.IngredientInput(
+                    quantity_text="1", unit="each", food="x'); alert(1);//"
+                )
+            ],
+        ),
+    )
+    page = admin_client.get("/foods")
+    assert page.status_code == 200
+    assert "Merge this food into the selected one" in page.text  # static confirm text
+    assert "confirm('Merge x" not in page.text  # the name never enters the JS string

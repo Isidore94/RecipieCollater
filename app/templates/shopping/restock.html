@@ -14,6 +14,7 @@
   <ul class="restock-list">
     {% for line in candidates %}
     <li class="restock-item">
+      <input type="hidden" name="seen" value="{{ line.item_id }}">
       {% if line.pantry_item_id and line.action_text %}
       <label class="check">
         <input type="checkbox" name="restock" value="{{ line.item_id }}" checked>

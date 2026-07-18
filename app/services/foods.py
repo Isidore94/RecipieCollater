@@ -258,6 +258,27 @@ def merge_foods(
         ),
     )
     conn.execute("DELETE FROM foods WHERE id = ?", (source_id,))
+    # Rewriting parent_food_id can leave the target as its own parent (merging a family root
+    # into one of its children) or close a longer loop - clear the target's parent if walking
+    # up from it ever returns to it, so set_parent's cycle guard stays satisfiable.
+    conn.execute(
+        "UPDATE foods SET parent_food_id = NULL WHERE id = ? AND parent_food_id = ?",
+        (target_id, target_id),
+    )
+    seen = {target_id}
+    cursor = conn.execute(
+        "SELECT parent_food_id FROM foods WHERE id = ?", (target_id,)
+    ).fetchone()
+    walk = cursor["parent_food_id"] if cursor else None
+    while walk is not None:
+        if walk in seen:
+            conn.execute(
+                "UPDATE foods SET parent_food_id = NULL WHERE id = ?", (target_id,)
+            )
+            break
+        seen.add(int(walk))
+        row = conn.execute("SELECT parent_food_id FROM foods WHERE id = ?", (walk,)).fetchone()
+        walk = row["parent_food_id"] if row else None
     if commit:
         conn.commit()
 

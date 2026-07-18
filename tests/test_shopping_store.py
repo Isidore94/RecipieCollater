@@ -250,3 +250,67 @@ def test_restock_can_create_new_pantry_item(migrated_db: sqlite3.Connection) -> 
     )
     created = pantry.items_for_food(migrated_db, _food_id(migrated_db, "milk"))
     assert len(created) == 1 and created[0].quantity_mode == "gauge" and created[0].gauge == "full"
+
+
+# ---- adversarial-review regressions ----------------------------------------------------
+
+
+def test_same_food_twice_in_one_recipe_claims_stock_once(
+    migrated_db: sqlite3.Connection,
+) -> None:
+    """Two flour lines must not both count the same pantry flour (under-buying)."""
+    seed_core_units(migrated_db)
+    rid = _recipe(
+        migrated_db,
+        [_ing("200", "grams", "flour"), _ing("100", "grams", "flour")],
+    )
+    _exact_item(migrated_db, "flour", "150", "grams")
+    lst = shopping.active_list(migrated_db)
+    shopping.add_from_recipe(migrated_db, lst, rid)
+    items = shopping.list_items(migrated_db, lst)
+    assert len(items) == 1  # merged
+    assert items[0].quantity_text == "150"  # 300 total need - 150 on hand, claimed once
+
+
+def test_trip_keys_distinct_for_one_food_in_two_dimensions(
+    migrated_db: sqlite3.Connection,
+) -> None:
+    seed_core_units(migrated_db)
+    a = _recipe(migrated_db, [_ing("200", "grams", "flour")], title="ByMass")
+    b = _recipe(migrated_db, [_ing("1", "cup", "flour")], title="ByVolume")
+    preview = shopping.build_trip(migrated_db, [(a, None), (b, None)])
+    keys = [line.key for line in preview.to_buy]
+    assert len(keys) == 2 and len(set(keys)) == 2  # no collision
+    # untick just the mass line: only the volume line lands
+    lst = shopping.active_list(migrated_db)
+    mass_key = next(line.key for line in preview.to_buy if line.unit_name == "gram")
+    added = shopping.apply_trip(migrated_db, lst, [(a, None), (b, None)], exclude={mass_key})
+    assert added == 1
+    assert shopping.list_items(migrated_db, lst)[0].unit_name == "cup"
+
+
+def test_trip_provenance_names_every_contributing_recipe(
+    migrated_db: sqlite3.Connection,
+) -> None:
+    seed_core_units(migrated_db)
+    a = _recipe(migrated_db, [_ing("200", "grams", "flour")], title="Bread")
+    b = _recipe(migrated_db, [_ing("100", "grams", "flour")], title="Roux")
+    lst = shopping.active_list(migrated_db)
+    shopping.apply_trip(migrated_db, lst, [(a, None), (b, None)])
+    item = shopping.list_items(migrated_db, lst)[0]
+    labels = set(shopping.sources_by_item(migrated_db, lst)[item.id])
+    assert labels == {"for Bread", "for Roux"}
+
+
+def test_restock_clear_scoped_to_presented_lines(migrated_db: sqlite3.Connection) -> None:
+    lst = shopping.active_list(migrated_db)
+    seen = shopping.add_manual(migrated_db, lst, "milk")
+    late = shopping.add_manual(migrated_db, lst, "eggs")
+    shopping.toggle(migrated_db, seen)
+    shopping.toggle(migrated_db, late)  # checked AFTER the review form rendered
+    shopping.apply_restock(
+        migrated_db, lst, restock_item_ids=set(), create_item_ids=set(),
+        create_location_id=None, clear_item_ids={seen},
+    )
+    remaining = shopping.list_items(migrated_db, lst)
+    assert [i.display_text for i in remaining] == ["eggs"]  # the unseen line survived

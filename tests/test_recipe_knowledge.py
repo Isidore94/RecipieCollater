@@ -102,3 +102,24 @@ def test_add_tags_idempotent(migrated_db: sqlite3.Connection) -> None:
     assert recipes.add_tags(migrated_db, rid, ["dinner"]) == 0  # already linked
     detail = recipes.get_recipe(migrated_db, rid)
     assert detail is not None and set(detail.tags) == {"dinner", "italian"}
+
+
+def test_hinted_pantry_item_is_deletable(migrated_db: sqlite3.Connection) -> None:
+    """A remembered deduction mapping must not make the pantry item undeletable (FK 500)."""
+    from app.services import deductions, pantry
+
+    seed_core_units(migrated_db)
+    rid = recipes.create_recipe(migrated_db, _input())
+    flour_line = int(_flour_row(migrated_db, rid)["id"])
+    loc = pantry.create_location(migrated_db, "Pantry")
+    item = pantry.add_item(
+        migrated_db,
+        pantry.PantryItemInput(display_name="Flour", location_id=loc, food="flour"),
+    )
+    deductions.set_mapping(migrated_db, flour_line, item)
+
+    pantry.remove_item(migrated_db, item, delete=True)  # must not raise
+
+    assert pantry.get_item(migrated_db, item) is None
+    row = _flour_row(migrated_db, rid)
+    assert row["pantry_item_hint"] is None  # the dangling mapping was cleared

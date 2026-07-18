@@ -541,6 +541,14 @@ def remove_item(
             (stamp, user_id, item_id),
         )
     if delete:
+        # recipe_ingredients.pantry_item_hint references this row with NO ON DELETE clause,
+        # so a remembered deduction mapping made the item undeletable (FK violation -> 500).
+        # Clear the hints and revoke their trust - the mapping is gone either way.
+        conn.execute(
+            "UPDATE recipe_ingredients SET pantry_item_hint = NULL, deduction_trusted_at = NULL, "
+            "deduction_trust_signature = NULL WHERE pantry_item_hint = ?",
+            (item_id,),
+        )
         conn.execute("DELETE FROM pantry_items WHERE id = ?", (item_id,))
     if commit:
         conn.commit()

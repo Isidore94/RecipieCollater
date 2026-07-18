@@ -70,8 +70,11 @@
         </label>
         <button type="submit" class="btn-secondary">Set family</button>
       </form>
+      {# The confirm text is deliberately static: interpolating the food name into a JS string
+         would be a stored-XSS vector (HTML entity escaping does not protect JS context, and
+         food names arrive from ingested web pages). #}
       <form method="post" action="/foods/{{ f.id }}/merge" class="food-form"
-            onsubmit="return confirm('Merge {{ f.name }} into the selected food? Every recipe, pantry item and list line moves over.');">
+            onsubmit="return confirm('Merge this food into the selected one? Every recipe, pantry item and list line moves over.');">
         <input type="hidden" name="q" value="{{ query }}">
         <label>Merge into
           <select name="target_id">
