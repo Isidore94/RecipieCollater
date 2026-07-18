@@ -44,16 +44,30 @@
 
 {% if status == 'cookbook' %}
 <p class="sort-toggle no-print">
-  {% if stale_sort %}
-  <a href="/cookbook" class="btn-secondary">Most recent</a>
-  <span class="muted">Sorted by longest since you cooked it</span>
-  {% else %}
-  <a href="/cookbook?sort=stale" class="btn-secondary">Haven&rsquo;t made in a while</a>
+  {% if stale_sort or use_it_up is defined %}
+  <a href="/cookbook" class="btn-secondary">All recipes</a>
   {% endif %}
+  {% if not stale_sort %}<a href="/cookbook?sort=stale" class="btn-secondary">Haven&rsquo;t made in a while</a>{% endif %}
+  {% if use_it_up is not defined %}<a href="/cookbook?sort=useitup" class="btn-secondary">Use it up</a>{% endif %}
 </p>
 {% endif %}
 
-{% if recipes %}
+{% if use_it_up is defined %}
+{% if use_it_up %}
+<p class="muted">Recipes that use what&rsquo;s expiring soon in your pantry.</p>
+<ul class="recipe-cards">
+  {% for u in use_it_up %}
+  <li class="card recipe-card">
+    <a href="/recipes/{{ u.slug }}"><h2>{{ u.title }}</h2></a>
+    <p class="muted">Uses {{ u.uses }} item{{ 's' if u.uses != 1 }} expiring soon</p>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">Nothing in the pantry is expiring soon. &#127881;</p>
+{% endif %}
+
+{% elif recipes %}
 <ul class="recipe-cards">
   {% for r in recipes %}
   <li class="card recipe-card">

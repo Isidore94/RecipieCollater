@@ -366,3 +366,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .shop-check button { color: #000; }
   .shop-tools, .shop-remove, .shop-add { display: none !important; }
 }
+
+/* Pantry-aware matching (Phase 4e) */
+.coverage { padding: 8px 12px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); font-size: 14px; margin: 0 0 14px; }
+.coverage.is-complete { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }

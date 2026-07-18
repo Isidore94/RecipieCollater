@@ -40,6 +40,17 @@
   </form>
 </p>
 
+{% if coverage and coverage.total %}
+<p class="coverage no-print{% if coverage.complete %} is-complete{% endif %}">
+  {% if coverage.complete %}
+  &#10003; You have all {{ coverage.total }} tracked ingredients
+  {% else %}
+  You have {{ coverage.have }} of {{ coverage.total }} ingredients
+  {% if coverage.missing %}<span class="muted">&mdash; need {{ coverage.missing | join(', ') }}</span>{% endif %}
+  {% endif %}
+</p>
+{% endif %}
+
 <section class="card">
   <div class="scaler no-print">
     <span class="muted">Servings:</span>

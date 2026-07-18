@@ -16,7 +16,7 @@ from starlette.datastructures import FormData
 from app.auth import current_user, require_csrf
 from app.deps import get_db
 from app.routers.ingest_api import schedule_processing
-from app.services import cooking, ingest
+from app.services import cooking, ingest, matching
 from app.services import recipes as recipe_service
 from app.services.users import User
 from app.templating import render
@@ -174,6 +174,11 @@ def cookbook(
             request, "recipes/browse.html", active_nav="cookbook", user=user,
             tab_title="Cookbook", status="cookbook", query="", stale_sort=True,
             recipes=cooking.list_recipes_by_staleness(db, status="cookbook"),
+        )
+    if sort == "useitup":
+        return render(
+            request, "recipes/browse.html", active_nav="cookbook", user=user,
+            tab_title="Cookbook", status="cookbook", query="", use_it_up=matching.use_it_up(db),
         )
     return _render_library(request, db, user, "cookbook", "Cookbook", q)
 
