@@ -353,6 +353,13 @@ def to_text(conn: sqlite3.Connection, list_id: int) -> str:
     return "\n".join(lines)
 
 
+def to_reminders_text(conn: sqlite3.Connection, list_id: int) -> str:
+    """Unchecked items, one per line, no aisle headers - paste straight into Apple Reminders (each
+    line becomes its own reminder). This is the household's away-from-home path: the list rides
+    iCloud, so no server exposure is needed."""
+    return "\n".join(item.label for item in list_items(conn, list_id) if not item.checked)
+
+
 def to_json(conn: sqlite3.Connection, list_id: int) -> dict[str, object]:
     return {
         "aisles": [

@@ -370,3 +370,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 /* Pantry-aware matching (Phase 4e) */
 .coverage { padding: 8px 12px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); font-size: 14px; margin: 0 0 14px; }
 .coverage.is-complete { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }
+
+/* Copy-for-Reminders (LAN shopping export) */
+.shop-reminders { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.reminders-box { flex-basis: 100%; min-height: 140px; font-family: var(--font-ui); font-size: 15px; margin-top: 8px; }

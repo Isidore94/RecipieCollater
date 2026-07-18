@@ -18,7 +18,10 @@ def test_shopping_page_and_manual_add(admin_client: TestClient) -> None:
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert "paper towels" in admin_client.get("/shopping").text
+    page = admin_client.get("/shopping").text
+    assert "paper towels" in page
+    # the Copy-for-Reminders affordance is present with the item in its textarea
+    assert "Copy for Reminders" in page and "shopping.js" in page
 
 
 def test_add_from_recipe_route(admin_client: TestClient, migrated_db: sqlite3.Connection) -> None:

@@ -12,6 +12,14 @@
   <button type="submit" class="btn-primary">Add</button>
 </form>
 
+{% if reminders_text %}
+<div class="shop-reminders no-print">
+  <button type="button" id="copy-reminders" class="btn-primary">Copy for Reminders</button>
+  <span id="reminders-status" class="muted" role="status"></span>
+  <textarea id="reminders-text" class="reminders-box" hidden aria-label="Shopping list to copy">{{ reminders_text }}</textarea>
+</div>
+{% endif %}
+
 <div class="shop-tools no-print">
   <form method="post" action="/shopping/add-staples">
     <button type="submit" class="btn-secondary">Add low staples</button>
@@ -51,4 +59,5 @@
 {% else %}
 <p class="muted">Your list is empty. Add items above, pull in low staples, or use &ldquo;Add missing to shopping&rdquo; on a recipe.</p>
 {% endif %}
+<script src="/static/js/shopping.js" defer></script>
 {% endblock %}

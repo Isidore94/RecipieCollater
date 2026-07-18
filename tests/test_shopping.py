@@ -116,3 +116,17 @@ def test_grouped_by_aisle_and_text_export(migrated_db: sqlite3.Connection) -> No
     assert "Dairy" in aisles and "Other" in aisles
     text = shopping.to_text(migrated_db, lst)
     assert "Dairy:" in text and "eggs" in text
+
+
+def test_reminders_text_is_plain_lines(migrated_db: sqlite3.Connection) -> None:
+    lst = shopping.active_list(migrated_db)
+    shopping.add_manual(migrated_db, lst, "paper towels")
+    checked = shopping.add_manual(migrated_db, lst, "milk")
+    shopping.add_manual(migrated_db, lst, "eggs")
+    shopping.toggle(migrated_db, checked)  # milk is bought -> excluded
+
+    text = shopping.to_reminders_text(migrated_db, lst)
+    lines = text.splitlines()
+    assert "paper towels" in lines and "eggs" in lines
+    assert "milk" not in lines  # checked-off items are not re-added to Reminders
+    assert not any(line.endswith(":") for line in lines)  # no aisle headers, just item names

@@ -39,6 +39,7 @@ def index(
     return render(
         request, "shopping/index.html", active_nav="pantry", user=user,
         aisles=shopping.grouped(db, list_id), remaining=remaining, total=total,
+        reminders_text=shopping.to_reminders_text(db, list_id),
     )
 
 
