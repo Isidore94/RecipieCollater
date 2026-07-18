@@ -347,15 +347,20 @@ def set_gauge(
     *,
     reason: str = "stock_take",
     user_id: int | None = None,
+    cook_log_id: int | None = None,
+    batch_id: str | None = None,
     commit: bool = True,
 ) -> None:
-    """Set a gauge item to an explicit level (stock-take, restock)."""
+    """Set a gauge item to an explicit level (stock-take, restock, cook step-down)."""
     if gauge not in _GAUGE_CYCLE:
         raise PantryError(f"unknown gauge: {gauge!r}")
     item = _row(conn, item_id)
     if item["quantity_mode"] != "gauge":
         raise PantryError("not a gauge item")
-    _apply_gauge(conn, item, gauge, reason=reason, user_id=user_id)
+    _apply_gauge(
+        conn, item, gauge, reason=reason, user_id=user_id, cook_log_id=cook_log_id,
+        batch_id=batch_id,
+    )
     if commit:
         conn.commit()
 
@@ -381,7 +386,14 @@ def cycle_gauge(
 
 
 def _apply_gauge(
-    conn: sqlite3.Connection, item: sqlite3.Row, new_gauge: str, *, reason: str, user_id: int | None
+    conn: sqlite3.Connection,
+    item: sqlite3.Row,
+    new_gauge: str,
+    *,
+    reason: str,
+    user_id: int | None,
+    cook_log_id: int | None = None,
+    batch_id: str | None = None,
 ) -> None:
     conn.execute(
         "UPDATE pantry_items SET gauge = ?, updated_at = ?, updated_by = ? WHERE id = ?",
@@ -389,7 +401,7 @@ def _apply_gauge(
     )
     _record_adjustment(
         conn, int(item["id"]), item["food_id"], reason=reason, user_id=user_id,
-        from_gauge=item["gauge"], to_gauge=new_gauge,
+        from_gauge=item["gauge"], to_gauge=new_gauge, cook_log_id=cook_log_id, batch_id=batch_id,
     )
 
 
@@ -400,6 +412,8 @@ def set_have(
     *,
     reason: str = "stock_take",
     user_id: int | None = None,
+    cook_log_id: int | None = None,
+    batch_id: str | None = None,
     commit: bool = True,
 ) -> None:
     """Set a binary item's have/out state."""
@@ -413,7 +427,7 @@ def set_have(
     )
     _record_adjustment(
         conn, item_id, item["food_id"], reason=reason, user_id=user_id,
-        from_have=item["have"], to_have=new_have,
+        from_have=item["have"], to_have=new_have, cook_log_id=cook_log_id, batch_id=batch_id,
     )
     if commit:
         conn.commit()
@@ -608,6 +622,61 @@ def get_item(conn: sqlite3.Connection, item_id: int) -> PantryItem | None:
 def shopping_candidates(conn: sqlite3.Connection) -> list[PantryItem]:
     """Staples that are out or below threshold - the pantry's contribution to the shopping list."""
     return [item for item in list_items(conn) if item.needs_restock]
+
+
+def items_for_food(conn: sqlite3.Connection, food_id: int | None) -> list[PantryItem]:
+    """Every pantry item mapped to a food - the join a recipe ingredient uses to find its item."""
+    if food_id is None:
+        return []
+    rows = conn.execute(
+        _ITEM_SELECT + " WHERE pi.food_id = ? ORDER BY pi.id", (food_id,)
+    ).fetchall()
+    return [_to_item(r) for r in rows]
+
+
+def deduct_canonical(
+    conn: sqlite3.Connection,
+    item_id: int,
+    used_canonical: int,
+    *,
+    reason: str = "cook",
+    cook_log_id: int | None = None,
+    batch_id: str | None = None,
+    user_id: int | None = None,
+    commit: bool = False,
+) -> int:
+    """Subtract a canonical amount from an exact item (clamped at zero); returns the applied delta.
+
+    Works in canonical micro-units so a recipe measured in one unit can deduct from a pantry item
+    measured in another of the same dimension. The caller must have verified matching dimensions.
+    Defaults to commit=False so a cook applies every line in one batch before committing.
+    """
+    item = _row(conn, item_id)
+    if item["quantity_mode"] != "exact":
+        raise PantryError("not an exact-quantity item")
+    unit = units.get_unit(conn, item["unit_id"]) if item["unit_id"] else None
+    if unit is None or unit.to_canonical_microunits is None:
+        raise PantryError("item has no exact unit to deduct from")
+    factor = unit.to_canonical_microunits
+    old_canonical = item["canonical_quantity"] or 0
+    new_canonical = max(0, old_canonical - used_canonical)
+    applied_delta = new_canonical - old_canonical  # <= 0
+    old_value = quantity.from_canonical(old_canonical, factor)
+    new_value = quantity.from_canonical(new_canonical, factor)
+    conn.execute(
+        """UPDATE pantry_items
+           SET quantity_text = ?, canonical_quantity = ?, updated_at = ?, updated_by = ?
+           WHERE id = ?""",
+        (quantity.format_quantity(new_value), new_canonical, now_iso(), user_id, item_id),
+    )
+    _record_adjustment(
+        conn, item_id, item["food_id"], reason=reason, user_id=user_id,
+        delta_quantity_text=quantity.format_quantity(new_value - old_value),
+        canonical_delta=applied_delta, cook_log_id=cook_log_id, batch_id=batch_id,
+    )
+    if commit:
+        conn.commit()
+    return applied_delta
 
 
 def new_batch_id() -> str:

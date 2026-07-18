@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Pantry deductions · {{ recipe.title }}{% endblock %}
+{% block content %}
+
+{% if applied is not none %}
+{# --- Applied: show what changed, offer one-tap Undo --- #}
+<header class="page-head"><h1>Pantry updated</h1></header>
+{% if summary %}
+<ul class="deduct-summary card">
+  {% for line in summary %}<li>{{ line }}</li>{% endfor %}
+</ul>
+{% else %}
+<p class="muted card">Nothing needed deducting.</p>
+{% endif %}
+<div class="form-actions">
+  <a href="/recipes/{{ recipe.slug }}" class="btn-primary">Done</a>
+  {% if summary %}
+  <form method="post" action="/recipes/{{ recipe.slug }}/deductions/undo">
+    <input type="hidden" name="batch_id" value="{{ applied }}">
+    <button type="submit" class="btn-secondary">Undo</button>
+  </form>
+  {% endif %}
+</div>
+
+{% else %}
+{# --- Review: propose deductions before applying --- #}
+<header class="page-head"><h1>Update the pantry?</h1></header>
+<p class="muted">From cooking &ldquo;{{ recipe.title }}&rdquo; ({{ proposal.servings }} servings). Untick anything you don&rsquo;t want to deduct.</p>
+
+<form method="post" action="/recipes/{{ recipe.slug }}/deductions" class="card deduct-form">
+  <input type="hidden" name="cook_log_id" value="{{ cook_log_id }}">
+  <input type="hidden" name="servings" value="{{ proposal.servings }}">
+
+  {% if proposal.deductible_lines %}
+  <ul class="deduct-list">
+    {% for line in proposal.deductible_lines %}
+    <li class="deduct-item">
+      <label class="check">
+        <input type="checkbox" name="line" value="{{ line.ingredient_id }}"{% if line.eligible or line.kind == 'exact' %} checked{% endif %}>
+        <span class="deduct-food">{{ line.pantry_item_name }}</span>
+      </label>
+      <span class="deduct-amount">
+        {% if line.kind == 'exact' %}{{ line.used_text }}
+        {% elif line.kind == 'gauge' %}step down &rarr; {{ line.used_text }}
+        {% else %}mark out{% endif %}
+      </span>
+      {% if not line.food_confirmed %}<span class="chip-tag" title="New food, review before trusting">pending</span>{% endif %}
+      <span class="muted deduct-from">{{ line.label }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+
+  <label class="check"><input type="checkbox" name="trust" value="on"> Remember these choices for next time</label>
+  <label class="check"><input type="checkbox" name="auto" value="on"> Auto-apply when I cook this again</label>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Deduct from pantry</button>
+    <a href="/recipes/{{ recipe.slug }}" class="btn-secondary">Not now</a>
+  </div>
+  {% else %}
+  <p class="muted">Nothing in your pantry matches this recipe yet.</p>
+  <a href="/recipes/{{ recipe.slug }}" class="btn-primary">Done</a>
+  {% endif %}
+</form>
+
+{% if proposal and proposal.lines | selectattr('kind', 'equalto', 'skip') | list %}
+<details class="deduct-skipped">
+  <summary class="muted">Skipped ({{ proposal.lines | selectattr('kind', 'equalto', 'skip') | list | length }})</summary>
+  <ul class="muted">
+    {% for line in proposal.lines if line.kind == 'skip' %}
+    <li>{{ line.label }} &mdash; {{ line.reason }}</li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% endif %}
+{% endblock %}

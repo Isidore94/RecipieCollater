@@ -14,7 +14,7 @@ from starlette.datastructures import FormData
 
 from app.auth import current_user, require_csrf
 from app.deps import get_db
-from app.services import cooking, recipes
+from app.services import cooking, deductions, recipes
 from app.services.users import User
 from app.templating import render
 
@@ -87,10 +87,98 @@ async def record_after_cook(
             promote=_form_str(form, "promote") in ("on", "true", "1"),
         )
         try:
-            cooking.record_cook(db, detail.id, data, user_id=user.id)
+            cook_log_id = cooking.record_cook(db, detail.id, data, user_id=user.id)
         except cooking.CookError as exc:
             return render(
                 request, "cook/after_cook.html", active_nav=None, user=user, recipe=detail,
                 error=str(exc), status_code=400,
             )
+    # Cook recorded. If the pantry has anything to deduct, either auto-apply a trusted recipe or
+    # send the user to review the proposal first (docs/06 §2.1).
+    proposal = deductions.propose(
+        db, detail.id, servings_made=data.servings_made, cook_log_id=cook_log_id
+    )
+    if not proposal.deductible_lines:
+        return RedirectResponse(f"/recipes/{slug}", status_code=303)
+    if proposal.auto_ready:
+        eligible = {line.ingredient_id for line in proposal.deductible_lines if line.eligible}
+        result = deductions.apply(
+            db, detail.id, cook_log_id, line_ids=eligible,
+            servings_made=data.servings_made, user_id=user.id,
+        )
+        return RedirectResponse(
+            f"/recipes/{slug}/deductions?cook={cook_log_id}&applied={result.batch_id}",
+            status_code=303,
+        )
+    return RedirectResponse(f"/recipes/{slug}/deductions?cook={cook_log_id}", status_code=303)
+
+
+# --------------------------------------------------------------------------------------
+# Cook-through pantry deductions (Phase 4c): review -> apply -> undo
+# --------------------------------------------------------------------------------------
+
+
+@router.get("/{slug}/deductions")
+def deductions_review(
+    request: Request,
+    slug: str,
+    cook: int,
+    applied: str | None = None,
+    servings: str | None = None,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is None:
+        return RedirectResponse("/cookbook", status_code=303)
+    if applied:  # already applied (auto-apply or after a review submit): show summary + Undo
+        return render(
+            request, "cook/deductions.html", active_nav=None, user=user, recipe=detail,
+            proposal=None, applied=applied, summary=deductions.batch_summary(db, applied),
+            cook_log_id=cook,
+        )
+    proposal = deductions.propose(db, detail.id, servings_made=servings, cook_log_id=cook)
+    return render(
+        request, "cook/deductions.html", active_nav=None, user=user, recipe=detail,
+        proposal=proposal, applied=None, summary=None, cook_log_id=cook,
+    )
+
+
+@router.post("/{slug}/deductions")
+async def deductions_apply(
+    request: Request,
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
+    if detail is None:
+        return RedirectResponse("/cookbook", status_code=303)
+    async with request.form() as form:
+        cook_log_id = _form_int(form, "cook_log_id")
+        servings = _form_str(form, "servings") or None
+        line_ids = {int(v) for v in form.getlist("line") if isinstance(v, str) and v.isdigit()}
+        result = deductions.apply(
+            db, detail.id, cook_log_id, line_ids=line_ids, servings_made=servings,
+            trust=_form_str(form, "trust") in ("on", "1", "true"),
+            auto=_form_str(form, "auto") in ("on", "1", "true"), user_id=user.id,
+        )
+    return RedirectResponse(
+        f"/recipes/{slug}/deductions?cook={cook_log_id}&applied={result.batch_id}", status_code=303
+    )
+
+
+@router.post("/{slug}/deductions/undo")
+async def deductions_undo(
+    request: Request,
+    slug: str,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    async with request.form() as form:
+        batch_id = _form_str(form, "batch_id")
+        if batch_id:
+            deductions.undo(db, batch_id, user_id=user.id)
     return RedirectResponse(f"/recipes/{slug}", status_code=303)
