@@ -26,15 +26,17 @@ def safe_url(value: str | None) -> str:
 
 _TEMPLATES.env.filters["safe_url"] = safe_url
 
-# Primary navigation (docs/07-ui-ux.md §2). Interim Phase-4.6 set: Home leads with food,
-# Shopping earns a tab (it is the most-used away-from-home surface). Plan/Chat return as tabs
-# when Phase 5 ships them; their routes stay reachable.
+# Primary navigation (docs/07-ui-ux.md §2). Phase-5 full set. Shopping keeps its own tab
+# (the household's most-used away-from-home surface) rather than folding under Plan, so the tab
+# bar carries six destinations; Inbox stays reachable via the Cookbook library-nav and Home's
+# "new to try". Plan owns the week board; Chat is the assistant.
 NAV_ITEMS: list[dict[str, str]] = [
     {"key": "home", "label": "Home", "href": "/", "icon": "home"},
     {"key": "cookbook", "label": "Cookbook", "href": "/cookbook", "icon": "book"},
     {"key": "pantry", "label": "Pantry", "href": "/pantry", "icon": "box"},
     {"key": "shopping", "label": "Shopping", "href": "/shopping", "icon": "cart"},
-    {"key": "inbox", "label": "Inbox", "href": "/inbox", "icon": "inbox"},
+    {"key": "plan", "label": "Plan", "href": "/plan", "icon": "calendar"},
+    {"key": "chat", "label": "Chat", "href": "/chat", "icon": "chat"},
 ]
 
 

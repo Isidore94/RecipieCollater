@@ -24,11 +24,6 @@ from app.templating import render
 
 router = APIRouter()
 
-_EMPTY_TABS = {
-    "plan": ("Plan", "Weekly meal plans arrive with Phase 5."),
-    "chat": ("Assistant", "The AI assistant arrives with Phase 5."),
-}
-
 # In-flight ingest job statuses -> the label the inbox shows on each job chip.
 _JOB_STATUS_LABEL = {
     "queued": "Queued",
@@ -238,18 +233,3 @@ def archive(
     return _render_library(request, db, user, "archived", "Archive", q)
 
 
-def _render_tab(request: Request, user: User, key: str) -> Response:
-    title, blurb = _EMPTY_TABS[key]
-    return render(
-        request, "tab_empty.html", active_nav=None, user=user, tab_title=title, tab_blurb=blurb
-    )
-
-
-@router.get("/plan")
-def plan(request: Request, user: User = Depends(current_user)) -> Response:
-    return _render_tab(request, user, "plan")
-
-
-@router.get("/chat")
-def chat(request: Request, user: User = Depends(current_user)) -> Response:
-    return _render_tab(request, user, "chat")

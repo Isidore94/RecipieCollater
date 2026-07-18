@@ -139,3 +139,14 @@ def test_inline_rename_roundtrip(
     )
     assert resp.status_code == 303
     assert "Tuesday Chili" in admin_client.get(f"/recipes/{slug}").text
+
+
+def test_phase5_6_screens_render(admin_client: TestClient, migrated_db: sqlite3.Connection) -> None:
+    slug = _setup_world(migrated_db)
+    assert admin_client.get("/plan").status_code == 200
+    assert admin_client.get("/preferences").status_code == 200
+    assert admin_client.get("/chat").status_code == 200
+    assert admin_client.get("/admin/dashboard").status_code == 200
+    # the new-recipe form carries the photo-import box
+    assert "Read from photo" in admin_client.get("/recipes/new").text
+    assert slug  # sanity

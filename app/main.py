@@ -26,6 +26,7 @@ from app.db import connect, run_migrations
 from app.logging_config import configure_logging, get_logger
 from app.routers import (
     admin,
+    assistant,
     auth,
     cooking,
     foods,
@@ -34,6 +35,8 @@ from app.routers import (
     onboarding,
     pages,
     pantry,
+    planning,
+    preferences,
     receipts,
     recipes,
     shopping,
@@ -129,6 +132,9 @@ def create_app() -> FastAPI:
     app.include_router(shopping.router)
     app.include_router(foods.router)
     app.include_router(receipts.router)
+    app.include_router(planning.router)
+    app.include_router(preferences.router)
+    app.include_router(assistant.router)
     app.include_router(pages.router)
 
     return app

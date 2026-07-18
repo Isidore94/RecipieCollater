@@ -497,3 +497,77 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .title-rename summary { cursor: pointer; list-style: none; color: var(--ink-soft); font-size: 15px; }
 .title-rename-form { display: flex; gap: 6px; margin-top: 6px; }
 .title-rename-form input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); min-width: 260px; }
+
+/* ---- Phase 5: meal plan, preferences, assistant ---- */
+
+/* Week board */
+.week-nav { display: flex; gap: 8px; margin-bottom: 12px; }
+.plan-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.plan-tools form { margin: 0; }
+.week-board { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 720px) { .week-board { grid-template-columns: repeat(7, 1fr); gap: 6px; } }
+.day-col { border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--surface); min-width: 0; }
+.day-col.is-today { border-color: var(--brand); }
+.day-head { font-size: 14px; margin: 0 0 6px; }
+.day-entries { list-style: none; padding: 0; margin: 0 0 6px; }
+.plan-entry { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; padding: 6px; border-radius: 8px; background: var(--paper); margin-bottom: 5px; }
+.plan-entry.is-note { border-left: 3px solid var(--ink-soft); }
+.plan-entry-body a { text-decoration: none; font-size: 14px; }
+.plan-slot { display: block; font-size: 11px; }
+.day-add summary { cursor: pointer; font-size: 13px; color: var(--brand); }
+.day-add-form { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.day-add-form select, .day-add-form input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); width: 100%; }
+.day-add-row { display: flex; gap: 5px; }
+.day-add-row input { flex: 1; min-width: 0; }
+.menus-card h2 { margin: 0 0 8px; }
+.menus-row { margin-bottom: 10px; }
+.menu-list { list-style: none; padding: 0; margin: 0; }
+.menu-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.plan-assistant-hint { margin-top: 12px; }
+
+/* Preferences */
+.pref-groups { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
+@media (min-width: 720px) { .pref-groups { grid-template-columns: 1fr 1fr; } }
+.pref-group h2 { font-size: 15px; margin: 0 0 8px; }
+.pref-chip { display: inline-flex; align-items: center; gap: 4px; }
+.pref-chip form { margin: 0; }
+.pref-add { display: flex; gap: 6px; margin-top: 8px; }
+.pref-add input { flex: 1; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+
+/* Assistant */
+.chat-intro { margin-bottom: 14px; }
+.chat-examples { margin: 6px 0 0; padding-left: 18px; color: var(--ink-soft); line-height: 1.7; }
+.chat-thread { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.chat-msg { max-width: 92%; }
+.chat-user { align-self: flex-end; }
+.chat-assistant { align-self: flex-start; }
+.chat-bubble { margin: 0; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; }
+.chat-user .chat-bubble { background: var(--brand); color: var(--brand-ink); border-bottom-right-radius: 4px; }
+.chat-assistant .chat-bubble { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.proposal { margin-top: 8px; }
+.proposal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.proposal-list { margin: 0 0 8px; padding-left: 18px; font-size: 14px; line-height: 1.6; }
+.proposal-actions { display: flex; gap: 8px; }
+.proposal-actions form { margin: 0; }
+.proposal-accepted { opacity: .7; }
+.proposal-dismissed { opacity: .5; }
+.chat-compose { display: flex; gap: 8px; align-items: flex-end; }
+.chat-compose textarea { flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); font: inherit; resize: vertical; }
+.chat-foot { margin-top: 10px; }
+
+/* ---- Phase 6: admin dashboard + photo import ---- */
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+@media (min-width: 720px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
+.stat { text-align: center; padding: 14px 10px; }
+.stat-num { display: block; font-size: 26px; font-weight: 700; font-family: var(--font-display); }
+.stat-label { font-size: 12px; color: var(--ink-soft); }
+.stat-bad { border-color: var(--danger); }
+.stat-bad .stat-num { color: var(--danger); }
+.stat-warn { border-color: #c98a1e; }
+.sys-list { list-style: none; padding: 0; margin: 0; line-height: 1.9; }
+.fail-list { list-style: none; padding: 0; margin: 0; }
+.fail-item { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.fail-url { flex: 1; overflow: hidden; text-overflow: ellipsis; color: var(--ink-soft); }
+.fail-msg { flex-basis: 100%; }
+.draft-photo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.draft-photo label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--ink-soft); }
