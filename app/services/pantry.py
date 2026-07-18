@@ -303,7 +303,7 @@ def set_exact(
         """UPDATE pantry_items
            SET quantity_text = ?, canonical_quantity = ?, updated_at = ?, updated_by = ?
            WHERE id = ?""",
-        (quantity.format_quantity(new_value), new_canonical, stamp, user_id, item_id),
+        (quantity.plain_str(new_value), new_canonical, stamp, user_id, item_id),
     )
     _record_adjustment(
         conn, item_id, item["food_id"], reason=reason, user_id=user_id,
@@ -335,7 +335,7 @@ def step_exact(
     if new_value < 0:
         new_value = Decimal(0)
     set_exact(
-        conn, item_id, quantity.format_quantity(new_value), reason=reason, user_id=user_id,
+        conn, item_id, quantity.plain_str(new_value), reason=reason, user_id=user_id,
         commit=commit,
     )
 
@@ -667,7 +667,7 @@ def deduct_canonical(
         """UPDATE pantry_items
            SET quantity_text = ?, canonical_quantity = ?, updated_at = ?, updated_by = ?
            WHERE id = ?""",
-        (quantity.format_quantity(new_value), new_canonical, now_iso(), user_id, item_id),
+        (quantity.plain_str(new_value), new_canonical, now_iso(), user_id, item_id),
     )
     _record_adjustment(
         conn, item_id, item["food_id"], reason=reason, user_id=user_id,

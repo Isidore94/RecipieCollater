@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -36,6 +37,7 @@ from app.routers import (
     shopping,
     shortcut,
 )
+from app.services.quantity import QuantityError
 from app.services.units import seed_core_units
 
 log = get_logger(__name__)
@@ -64,6 +66,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     yield
     log.info("shutdown")
+
+
+async def _quantity_error_handler(request: Request, exc: Exception) -> Response:
+    return PlainTextResponse("That amount could not be read as a number.", status_code=400)
 
 
 def create_app() -> FastAPI:
@@ -100,6 +106,8 @@ def create_app() -> FastAPI:
     app.add_exception_handler(AuthRequired, auth_required_handler)
     app.add_exception_handler(IngestAuthError, ingest_auth_handler)
     app.add_exception_handler(CSRFError, csrf_handler)
+    # A bad amount string (e.g. a non-numeric ?servings=) is a client error, not a 500.
+    app.add_exception_handler(QuantityError, _quantity_error_handler)
 
     app.mount(
         "/static",

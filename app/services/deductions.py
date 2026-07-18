@@ -191,12 +191,16 @@ def _propose_line(conn: sqlite3.Connection, row: sqlite3.Row, factor: Decimal) -
         scaled = quantity.parse_quantity(row["quantity_text"]) * factor
         used_canonical = quantity.to_canonical(scaled, int(row["unit_factor"]))
         eligible = confirmed and trusted
+        # Show the amount in the PANTRY item's unit (what actually gets decremented), not the
+        # recipe's - the two units can differ within a dimension (e.g. recipe tbsp, pantry ml).
+        item_factor = item_unit.to_canonical_microunits or int(row["unit_factor"])
+        shown = quantity.convert(scaled, int(row["unit_factor"]), item_factor)
         unit_label = item_unit.abbreviation or item_unit.name
         return ProposedLine(
             ingredient_id=int(row["id"]), label=row["original_text"], food_id=row["food_id"],
             food_name=row["food_name"], food_confirmed=confirmed, pantry_item_id=item.id,
             pantry_item_name=item.display_name, kind="exact",
-            used_text=f"-{quantity.format_quantity(scaled)} {unit_label}",
+            used_text=f"-{quantity.format_quantity(shown)} {unit_label}",
             used_canonical=used_canonical, reason=None, trusted=trusted, eligible=eligible,
         )
 
@@ -232,10 +236,18 @@ def apply(
 ) -> ApplyResult:
     """Apply the chosen deductible lines in one batch. Re-proposes server-side, so a stale/hostile
     client can't deduct a line the recipe no longer supports. Optionally remembers trust + auto."""
+    # Idempotency: a cook deducts at most once. A re-POST (back button, double-click, second tab)
+    # or a revisit of the review form returns the existing batch instead of deducting again.
+    if cook_log_id is not None:
+        existing = batch_for_cook(conn, cook_log_id)
+        if existing is not None:
+            return ApplyResult(batch_id=existing, applied=batch_summary(conn, existing))
+
     proposal = propose(conn, recipe_id, servings_made=servings_made, cook_log_id=cook_log_id)
     batch_id = pantry.new_batch_id()
     stamp = now_iso()
     applied: list[str] = []
+    stepped: set[int] = set()  # gauge/binary items already stepped this cook (never step one twice)
 
     for line in proposal.deductible_lines:
         if line.ingredient_id not in line_ids or line.pantry_item_id is None:
@@ -245,17 +257,21 @@ def apply(
                 conn, line.pantry_item_id, line.used_canonical, cook_log_id=cook_log_id,
                 batch_id=batch_id, user_id=user_id, commit=False,
             )
-        elif line.kind == "gauge":
-            pantry.set_gauge(
-                conn, line.pantry_item_id, _step_down(_current_gauge(conn, line.pantry_item_id)),
-                reason="cook", cook_log_id=cook_log_id, batch_id=batch_id, user_id=user_id,
-                commit=False,
-            )
-        elif line.kind == "binary":
-            pantry.set_have(
-                conn, line.pantry_item_id, False, reason="cook", cook_log_id=cook_log_id,
-                batch_id=batch_id, user_id=user_id, commit=False,
-            )
+        elif line.kind in ("gauge", "binary"):
+            if line.pantry_item_id in stepped:
+                continue  # a second recipe line for the same gauge/binary item must not re-step it
+            stepped.add(line.pantry_item_id)
+            if line.kind == "gauge":
+                pantry.set_gauge(
+                    conn, line.pantry_item_id,
+                    _step_down(_current_gauge(conn, line.pantry_item_id)), reason="cook",
+                    cook_log_id=cook_log_id, batch_id=batch_id, user_id=user_id, commit=False,
+                )
+            else:
+                pantry.set_have(
+                    conn, line.pantry_item_id, False, reason="cook", cook_log_id=cook_log_id,
+                    batch_id=batch_id, user_id=user_id, commit=False,
+                )
         else:
             continue
         applied.append(f"{line.pantry_item_name} {line.used_text}")
@@ -305,13 +321,31 @@ def set_mapping(
         conn.commit()
 
 
+def is_undone(conn: sqlite3.Connection, batch_id: str) -> bool:
+    """Whether this cook batch has already been reversed (guards a replayed Undo)."""
+    return (
+        conn.execute(
+            "SELECT 1 FROM pantry_adjustments WHERE batch_id = ? AND source = 'undo' LIMIT 1",
+            (batch_id,),
+        ).fetchone()
+        is not None
+    )
+
+
 def undo(conn: sqlite3.Connection, batch_id: str, *, user_id: int | None = None) -> int:
-    """Reverse a cook's deduction batch with compensating adjustments. Returns lines reversed."""
+    """Reverse a cook's deduction batch with compensating adjustments. Returns lines reversed.
+
+    Single-shot: a replayed Undo (double-click, page reload, revisit) is a no-op, so the pantry is
+    never over-restored. A terminal 'undo' marker row records that the batch was reversed.
+    """
+    if is_undone(conn, batch_id):
+        return 0
     rows = conn.execute(
         "SELECT * FROM pantry_adjustments WHERE batch_id = ? AND reason = 'cook' ORDER BY id",
         (batch_id,),
     ).fetchall()
     reversed_count = 0
+    restored_gauges: set[int] = set()  # restore each gauge/binary item once, to its earliest state
     for adj in rows:
         item_id = adj["pantry_item_id"]
         if item_id is None:  # the item was deleted since; nothing to restore
@@ -326,10 +360,16 @@ def undo(conn: sqlite3.Connection, batch_id: str, *, user_id: int | None = None)
                 commit=False,
             )
         elif item.quantity_mode == "gauge" and adj["from_gauge"] is not None:
+            if item_id in restored_gauges:
+                continue
+            restored_gauges.add(item_id)
             pantry.set_gauge(
                 conn, item_id, adj["from_gauge"], reason="correction", user_id=user_id, commit=False
             )
         elif item.quantity_mode == "binary" and adj["from_have"] is not None:
+            if item_id in restored_gauges:
+                continue
+            restored_gauges.add(item_id)
             pantry.set_have(
                 conn, item_id, bool(adj["from_have"]), reason="correction", user_id=user_id,
                 commit=False,
@@ -337,6 +377,12 @@ def undo(conn: sqlite3.Connection, batch_id: str, *, user_id: int | None = None)
         else:
             continue
         reversed_count += 1
+    # Terminal marker: a second undo(batch_id) selects this and returns 0.
+    conn.execute(
+        "INSERT INTO pantry_adjustments (reason, source, batch_id, user_id) "
+        "VALUES ('correction', 'undo', ?, ?)",
+        (batch_id, user_id),
+    )
     conn.commit()
     return reversed_count
 
@@ -361,6 +407,30 @@ def batch_summary(conn: sqlite3.Connection, batch_id: str) -> list[str]:
         elif r["to_have"] is not None:
             summary.append(f"{r['name']} → {'have' if r['to_have'] else 'out'}")
     return summary
+
+
+def cook_recipe_id(conn: sqlite3.Connection, cook_log_id: int) -> int | None:
+    """The recipe a cook_log belongs to (None if the id is unknown) - guards a bad FK from a form."""
+    row = conn.execute("SELECT recipe_id FROM cook_log WHERE id = ?", (cook_log_id,)).fetchone()
+    return int(row["recipe_id"]) if row else None
+
+
+def cook_servings(conn: sqlite3.Connection, cook_log_id: int) -> str | None:
+    """The servings a cook was recorded at, so a review never re-proposes at base servings."""
+    row = conn.execute(
+        "SELECT servings_made FROM cook_log WHERE id = ?", (cook_log_id,)
+    ).fetchone()
+    return row["servings_made"] if row else None
+
+
+def batch_recipe_id(conn: sqlite3.Connection, batch_id: str) -> int | None:
+    """The recipe whose cook owns a batch, so Undo can be bound to the right recipe."""
+    row = conn.execute(
+        "SELECT cl.recipe_id FROM pantry_adjustments pa JOIN cook_log cl ON cl.id = pa.cook_log_id "
+        "WHERE pa.batch_id = ? AND pa.reason = 'cook' LIMIT 1",
+        (batch_id,),
+    ).fetchone()
+    return int(row["recipe_id"]) if row else None
 
 
 def batch_for_cook(conn: sqlite3.Connection, cook_log_id: int) -> str | None:

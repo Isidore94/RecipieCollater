@@ -131,16 +131,20 @@ def deductions_review(
     detail = recipes.get_recipe_by_slug(db, slug)
     if detail is None:
         return RedirectResponse("/cookbook", status_code=303)
-    if applied:  # already applied (auto-apply or after a review submit): show summary + Undo
+    # If this cook already has a batch, always show its summary - never re-offer the review form
+    # (which could deduct a second time). Otherwise re-propose at the cook's actual servings.
+    batch = applied or deductions.batch_for_cook(db, cook)
+    if batch:
         return render(
             request, "cook/deductions.html", active_nav=None, user=user, recipe=detail,
-            proposal=None, applied=applied, summary=deductions.batch_summary(db, applied),
-            cook_log_id=cook,
+            proposal=None, applied=batch, summary=deductions.batch_summary(db, batch),
+            undone=deductions.is_undone(db, batch), cook_log_id=cook,
         )
+    servings = servings or deductions.cook_servings(db, cook)
     proposal = deductions.propose(db, detail.id, servings_made=servings, cook_log_id=cook)
     return render(
         request, "cook/deductions.html", active_nav=None, user=user, recipe=detail,
-        proposal=proposal, applied=None, summary=None, cook_log_id=cook,
+        proposal=proposal, applied=None, summary=None, undone=False, cook_log_id=cook,
     )
 
 
@@ -157,6 +161,10 @@ async def deductions_apply(
         return RedirectResponse("/cookbook", status_code=303)
     async with request.form() as form:
         cook_log_id = _form_int(form, "cook_log_id")
+        # The cook_log_id lands in a foreign-keyed adjustment; verify it exists AND belongs to this
+        # recipe first, so a bad/forged id can't 500 on the FK or deduct against another recipe.
+        if cook_log_id is None or deductions.cook_recipe_id(db, cook_log_id) != detail.id:
+            return RedirectResponse(f"/recipes/{slug}", status_code=303)
         servings = _form_str(form, "servings") or None
         line_ids = {int(v) for v in form.getlist("line") if isinstance(v, str) and v.isdigit()}
         result = deductions.apply(
@@ -177,8 +185,11 @@ async def deductions_undo(
     user: User = Depends(current_user),
     _: None = Depends(require_csrf),
 ) -> Response:
+    detail = recipes.get_recipe_by_slug(db, slug)
     async with request.form() as form:
         batch_id = _form_str(form, "batch_id")
-        if batch_id:
+        # Bind the batch to this recipe's cook so one recipe's Undo can't reverse another's batch.
+        owner = deductions.batch_recipe_id(db, batch_id) if batch_id else None
+        if detail is not None and owner == detail.id:
             deductions.undo(db, batch_id, user_id=user.id)
     return RedirectResponse(f"/recipes/{slug}", status_code=303)

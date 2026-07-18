@@ -123,9 +123,12 @@
         <input type="hidden" name="next" value="{{ back }}">
         <button name="reason" value="manual_remove" class="btn-secondary">Used up</button>
         <button name="reason" value="spoiled" class="btn-secondary">Went bad</button>
-        <button name="reason" value="manual_remove" formmethod="post" class="btn-danger"
-                onclick="this.form.delete.value='1'">Delete</button>
-        <input type="hidden" name="delete" value="0">
+      </form>
+      <form method="post" action="/pantry/items/{{ item.id }}/remove" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <input type="hidden" name="reason" value="manual_remove">
+        <input type="hidden" name="delete" value="1">
+        <button type="submit" class="btn-danger">Delete</button>
       </form>
     </details>
   </li>

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from app.services import deductions, pantry, recipes
+from app.services import cooking, deductions, pantry, recipes
 from app.services.units import seed_core_units
 
 
@@ -185,3 +185,62 @@ def test_apply_ignores_lines_not_selected(migrated_db: sqlite3.Connection) -> No
     deductions.apply(migrated_db, rid, None, line_ids={flour_line.ingredient_id})  # only flour
     assert pantry.get_item(migrated_db, flour).quantity_text == "800"
     assert pantry.get_item(migrated_db, sugar).quantity_text == "500"  # untouched
+
+
+# --- Regression tests for the Phase 4 adversarial review findings ---
+
+
+def test_undo_is_idempotent(migrated_db: sqlite3.Connection) -> None:
+    # Finding #1: replaying an Undo must NOT keep re-adding the deducted amount.
+    seed_core_units(migrated_db)
+    rid = _recipe(migrated_db, [_ing("200", "grams", "flour")])
+    loc = pantry.create_location(migrated_db, "Pantry")
+    item = _exact_item(migrated_db, loc, "flour", "1000", "grams")
+    line = _line(deductions.propose(migrated_db, rid), "flour")
+    result = deductions.apply(migrated_db, rid, None, line_ids={line.ingredient_id})
+
+    assert deductions.undo(migrated_db, result.batch_id) == 1
+    assert pantry.get_item(migrated_db, item).quantity_text == "1000"
+    assert deductions.undo(migrated_db, result.batch_id) == 0  # replay is a no-op
+    assert pantry.get_item(migrated_db, item).quantity_text == "1000"  # not over-restored
+
+
+def test_apply_is_idempotent_per_cook(migrated_db: sqlite3.Connection) -> None:
+    # Finding #2: the same cook must not be deducted twice.
+    seed_core_units(migrated_db)
+    rid = _recipe(migrated_db, [_ing("200", "grams", "flour")])
+    loc = pantry.create_location(migrated_db, "Pantry")
+    item = _exact_item(migrated_db, loc, "flour", "1000", "grams")
+    cook_id = cooking.record_cook(migrated_db, rid, cooking.CookCaptureInput(servings_made="4"))
+    line = _line(deductions.propose(migrated_db, rid, cook_log_id=cook_id), "flour")
+
+    first = deductions.apply(migrated_db, rid, cook_id, line_ids={line.ingredient_id})
+    second = deductions.apply(migrated_db, rid, cook_id, line_ids={line.ingredient_id})
+    assert first.batch_id == second.batch_id  # same batch returned, not a new deduction
+    assert pantry.get_item(migrated_db, item).quantity_text == "800"  # deducted once only
+
+
+def test_gauge_item_stepped_once_per_cook(migrated_db: sqlite3.Connection) -> None:
+    # Finding #5: a gauge item used by two recipe lines steps down once, not twice.
+    seed_core_units(migrated_db)
+    rid = _recipe(migrated_db, [_ing("100", "grams", "rice"), _ing("50", "grams", "rice")])
+    loc = pantry.create_location(migrated_db, "Pantry")
+    item = pantry.add_item(
+        migrated_db,
+        pantry.PantryItemInput(
+            display_name="Rice", location_id=loc, quantity_mode="gauge", food="rice"
+        ),
+    )
+    ids = {ln.ingredient_id for ln in deductions.propose(migrated_db, rid).deductible_lines}
+    deductions.apply(migrated_db, rid, None, line_ids=ids)
+    assert pantry.get_item(migrated_db, item).gauge == "half"  # full -> half once, not full -> low
+
+
+def test_cross_unit_deduction_display(migrated_db: sqlite3.Connection) -> None:
+    # Finding #3: the shown amount uses the PANTRY item's unit, not the recipe's.
+    seed_core_units(migrated_db)
+    rid = _recipe(migrated_db, [_ing("2", "tbsp", "oil")])
+    loc = pantry.create_location(migrated_db, "Pantry")
+    _exact_item(migrated_db, loc, "oil", "500", "ml")  # pantry tracks oil in ml
+    line = _line(deductions.propose(migrated_db, rid), "oil")
+    assert "ml" in line.used_text and "tbsp" not in line.used_text

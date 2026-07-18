@@ -130,5 +130,14 @@ def format_quantity(value: Decimal) -> str:
     return f"{whole} {fraction_text}" if whole else fraction_text
 
 
-def _plain_decimal(value: Decimal) -> str:
+def plain_str(value: Decimal) -> str:
+    """An exact plain-decimal string (never fraction-snapped) that round-trips via parse_quantity.
+
+    Use this to STORE an amount that will be read back as the source of truth (e.g. a pantry item's
+    quantity_text), so kitchen-fraction rounding from format_quantity can never corrupt the value.
+    """
     return format(value.normalize(), "f")
+
+
+def _plain_decimal(value: Decimal) -> str:
+    return plain_str(value)

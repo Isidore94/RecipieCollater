@@ -14,11 +14,13 @@
 {% endif %}
 <div class="form-actions">
   <a href="/recipes/{{ recipe.slug }}" class="btn-primary">Done</a>
-  {% if summary %}
+  {% if summary and not undone %}
   <form method="post" action="/recipes/{{ recipe.slug }}/deductions/undo">
     <input type="hidden" name="batch_id" value="{{ applied }}">
     <button type="submit" class="btn-secondary">Undo</button>
   </form>
+  {% elif undone %}
+  <span class="muted">Reversed.</span>
   {% endif %}
 </div>
 
