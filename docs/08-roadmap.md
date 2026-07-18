@@ -142,6 +142,30 @@ genuinely usable day-to-day, and lay the deterministic groundwork the Phase-5 as
   pasted Instacart order does the same; a second receipt from the same store resolves its
   repeated lines without model disagreement (aliases hit first).
 
+## Phase 5 / 6 — DONE (2026-07-18)
+
+Both remaining pillars shipped together. Notes on what was built vs. the original spec:
+
+**Phase 5 (planning + assistant) — LIVE.** Migration 014. The week board (`/plan`) is deterministic
+and AI-free: recipe/note entries with per-entry servings, prev/next week nav, one-tap
+plan→shopping (reuses the 4.6 trip builder), saved menus (reusable templates; a menu survives a
+recipe deletion via ON DELETE SET NULL and skips the orphan), and iCal export. Household
+preferences (`/preferences`): allergy/exclude are hard, the rest soft, plus weekday/weekend time
+budgets. The assistant (`/chat`) follows the proposal pattern — deterministic hard-filtered
+candidate set + pantry summary first, one structured model turn, proposals persisted as pending
+records, acceptance re-validates and applies deterministically + idempotently. **v1 divergence:**
+single structured request/response per turn (forced-tool adapter), NOT streaming SSE + SDK
+tool-runner (recorded in docs/05). Big-event mode and semantic candidate ranking are deferred.
+
+**Phase 6 (resilience + polish) — the evidence-justified subset.** Admin dashboard
+(`/admin/dashboard`: queue health, recent ingest failures, AI spend per provider vs caps, DB size,
+schema version, worker heartbeat, last healthy backup, yt-dlp version); nightly cookbook export
+(`python -m app.manage export-cookbook <dir>` → per-recipe JSON + Markdown + index, cron-able);
+cookbook **photo import** (vision → prefilled recipe form, reusing the 4.7 image path). **Deferred
+as evidence-gated** (per the roadmap's own "only if evidence justifies"): semantic/vector search,
+trusted HTTPS, Tailscale, and the full accessibility/perf regression checklist — to revisit once
+real usage shows the need.
+
 ## Phase 5 — Meal planning and assistant
 
 - Phase-owned migrations for meal plans, saved menus, household preferences, AI conversations, versioned proposals, and usage records.

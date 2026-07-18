@@ -91,7 +91,18 @@ Assistant responses may create separate versioned proposal records (meal plan, p
 
 ### Streaming
 
-SSE relay: browser POSTs the chat message → FastAPI `StreamingResponse(media_type="text/event-stream")` forwards text-delta chunks from the provider's stream (Claude `messages.stream()` or OpenAI streaming responses, normalized by the adapter to a single delta event) → browser reads via `fetch()` + ReadableStream (EventSource is GET-only). SSE over WebSocket deliberately: unidirectional, auto-reconnect, plain HTTP, trivial on LAN. API keys never leave the server.
+**v1 status (Phase 5c, 2026-07-18, recorded per the docs-as-contract rule):** the assistant ships
+as a **single structured request/response per turn** via the forced-tool adapter (the same offline-
+testable pattern as extract/draft/receipt), NOT the streaming SSE + SDK tool-runner loop below. The
+load-bearing contract is preserved — application code builds the hard-filtered candidate set and
+pantry summary first (`assistant.build_context`), the model reasons over that and returns a
+validated `AssistantResponse` (message + optional meal-plan / pantry-update proposals), and
+acceptance re-validates and applies through deterministic services in one idempotent transaction.
+Server-rendered htmx, no SSE. Streaming and multi-tool loops are a post-v1 enhancement (they need
+idempotency tests around every mid-stream tool call and provider transition; not worth the risk at
+family scale for a one-shot planning turn).
+
+Planned streaming design (post-v1): SSE relay: browser POSTs the chat message → FastAPI `StreamingResponse(media_type="text/event-stream")` forwards text-delta chunks from the provider's stream (Claude `messages.stream()` or OpenAI streaming responses, normalized by the adapter to a single delta event) → browser reads via `fetch()` + ReadableStream (EventSource is GET-only). SSE over WebSocket deliberately: unidirectional, auto-reconnect, plain HTTP, trivial on LAN. API keys never leave the server.
 
 ### Prompt-caching gotchas (encode in the implementation)
 

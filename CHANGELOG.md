@@ -19,6 +19,39 @@ Schema v13 (migration 013). A grocery trip becomes pantry restocks in one review
   tracking new foods, and checks purchases off the shopping list. "Scan receipt" entry
   points on Pantry and Shopping.
 
+### Phase 5 — Meal planning & assistant (2026-07-18)
+
+Schema v14 (migration 014). The last unbuilt pillar of the product.
+
+- **Week board** (`/plan`, new Plan tab): recipe or free-text note entries with per-entry
+  servings, prev/this/next-week navigation, and one-tap **plan → shopping list** (reuses the
+  Phase 4.6 trip builder, so it's pantry-aware and package-rounded). **Saved menus** save a week
+  as a reusable template and re-apply it to any week (survives recipe deletion, skips orphans).
+  **iCal export** of the week for Apple/Google Calendar.
+- **Household preferences** (`/preferences`): allergies + exclusions are hard constraints (the
+  assistant never suggests a recipe that hits them); dislikes/diet/equipment/cuisines are soft;
+  weekday/weekend time budgets and default servings are scalars.
+- **Assistant** (`/chat`, new Chat tab): deterministic-first — application code builds a
+  hard-filtered, coverage-ranked candidate set and pantry summary, the model reasons over that
+  and returns one structured turn, and any meal-plan / pantry-update proposals are persisted as
+  pending records. Accept/Dismiss cards; acceptance re-validates and applies via deterministic
+  services in one idempotent transaction (the model never writes). Hallucinated recipe ids are
+  dropped. v1 is one structured request/response per turn (no streaming yet — docs/05).
+- Nav is now the full six: Home / Cookbook / Pantry / Shopping / Plan / Chat.
+
+### Phase 6 — Resilience & polish (2026-07-18)
+
+- **Admin dashboard** (`/admin/dashboard`): queue pending/failed, recent ingest failures, AI
+  spend per provider vs caps, DB size, schema version, worker heartbeat, last healthy backup,
+  yt-dlp version.
+- **Cookbook export**: `python -m app.manage export-cookbook <dir>` writes every recipe as JSON
+  and Markdown plus an index (cron/Scheduled-Task for the nightly cadence).
+- **Cookbook photo import**: snap a cookbook page or recipe card on the New Recipe form → vision
+  transcription prefills the form for review (reuses the 4.7 image pipeline; nothing saved until
+  you Save).
+- Evidence-gated items (semantic search, TLS, Tailscale, full a11y/perf checklist) deferred per
+  the roadmap.
+
 ### YouTube ingestion + title fixes (2026-07-18)
 
 - Inline recipe rename on the sheet (imported YouTube titles are clickbait); the slug/URL
