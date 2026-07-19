@@ -1,3 +1,4 @@
+{% from "partials/_icons.html" import icon %}
 <!DOCTYPE html>
 <html lang="en" data-theme="auto">
 <head>
@@ -51,7 +52,7 @@
           <a href="{{ item.href }}"
              class="rail-link{% if active_nav == item.key %} is-active{% endif %}"
              {% if active_nav == item.key %}aria-current="page"{% endif %}>
-            <span class="rail-icon" aria-hidden="true" data-icon="{{ item.icon }}"></span>
+            <span class="rail-icon" aria-hidden="true">{{ icon(item.icon) }}</span>
             <span class="rail-label">{{ item.label }}</span>
             {% if item.key == 'shopping' %}
             <span hx-get="/shopping/badge" hx-trigger="load" hx-swap="outerHTML"></span>
@@ -99,7 +100,7 @@
       <a href="{{ item.href }}"
          class="tab{% if active_nav == item.key %} is-active{% endif %}"
          {% if active_nav == item.key %}aria-current="page"{% endif %}>
-        <span class="tab-icon" aria-hidden="true" data-icon="{{ item.icon }}"></span>
+        <span class="tab-icon" aria-hidden="true">{{ icon(item.icon) }}</span>
         <span class="tab-label">{{ item.label }}</span>
         {% if item.key == 'shopping' %}
         <span hx-get="/shopping/badge" hx-trigger="load" hx-swap="outerHTML"></span>

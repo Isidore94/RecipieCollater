@@ -149,4 +149,7 @@ def test_phase5_6_screens_render(admin_client: TestClient, migrated_db: sqlite3.
     assert admin_client.get("/admin/dashboard").status_code == 200
     # the new-recipe form carries the photo-import box
     assert "Read from photo" in admin_client.get("/recipes/new").text
+    # nav renders real inline-SVG icons, not placeholder squares
+    home = admin_client.get("/").text
+    assert home.count('class="nav-icon"') >= 6
     assert slug  # sanity
