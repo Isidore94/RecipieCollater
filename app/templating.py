@@ -15,6 +15,23 @@ from app.services.users import User
 _TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
 
 
+def _asset_version() -> str:
+    """A cache-busting token for the stylesheet, from its own mtime.
+
+    iOS Safari (and a home-screen A2HS app especially) caches CSS aggressively, so a redeploy
+    can keep serving the old stylesheet. Appending ?v=<mtime> to the href changes the URL every
+    time the file changes, forcing a fresh fetch without any service worker. Frozen-aware: reads
+    the bundled copy under PACKAGE_DIR.
+    """
+    try:
+        return str(int((PACKAGE_DIR / "static" / "css" / "app.css").stat().st_mtime))
+    except OSError:
+        return "0"
+
+
+ASSET_VERSION = _asset_version()
+
+
 def safe_url(value: str | None) -> str:
     """Return the URL only if it is an http(s) link, else ''. Defence in depth for any value that
     reaches an href: HTML-escaping does not neutralise a 'javascript:' or 'data:' URI (#9.1)."""
@@ -57,6 +74,7 @@ def render(
         "active_nav": active_nav,
         "user": user,
         "csrf_header": CSRF_HEADER,
+        "asset_version": ASSET_VERSION,
         **context,
     }
     return _TEMPLATES.TemplateResponse(
