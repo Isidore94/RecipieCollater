@@ -55,7 +55,16 @@ a { color: var(--brand); }
 
 /* ---- App shell ---- */
 .app-shell { min-height: 100dvh; }
-.main { padding: 20px 16px 90px; max-width: 1100px; margin: 0 auto; }
+/* viewport-fit=cover lets content fill under the Dynamic Island / notch, so the top (and the
+   sides, in landscape) must pad by the safe-area insets or the top row is clipped. The literal
+   floors keep normal spacing on devices with no inset; the desktop rule below overrides this. */
+.main {
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-bottom: 90px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  max-width: 1100px; margin: 0 auto;
+}
 .mobile-tools {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   margin-bottom: 14px; color: var(--ink-soft); font-size: 13px;
@@ -160,7 +169,11 @@ button:hover { filter: brightness(1.05); }
 .data td button { padding: 6px 10px; min-height: auto; }
 
 /* Onboarding (plain, centered) */
-.plain { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.plain {
+  min-height: 100dvh; display: grid; place-items: center;
+  padding: max(24px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px))
+           max(24px, env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+}
 .onboarding { max-width: 440px; width: 100%; }
 .onboarding-brand { font-family: var(--font-display); font-size: 20px; margin-bottom: 8px; }
 .onboarding h1 { font-size: 24px; margin: 0 0 8px; }
