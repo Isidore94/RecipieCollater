@@ -324,10 +324,15 @@ def apply(
     included_line_ids: set[int],
     food_names: dict[int, str],  # line_id -> the (possibly edited) generic name
     track_location_id: int | None,
+    line_locations: dict[int, int] | None = None,  # line_id -> per-line location override
     user_id: int | None = None,
 ) -> list[str]:
     """Apply the reviewed lines: learn aliases, restock matched pantry items, optionally start
-    tracking new foods, and check bought items off the shopping list. Idempotent per receipt."""
+    tracking new foods, and check bought items off the shopping list. Idempotent per receipt.
+
+    A new food lands in its per-line location when one was chosen, else the receipt-wide
+    ``track_location_id`` default; with neither it stays untracked (a food + alias are still
+    learned)."""
     head = conn.execute("SELECT status FROM receipts WHERE id = ?", (receipt_id,)).fetchone()
     if head is None:
         raise ReceiptError("unknown receipt")
@@ -399,11 +404,11 @@ def apply(
                         reason="restock", user_id=user_id, commit=False,
                     )
                     summary.append(f"{target.display_name} restocked")
-        elif track_location_id is not None:
+        elif (loc_id := (line_locations or {}).get(line_id) or track_location_id) is not None:
             new_id = pantry.add_item(
                 conn,
                 pantry.PantryItemInput(
-                    display_name=name, location_id=track_location_id,
+                    display_name=name, location_id=loc_id,
                     quantity_mode="gauge", gauge="full", food=name,
                 ),
                 user_id=user_id, commit=False,

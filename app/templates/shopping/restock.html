@@ -26,7 +26,14 @@
         <input type="checkbox" name="create" value="{{ line.item_id }}">
         <span>{{ line.display_text }}</span>
       </label>
-      <span class="restock-action muted">start tracking in the pantry</span>
+      {% if locations %}
+      <label class="restock-line-location">start tracking in
+        <select name="loc_{{ line.item_id }}" aria-label="Where {{ line.display_text }} goes">
+          <option value="">default</option>
+          {% for loc in locations %}<option value="{{ loc.id }}">{{ loc.name }}</option>{% endfor %}
+        </select>
+      </label>
+      {% else %}<span class="restock-action muted">start tracking in the pantry</span>{% endif %}
       {% else %}
       <span class="restock-plain">{{ line.display_text }}</span>
       <span class="restock-action muted">not tracked</span>
@@ -36,7 +43,7 @@
   </ul>
 
   {% if candidates | selectattr('can_create') | list %}
-  <label class="restock-location">New items go in
+  <label class="restock-location">New items default to
     <select name="create_location">
       {% for loc in locations %}
       <option value="{{ loc.id }}">{{ loc.name }}</option>

@@ -929,11 +929,15 @@ def apply_restock(
     restock_item_ids: set[int],
     create_item_ids: set[int],
     create_location_id: int | None,
+    create_locations: dict[int, int] | None = None,  # item_id -> per-line location override
     clear_item_ids: set[int] | None = None,
     user_id: int | None = None,
 ) -> list[str]:
     """Apply the chosen restocks (reason='restock'), create the chosen new pantry items
     (gauge, full - refine later in the pantry), then clear the checked lines.
+
+    A created item lands in its per-line location when one was chosen, else the list-wide
+    ``create_location_id`` default.
 
     ``clear_item_ids`` scopes the clear to the lines the review form actually presented, so an
     item someone else checks off between render and submit is not swept away unseen; None
@@ -969,12 +973,13 @@ def apply_restock(
         elif (
             line.item_id in create_item_ids
             and line.can_create
-            and create_location_id is not None
+            and (loc_id := (create_locations or {}).get(line.item_id) or create_location_id)
+            is not None
         ):
             new_id = pantry.add_item(
                 conn,
                 pantry.PantryItemInput(
-                    display_name=line.display_text, location_id=create_location_id,
+                    display_name=line.display_text, location_id=loc_id,
                     quantity_mode="gauge", gauge="full",
                 ),
                 user_id=user_id, commit=False,

@@ -240,6 +240,43 @@ def test_apply_restocks_learns_and_checks_off(
     ) == []
 
 
+def test_apply_per_line_location_overrides_receipt_default(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_core_units(migrated_db)
+    pantry_loc = pantry.create_location(migrated_db, "Pantry")
+    freezer = pantry.create_location(migrated_db, "Freezer", is_freezer=True)
+    provider = _FakeProvider(items=[
+        ExtractedReceiptItem(original_text="KS ORG CHKPEAS", food="chickpeas"),
+        ExtractedReceiptItem(original_text="GV PEAS FROZEN", food="frozen peas"),
+    ])
+    _use_provider(monkeypatch, provider)
+    captured = receipts.capture(migrated_db, text="order")
+    assert captured.receipt_id is not None
+    lines = receipts.review(migrated_db, captured.receipt_id).lines
+    peas_line = next(li.line_id for li in lines if li.food_name == "frozen peas")
+
+    # default is the pantry; the frozen-peas line is overridden to the freezer
+    receipts.apply(
+        migrated_db, captured.receipt_id,
+        included_line_ids={li.line_id for li in lines}, food_names={},
+        track_location_id=pantry_loc, line_locations={peas_line: freezer},
+    )
+
+    chickpeas = pantry.items_for_food(
+        migrated_db, _food_id_by_name(migrated_db, "chickpeas")
+    )
+    peas = pantry.items_for_food(migrated_db, _food_id_by_name(migrated_db, "frozen peas"))
+    assert chickpeas and chickpeas[0].location_id == pantry_loc
+    assert peas and peas[0].location_id == freezer
+
+
+def _food_id_by_name(conn: sqlite3.Connection, name: str) -> int:
+    row = conn.execute("SELECT id FROM foods WHERE name = ?", (name,)).fetchone()
+    assert row is not None
+    return int(row["id"])
+
+
 def test_learned_alias_matches_next_receipt_deterministically(
     migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

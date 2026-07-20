@@ -252,6 +252,30 @@ def test_restock_can_create_new_pantry_item(migrated_db: sqlite3.Connection) -> 
     assert len(created) == 1 and created[0].quantity_mode == "gauge" and created[0].gauge == "full"
 
 
+def test_restock_per_line_location_overrides_default(migrated_db: sqlite3.Connection) -> None:
+    seed_core_units(migrated_db)
+    fridge = pantry.create_location(migrated_db, "Fridge")
+    freezer = pantry.create_location(migrated_db, "Freezer", is_freezer=True)
+    rid = _recipe(migrated_db, [_ing("200", "ml", "milk"), _ing("1", "each", "peas")])
+    lst = shopping.active_list(migrated_db)
+    shopping.add_from_recipe(migrated_db, lst, rid)
+    for item in shopping.list_items(migrated_db, lst):
+        shopping.toggle(migrated_db, item.id)
+
+    candidates = shopping.restock_candidates(migrated_db, lst)
+    by_food = {c.food_id: c.item_id for c in candidates}
+    peas_item = by_food[_food_id(migrated_db, "peas")]
+    shopping.apply_restock(
+        migrated_db, lst, restock_item_ids=set(),
+        create_item_ids={c.item_id for c in candidates}, create_location_id=fridge,
+        create_locations={peas_item: freezer},
+    )
+    milk = pantry.items_for_food(migrated_db, _food_id(migrated_db, "milk"))
+    peas = pantry.items_for_food(migrated_db, _food_id(migrated_db, "peas"))
+    assert milk and milk[0].location_id == fridge
+    assert peas and peas[0].location_id == freezer
+
+
 # ---- adversarial-review regressions ----------------------------------------------------
 
 

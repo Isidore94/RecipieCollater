@@ -41,6 +41,14 @@
              class="receipt-food" aria-label="Generic food name for {{ line.original_text }}">
       <span class="restock-action">
         {% if line.action_text %}{{ line.pantry_item_name }} &rarr; {{ line.action_text }}
+        {% elif locations %}<label class="restock-line-location">
+          {% if line.is_new_food %}new &mdash; in{% else %}will track in{% endif %}
+          <select name="loc_{{ line.line_id }}"
+                  aria-label="Where {{ line.food_name }} goes">
+            <option value="">default</option>
+            {% for loc in locations %}<option value="{{ loc.id }}">{{ loc.name }}</option>{% endfor %}
+          </select>
+        </label>
         {% elif line.is_new_food %}<span class="muted">new &mdash; will track</span>
         {% else %}<span class="muted">not in the pantry &mdash; will track</span>{% endif %}
         {% if line.checks_off %}<span class="chip-tag" title="Checks this off the shopping list">&#10003; list</span>{% endif %}
@@ -50,7 +58,7 @@
   </ul>
 
   {% if locations %}
-  <label class="restock-location">New items go in
+  <label class="restock-location">New items default to
     <select name="track_location">
       {% for loc in locations %}<option value="{{ loc.id }}">{{ loc.name }}</option>{% endfor %}
     </select>

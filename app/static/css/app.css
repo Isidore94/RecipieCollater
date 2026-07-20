@@ -460,6 +460,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .restock-action { font-size: 13px; color: var(--brand); }
 .restock-location { display: block; margin: 10px 0 0; font-size: 14px; }
 .restock-location select { margin-left: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.restock-line-location { font-size: 13px; color: var(--brand); }
+.restock-line-location select { margin-left: 4px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); font-size: 13px; }
 
 /* Foods upkeep */
 .food-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }

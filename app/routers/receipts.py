@@ -94,14 +94,18 @@ async def apply(
             int(v) for v in form.getlist("line") if isinstance(v, str) and v.isdigit()
         }
         names: dict[int, str] = {}
+        line_locations: dict[int, int] = {}
         for line_id in included:
             names[line_id] = _str(form, f"food_{line_id}")
+            per_line = _str(form, f"loc_{line_id}")
+            if per_line.isdigit():
+                line_locations[line_id] = int(per_line)
         location_raw = _str(form, "track_location")
         location_id = int(location_raw) if location_raw.isdigit() else None
     try:
         summary = receipts.apply(
             db, receipt_id, included_line_ids=included, food_names=names,
-            track_location_id=location_id, user_id=user.id,
+            track_location_id=location_id, line_locations=line_locations, user_id=user.id,
         )
     except receipts.ReceiptError:
         return RedirectResponse("/receipts/new", status_code=303)
