@@ -43,6 +43,17 @@
         {% endif %}
         <button type="submit" class="btn-secondary">Save</button>
       </form>
+      <form method="post" action="/pantry/items/{{ item.id }}/tracking" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <label class="pantry-tracking">Track as
+          <select name="quantity_mode" aria-label="How {{ item.display_name }} is tracked">
+            <option value="exact"{% if item.quantity_mode == 'exact' %} selected{% endif %}>a count</option>
+            <option value="gauge"{% if item.quantity_mode == 'gauge' %} selected{% endif %}>full / half / low / out</option>
+            <option value="binary"{% if item.quantity_mode == 'binary' %} selected{% endif %}>have / out</option>
+          </select>
+        </label>
+        <button type="submit" class="btn-secondary">Save</button>
+      </form>
       <form method="post" action="/pantry/items/{{ item.id }}/expiry" class="pantry-menu-row">
         <input type="hidden" name="next" value="{{ back }}">
         <label class="pantry-expiry-edit">Expires

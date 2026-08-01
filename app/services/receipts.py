@@ -409,12 +409,12 @@ def apply(
                 conn,
                 pantry.PantryItemInput(
                     display_name=name, location_id=loc_id,
-                    quantity_mode="gauge", gauge="full", food=name,
+                    quantity_mode=pantry.AUTO_MODE, gauge="full", food=name,
                 ),
                 user_id=user_id, commit=False,
             )
             if new_id:
-                summary.append(f"{name} → tracked (full)")
+                summary.append(f"{name} → now tracked")
 
         # Check the purchase off the shopping list (it was bought, after all).
         checked = conn.execute(

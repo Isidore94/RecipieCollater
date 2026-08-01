@@ -160,11 +160,13 @@ def test_accept_pantry_update_marks_and_tracks(
 
     item = pantry.get_item(migrated_db, existing)
     assert item is not None and item.gauge == "full"  # marked back on hand
-    # a brand-new food started being tracked
+    # A brand-new food started being tracked, in the way that food is actually held: thighs are
+    # countable, so the assistant's "we got groceries" creates a count rather than a gauge.
     row = migrated_db.execute("SELECT id FROM foods WHERE name = 'chicken thighs'").fetchone()
     assert row is not None
     tracked = pantry.items_for_food(migrated_db, int(row["id"]))
-    assert tracked and tracked[0].gauge == "full"
+    assert tracked and tracked[0].quantity_mode == "exact"
+    assert tracked[0].display_quantity == "1"
 
 
 def test_dismiss_blocks_accept(

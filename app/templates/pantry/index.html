@@ -66,7 +66,7 @@
 <div class="pantry-forms">
   <details class="card pantry-add">
     <summary>+ Add an item</summary>
-    <form method="post" action="/pantry/items" class="stack" x-data="{ mode: 'gauge' }">
+    <form method="post" action="/pantry/items" class="stack" x-data="{ mode: 'auto' }">
       <input type="hidden" name="next" value="{{ back }}">
       <label>Name
         <input name="display_name" required autocomplete="off" placeholder="Chopped tomatoes">
@@ -80,14 +80,18 @@
       </label>
       <label>How do you track it?
         <select name="quantity_mode" x-model="mode">
-          <option value="gauge">Full / half / low / out</option>
-          <option value="exact">Exact count</option>
-          <option value="binary">Have / out</option>
+          {# Countable things (avocados, eggs, tins) become a number; staples become a gauge. #}
+          <option value="auto">Decide for me</option>
+          <option value="exact">Count them (3 avocados)</option>
+          <option value="gauge">Rough level (full / half / low / out)</option>
+          <option value="binary">Just have or out</option>
         </select>
       </label>
       <div x-show="mode === 'exact'" class="row">
-        <label>Amount <input name="quantity_text" inputmode="decimal" placeholder="3"></label>
-        <label>Unit <input name="unit" autocomplete="off" placeholder="each, g, ml"></label>
+        <label>How many <span class="muted">(optional)</span>
+          <input name="quantity_text" inputmode="decimal" placeholder="1"></label>
+        <label>Unit <span class="muted">(optional)</span>
+          <input name="unit" autocomplete="off" placeholder="each, g, ml"></label>
       </div>
       <label class="check"><input type="checkbox" name="is_staple"> Always keep this on hand (staple)</label>
       <label class="advanced">Expires <span class="muted">(optional)</span>

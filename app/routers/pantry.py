@@ -208,6 +208,26 @@ async def adjust_item(
         return flash.redirect(_back(form), notice="Updated.", undo=adjustment_id)
 
 
+@router.post("/items/{item_id}/tracking")
+async def set_tracking(
+    request: Request,
+    item_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    """Change how an item is tracked (a mis-guessed avocado should not need deleting)."""
+    async with request.form() as form:
+        back = _back(form)
+        mode = _str(form, "quantity_mode")
+        try:
+            pantry.set_quantity_mode(db, item_id, mode, user_id=user.id)
+        except pantry.PantryError as exc:
+            return flash.redirect(back, error=str(exc))
+    labels = {"exact": "counted", "gauge": "a rough level", "binary": "have or out"}
+    return flash.redirect(back, notice=f"Now tracked as {labels.get(mode, mode)}.")
+
+
 @router.post("/adjustments/{adjustment_id}/undo")
 async def undo_adjustment(
     request: Request,

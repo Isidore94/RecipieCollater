@@ -505,7 +505,7 @@ def _new_tracked_item(
                 food=food_name, quantity_text=qty, unit=unit,
             )
     return pantry.PantryItemInput(
-        display_name=food_name, location_id=location_id, quantity_mode="gauge",
+        display_name=food_name, location_id=location_id, quantity_mode=pantry.AUTO_MODE,
         gauge="full", food=food_name,
     )
 

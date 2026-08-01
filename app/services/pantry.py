@@ -23,11 +23,13 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from app.security import now_iso
-from app.services import quantity, units
+from app.services import quantity, quantity_mode, units
 
 _GAUGE_CYCLE: tuple[str, ...] = ("full", "half", "low", "out")
 _QUANTITY_MODES: frozenset[str] = frozenset({"exact", "gauge", "binary"})
 _REMOVE_REASONS: frozenset[str] = frozenset({"manual_remove", "spoiled"})
+# "Let the app decide" — resolved against the food, never stored.
+AUTO_MODE = "auto"
 
 
 class PantryError(ValueError):
@@ -176,8 +178,12 @@ def add_item(
     user_id: int | None = None,
     commit: bool = True,
 ) -> int:
-    """Create a pantry item and record its opening state as a 'correction' adjustment."""
-    if data.quantity_mode not in _QUANTITY_MODES:
+    """Create a pantry item and record its opening state as a 'correction' adjustment.
+
+    ``quantity_mode='auto'`` asks what the food itself implies (see quantity_mode.suggest), so
+    avocados arrive countable and flour arrives gauged without anyone having to decide.
+    """
+    if data.quantity_mode not in _QUANTITY_MODES and data.quantity_mode != AUTO_MODE:
         raise PantryError(f"unknown quantity mode: {data.quantity_mode!r}")
     name = data.display_name.strip()
     if not name:
@@ -189,15 +195,27 @@ def add_item(
     unit = units.resolve_unit(conn, data.unit) if (data.unit and data.unit.strip()) else None
     unit_id = unit.id if unit else None
 
+    mode = data.quantity_mode
+    if mode == AUTO_MODE:
+        mode = quantity_mode.suggest(conn, data.food or name, food_id=food_id)
+    elif food_id is not None:
+        # An explicit choice is the household's answer for this food from now on.
+        quantity_mode.remember(conn, food_id, mode, commit=False)
+
     quantity_text: str | None = None
     gauge: str | None = None
     have: int | None = None
-    if data.quantity_mode == "exact":
-        if data.quantity_text is None or not data.quantity_text.strip():
-            raise PantryError("an exact item needs a starting quantity")
-        quantity.parse_quantity(data.quantity_text)  # validate
-        quantity_text = data.quantity_text.strip()
-    elif data.quantity_mode == "gauge":
+    if mode == "exact":
+        # A counted item with no starting number means "one of these", which is what someone
+        # adding an avocado to the pantry means. Demanding a number here would push them back
+        # to the gauge, which is the thing this is fixing.
+        text = (data.quantity_text or "").strip() or "1"
+        quantity.parse_quantity(text)  # validate
+        quantity_text = text
+        if unit_id is None:
+            unit = units.resolve_unit(conn, "each")
+            unit_id = unit.id if unit else None
+    elif mode == "gauge":
         gauge = data.gauge if data.gauge in _GAUGE_CYCLE else "full"
     else:  # binary
         have = 1 if (data.have is None or data.have) else 0
@@ -216,7 +234,7 @@ def add_item(
             expires_on, step_down_on_cook, updated_at, updated_by)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            food_id, name, data.location_id, data.quantity_mode, quantity_text, unit_id,
+            food_id, name, data.location_id, mode, quantity_text, unit_id,
             canonical_quantity, gauge, have, 1 if data.is_staple else 0, min_text, canonical_min,
             data.expires_on or None, 1 if data.step_down_on_cook else 0, stamp, user_id,
         ),
@@ -450,6 +468,74 @@ def toggle_have(
     new_have = 0 if item["have"] else 1
     set_have(conn, item_id, bool(new_have), reason="correction", user_id=user_id, commit=commit)
     return bool(new_have)
+
+
+def set_quantity_mode(
+    conn: sqlite3.Connection,
+    item_id: int,
+    mode: str,
+    *,
+    user_id: int | None = None,
+    commit: bool = True,
+) -> None:
+    """Change how an item is tracked, carrying its current level across as best it can.
+
+    Needed because the mode is a guess until someone corrects it: an avocado that arrived as a
+    gauge has to be able to become a count without being deleted and re-added. The choice is
+    also remembered against the food, so the next one is right from the start.
+    """
+    if mode not in _QUANTITY_MODES:
+        raise PantryError(f"unknown quantity mode: {mode!r}")
+    item = _row(conn, item_id)
+    previous = item["quantity_mode"]
+    if previous == mode:
+        return
+
+    # Translate the level rather than resetting it: "low" becomes 1, "out" becomes 0/none, and a
+    # count of zero becomes "out". Losing the state on every switch would punish correcting it.
+    quantity_text: str | None = None
+    canonical: int | None = None
+    gauge: str | None = None
+    have: int | None = None
+    unit_id = item["unit_id"]
+    if mode == "exact":
+        if previous == "gauge":
+            quantity_text = {"full": "3", "half": "2", "low": "1", "out": "0"}.get(
+                item["gauge"] or "full", "1"
+            )
+        else:
+            quantity_text = "1" if item["have"] else "0"
+        if unit_id is None:
+            unit = units.resolve_unit(conn, "each")
+            unit_id = unit.id if unit else None
+        canonical = _canonical(conn, quantity_text, unit_id)
+    elif mode == "gauge":
+        if previous == "exact":
+            amount = _current_value(item)
+            gauge = "out" if amount <= 0 else ("low" if amount <= 1 else "full")
+        else:
+            gauge = "full" if item["have"] else "out"
+    else:  # binary
+        if previous == "exact":
+            have = 1 if _current_value(item) > 0 else 0
+        else:
+            have = 0 if item["gauge"] == "out" else 1
+
+    conn.execute(
+        """UPDATE pantry_items
+           SET quantity_mode = ?, quantity_text = ?, canonical_quantity = ?, unit_id = ?,
+               gauge = ?, have = ?, updated_at = ?, updated_by = ?
+           WHERE id = ?""",
+        (mode, quantity_text, canonical, unit_id, gauge, have, now_iso(), user_id, item_id),
+    )
+    _record_adjustment(
+        conn, item_id, item["food_id"], reason="correction", user_id=user_id,
+        source="mode-change", delta_quantity_text=quantity_text, to_gauge=gauge, to_have=have,
+    )
+    if item["food_id"] is not None:
+        quantity_mode.remember(conn, int(item["food_id"]), mode, commit=False)
+    if commit:
+        conn.commit()
 
 
 def set_staple(
@@ -706,7 +792,10 @@ def _display_quantity(row: sqlite3.Row) -> str:
         return "have" if row["have"] else "out"
     qty = row["quantity_text"] or "0"
     unit_name = row["unit_name"]
-    return f"{qty} {unit_name}" if unit_name else qty
+    # A bare count needs no unit word: "3", not "3 each".
+    if not unit_name or unit_name == "each":
+        return qty
+    return f"{qty} {unit_name}"
 
 
 def _to_item(row: sqlite3.Row) -> PantryItem:

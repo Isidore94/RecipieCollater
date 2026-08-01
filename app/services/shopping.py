@@ -986,12 +986,12 @@ def apply_restock(
                 conn,
                 pantry.PantryItemInput(
                     display_name=line.display_text, location_id=loc_id,
-                    quantity_mode="gauge", gauge="full",
+                    quantity_mode=pantry.AUTO_MODE, gauge="full",
                 ),
                 user_id=user_id, commit=False,
             )
             if new_id:
-                summary.append(f"{line.display_text} → tracked (full)")
+                summary.append(f"{line.display_text} → now tracked")
     if clear_item_ids is None:
         conn.execute(
             "DELETE FROM shopping_list_items WHERE list_id = ? AND checked = 1", (list_id,)

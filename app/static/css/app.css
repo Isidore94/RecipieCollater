@@ -583,6 +583,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cook-log-devs li::before { content: "\21B3"; margin-right: 6px; color: var(--brand); }
 
 /* Pantry extras */
+.pantry-tracking { font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
 .pantry-expiry-edit { font-size: 13px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; }
 .pantry-expiry-edit input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
 
