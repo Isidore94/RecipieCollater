@@ -1,0 +1,11 @@
+{# The shared empty state. Every screen's "nothing here yet" says the same three things: what
+   this place is for, the one thing to do next, and how to do it — so an empty app is a set of
+   invitations rather than a set of blank pages. #}
+<section class="empty-state" aria-live="polite">
+  <div class="empty-emoji" aria-hidden="true">{{ emoji | default('🍳', true) }}</div>
+  <p class="empty-blurb">{{ blurb }}</p>
+  {% if note %}<p class="empty-note">{{ note }}</p>{% endif %}
+  {% if action_href %}
+  <p class="empty-action"><a href="{{ action_href }}" class="btn-primary">{{ action_label }}</a></p>
+  {% endif %}
+</section>

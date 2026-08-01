@@ -113,9 +113,22 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="muted">
-  {% if query or filter_tag or filter_tier or filter_maxmin or filter_rating %}No matches.
-  {% else %}Nothing here yet. <a href="/recipes/new">Add your first recipe.</a>{% endif %}
-</p>
+{% if query or filter_tag or filter_tier or filter_maxmin or filter_rating %}
+{% with emoji='🔍', blurb='Nothing matched that.',
+        note='Try fewer words, or clear the filters above to see everything again.' %}
+{% include "partials/_empty.html" %}
+{% endwith %}
+{% elif tab_title == 'Inbox' %}
+{% with emoji='📥', blurb='Nothing waiting to be tried.',
+        note='Paste a recipe or YouTube link in the box above and it lands here, ready for you to look over before it joins the cookbook.' %}
+{% include "partials/_empty.html" %}
+{% endwith %}
+{% else %}
+{% with emoji='📖', blurb='Your cookbook is empty.',
+        note='This is where the keepers live. Paste a link on the Inbox tab, or type a recipe in yourself.',
+        action_href='/recipes/new', action_label='Add a recipe' %}
+{% include "partials/_empty.html" %}
+{% endwith %}
+{% endif %}
 {% endif %}
 {% endblock %}

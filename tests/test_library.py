@@ -60,4 +60,6 @@ def test_archive_separates_from_inbox(admin_client: TestClient) -> None:
 def test_search_no_match(admin_client: TestClient) -> None:
     _create(admin_client, "Tomato Pasta")
     resp = admin_client.get("/inbox", params={"q": "zzznothing"})
-    assert "No matches" in resp.text
+    assert "Tomato Pasta" not in resp.text
+    # A no-match is an empty state that says what to do next, not a bare line of text.
+    assert "empty-state" in resp.text and "Nothing matched that" in resp.text

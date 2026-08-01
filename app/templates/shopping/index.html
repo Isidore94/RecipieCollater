@@ -54,8 +54,11 @@
 </section>
 {% endfor %}
 {% else %}
-<p class="muted">Your list is empty. Add items above, pull in low staples, use &ldquo;Add missing
-  to shopping&rdquo; on a recipe, or <a href="/shopping/plan">plan a whole trip</a>.</p>
+{% with emoji='🛒', blurb='Nothing to buy.',
+        note='Type anything into the box above, pull in the staples that are running low, or use “Add missing to shopping” on a recipe.',
+        action_href='/shopping/plan', action_label='Plan a whole trip' %}
+{% include "partials/_empty.html" %}
+{% endwith %}
 {% endif %}
 
 <datalist id="unit-list">

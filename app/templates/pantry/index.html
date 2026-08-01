@@ -94,9 +94,16 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="muted">
-  {% if locations %}Nothing here yet. Add your first item above.
-  {% else %}Start by adding a location (a cupboard, the freezer&hellip;), then add what&rsquo;s in it.{% endif %}
-</p>
+{% if locations %}
+{% with emoji='🧺', blurb='Nothing in here yet.',
+        note='Add what you have with “+ Add an item” above. You do not need everything — just the things worth knowing you have.' %}
+{% include "partials/_empty.html" %}
+{% endwith %}
+{% else %}
+{% with emoji='🚪', blurb='Start with somewhere to put things.',
+        note='Add a location first — a cupboard, the fridge, the freezer — then add what is in it. “+ Location” is just above.' %}
+{% include "partials/_empty.html" %}
+{% endwith %}
+{% endif %}
 {% endif %}
 {% endblock %}

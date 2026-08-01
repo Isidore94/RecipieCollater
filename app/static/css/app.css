@@ -67,9 +67,11 @@ a { color: var(--brand); }
   max-width: 1100px; margin: 0 auto;
 }
 .mobile-tools {
-  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  margin-bottom: 14px; color: var(--ink-soft); font-size: 13px;
+  display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap;
+  gap: 6px 12px; margin-bottom: 14px; color: var(--ink-soft); font-size: 13px;
 }
+/* Wrap between items, never inside one — "Add to / phone" and "Sign / out" read as noise. */
+.mobile-tools > * { white-space: nowrap; }
 .mobile-tools select { min-height: 36px; padding: 6px 8px; }
 .mobile-tools form { display: flex; align-items: center; gap: 6px; margin: 0; }
 .mobile-tools .btn-link { font-size: 13px; padding: 0 2px; min-height: 36px; background: none; }
@@ -129,7 +131,8 @@ a { color: var(--brand); }
 .empty-state { text-align: center; padding: 48px 16px; color: var(--ink-soft); }
 .empty-emoji { font-size: 44px; }
 .empty-blurb { font-size: 17px; color: var(--ink); margin: 12px 0 6px; }
-.empty-note { font-size: 14px; max-width: 34ch; margin: 0 auto; }
+.empty-note { font-size: 14px; max-width: 40ch; margin: 0 auto; line-height: 1.55; }
+.empty-action { margin-top: 18px; }
 
 /* Forms */
 .stack { display: flex; flex-direction: column; gap: 8px; }
