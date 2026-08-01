@@ -36,6 +36,7 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+summary { min-height: 40px; display: flex; align-items: center; }
 html, body { margin: 0; padding: 0; }
 body {
   background: var(--paper); color: var(--ink);
@@ -143,8 +144,10 @@ input, select, button {
 }
 input:focus, select:focus { border-color: var(--brand); }
 .inline-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
-.check { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; }
-.check input { min-height: auto; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-weight: 400; min-height: 44px; }
+/* A native checkbox defaults to ~13px. The label is tappable too, but the box itself should
+   not be the smallest thing on the page. */
+.check input, input[type="checkbox"] { min-height: auto; width: 22px; height: 22px; accent-color: var(--brand); }
 button, .btn-primary {
   cursor: pointer; background: var(--brand); color: var(--brand-ink); border: none; font-weight: 600;
 }
@@ -337,7 +340,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cook-ingredients summary { font-weight: 600; cursor: pointer; }
 .checklist { list-style: none; padding: 0; margin: 10px 0 0; }
 .checklist li { padding: 6px 0; border-bottom: 1px solid var(--line); }
-.checklist label { display: flex; gap: 10px; align-items: baseline; cursor: pointer; }
+.checklist label { display: flex; gap: 12px; align-items: center; min-height: 44px; cursor: pointer; }
 .checklist input:checked + span { color: var(--ink-soft); text-decoration: line-through; }
 .cook-step-num { font-weight: 600; color: var(--ink-soft); }
 .cook-step-text { font-size: 20px; line-height: 1.5; margin: 8px 0; }

@@ -1,7 +1,9 @@
 # Usability review — August 2026
 
-> **Status: Tier 1 fixed** (commits following this document), plus the Tier 2/3 items called out
-> below as *Fixed*. The rest stand as the backlog.
+> **Status: all Tier 1 and Tier 2 items fixed**, plus the Tier 3 items on buttons, jargon, touch
+> targets, empty states and `:active` feedback. What remains is listed under *Still open* at the
+> bottom. Every page was re-checked at iPhone viewport afterwards: 21 screens, no page or network
+> errors, no horizontal overflow, no interactive control under 40px.
 
 Goal of this review: *"I want my wife to use this. It needs to be easy to use, quick to use, and enjoyable to use."*
 
@@ -183,17 +185,37 @@ Two bugs surfaced while fixing these and were fixed with them: a `display:` rule
 permanently on screen and the ingredient rows' "more" fields permanently expanded; and the
 wakeLock branch could throw without falling through to the video.
 
-## The backlog (unchanged from the review above)
+## Then fixed (second pass)
 
-Highest value next, in order:
+1. **Swallowed errors.** ~20 mutations wrapped their service call in `contextlib.suppress` and
+   redirected regardless, so a rejection was indistinguishable from success. All of them now
+   report through a shared flash helper (a query parameter, since the app has exactly one
+   persistent cookie by contract). Two specific dead ends went with them: adding a pantry item
+   before any location exists, and "Done shopping" with nothing to put away.
+2. **Moving a planned meal.** `POST /plan/entry/{id}/move` existed with no caller; each entry
+   now has a move control. The free-text `slot` beside it became a select, so a typo can no
+   longer invent a new meal slot.
+3. **Logout, and PIN confirmation.** There was no way out of a session anywhere; the name in
+   both navs is now a Sign out form that revokes server-side as well as clearing the cookie.
+   Setting a PIN asks twice, because a PIN is typed blind and a slip locked someone out.
+4. **Empty states.** The designed `.empty-state` component was dead code, referenced only by an
+   orphaned `tab_empty.html` that still said "you're on the Phase 0 foundation build". That file
+   is deleted; the component now backs a shared partial used across cookbook, inbox, no-match
+   search, pantry and shopping.
+5. **Success feedback.** Ratings, notes, rename, promote, preferences and pantry edits all
+   confirm what they did instead of reloading silently.
 
-1. **Errors swallowed by `contextlib.suppress`** across ~20 mutations (Tier 2.1) — "I pressed
-   the button and nothing happened" is still possible in the pantry, foods, preferences and
-   plan screens.
-2. **No way to move a planned meal to another day** (Tier 2.2) — the route exists, the UI
-   doesn't call it.
-3. **No logout / switch-user** (Tier 2.8), and PIN entry has no confirm field.
-4. **Undo beyond cook deductions** (Tier 2.6) — pantry adjustments already write the history
-   rows for it.
-5. **Success feedback and the unused empty-state component** (Tier 3) — ratings, notes,
-   rename and promote still reload silently.
+## Still open
+
+- **Undo beyond cook deductions** (Tier 2.6). Pantry adjustments already write the history rows
+  for it and recipes snapshot revisions for "cheap undo"; neither has a restore path. The cook
+  deduction undo (`app/services/deductions.py:356-421`) is the pattern to copy.
+- **Irreversible food merge** (Tier 2.6) — still guarded only by a generic `confirm()`.
+- **The add-a-recipe surface is still hidden** (Tier 2.4): the paste box lives only on Inbox,
+  which has no nav tab, while "+ New recipe" leads to the manual form.
+- **Trip planner does not scale** (Tier 2.9) — every recipe as a checkbox, no search.
+- **Receipts can still be stranded** (Tier 2.7) — no receipts index to find a pending one.
+- **Assistant has no conversation history** (Tier 2.10), and replies render markdown literally.
+- **No global search or "+" affordance**, and no motion anywhere (Tier 3).
+- From the docs-vs-code gap analysis: big-event mode, re-extract comparison, the embedded
+  per-step video player, and structured after-cook quantities remain unbuilt.
