@@ -5,6 +5,33 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### Instagram reel ingestion (2026-07-27)
+
+No schema change. The existing Apple Shortcut and existing tokens now import Instagram
+reels and posts — the recipe is read from the post's caption.
+
+- `app/services/instagram.py`: caption extraction from the public
+  `/p/<code>/embed/captioned/` page, parsed defensively (inline `contextJSON` →
+  rendered `.Caption` → truncated `og:description`), with trailing hashtag blocks stripped
+  before the LLM prompt.
+- **yt-dlp is deliberately not used.** Measured on the deploy target: yt-dlp 2026.07.04
+  answers every Instagram post — real or invented shortcode — with "empty media response
+  ... use --cookies", so anonymous access is impossible and the app stores no Instagram
+  credential. Supplied Safari HTML from the Shortcut's JavaScript variant remains the
+  path for private/followers-only posts, and now takes priority over any network fetch.
+- `ingest.instagram_shortcode()` collapses `/reel/`, `/reels/`, `/p/`, and `/tv/` URLs for
+  one post onto a single idempotency key, so sharing the same reel from the app and from
+  the website no longer creates two recipes. Profile URLs still fall through to the web path.
+- `source_type` stays `web` and `video_id` stays NULL (both avoid a `recipes` table rebuild;
+  `video_id` is YouTube-specific and would render a broken cook-mode deep link). Provenance
+  is `extraction_runs.extractor = 'instagram'`, spend logged as `extract_instagram`.
+- Failure is actionable: private, removed, or caption-less posts report
+  `instagram_unavailable` naming the Safari workaround, rather than a generic parse error.
+- Test fix (pre-existing): `tests/conftest.py` now clears `RC_ANTHROPIC_API_KEY` /
+  `RC_OPENAI_API_KEY`, which a developer shell commonly exports. Without it the
+  "no AI key configured" paths silently stopped being exercised and
+  `test_pipeline_youtube_needs_ai_key` failed on this machine.
+
 ### Phase 4.7 — Receipt capture (2026-07-18)
 
 Schema v13 (migration 013). A grocery trip becomes pantry restocks in one review.

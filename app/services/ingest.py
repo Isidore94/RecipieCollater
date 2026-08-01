@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import re
 import sqlite3
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -29,6 +30,11 @@ _TRACKING_PARAMS = frozenset(
 _YOUTUBE_HOSTS = frozenset(
     {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
 )
+_INSTAGRAM_HOSTS = frozenset({"instagram.com", "www.instagram.com", "m.instagram.com"})
+# The four path prefixes that address a single post. A bare /<username> is a profile, not a post,
+# and must not match.
+_INSTAGRAM_PREFIXES = ("/reel/", "/reels/", "/p/", "/tv/")
+_SHORTCODE_RE = re.compile(r"^[A-Za-z0-9_-]{5,64}$")
 
 
 class IngestError(ValueError):
@@ -75,6 +81,27 @@ def youtube_video_id(url: str) -> str | None:
     return None
 
 
+def instagram_shortcode(url: str) -> str | None:
+    """Return the shortcode for a reel/post/IGTV URL, else None.
+
+    ``/p/<code>`` and ``/reel/<code>`` address the *same* post: Instagram's own app shares one
+    form and the website the other. Both must collapse to one idempotency key, or sharing the
+    same reel twice by two routes would create two recipes.
+    """
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return None
+    if (parts.hostname or "").lower() not in _INSTAGRAM_HOSTS:
+        return None
+    path = parts.path
+    for prefix in _INSTAGRAM_PREFIXES:
+        if path.startswith(prefix):
+            code = path[len(prefix) :].split("/")[0]
+            return code if _SHORTCODE_RE.match(code) else None
+    return None
+
+
 def normalize_url(raw: str) -> str:
     """Normalize a URL to a stable idempotency key (canonical YouTube, no trackers/fragment)."""
     text = raw.strip()
@@ -96,6 +123,10 @@ def normalize_url(raw: str) -> str:
     video_id = youtube_video_id(text)
     if video_id:
         return f"https://www.youtube.com/watch?v={video_id}"
+
+    shortcode = instagram_shortcode(text)
+    if shortcode:
+        return f"https://www.instagram.com/reel/{shortcode}"
 
     netloc = host if port in (None, 80, 443) else f"{host}:{port}"
     kept = [

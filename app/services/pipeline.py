@@ -20,7 +20,16 @@ from app.ai import usage as ai_usage
 from app.config import get_settings
 from app.extraction import SCHEMA_VERSION, ExtractedRecipe
 from app.security import now_iso
-from app.services import fetch, images, ingest, ingredients, recipes, web_extract, youtube
+from app.services import (
+    fetch,
+    images,
+    ingest,
+    ingredients,
+    instagram,
+    recipes,
+    web_extract,
+    youtube,
+)
 
 
 def to_recipe_input(
@@ -142,6 +151,10 @@ def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
         _run_youtube(conn, job)
         return
 
+    if ingest.instagram_shortcode(job.normalized_url):
+        _run_instagram(conn, job)
+        return
+
     try:
         html = _obtain_html(conn, job)
     except fetch.FetchError as exc:
@@ -203,6 +216,59 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     refreshed = ingest.get_job(conn, job.id)
     if refreshed and refreshed.recipe_id:  # use the video thumbnail as the recipe photo
         _maybe_set_image(conn, refreshed.recipe_id, data.thumbnail_url)
+
+
+def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
+    """Ingest an Instagram reel or post: the caption carries the recipe.
+
+    Supplied Safari HTML wins whenever the Shortcut captured it - that page was fetched inside the
+    sharer's own logged-in session, so it works for followers-only accounts the public embed will
+    never serve. Falling back to the embed page keeps the plain share-a-link flow working for
+    public posts, which is the common case.
+    """
+    if not get_settings().ai_enabled:
+        ingest.set_status(
+            conn, job.id, "failed", error_category="instagram_needs_ai",
+            error_message="Add an AI API key to import recipes from Instagram.",
+        )
+        return
+
+    thumbnail_url: str | None = None
+    supplied = ingest.read_artifact(conn, job.id, "supplied_html")
+    if supplied is not None:
+        content = _page_text(supplied.decode("utf-8", errors="replace"))
+    else:
+        ingest.set_status(conn, job.id, "fetching")
+        shortcode = ingest.instagram_shortcode(job.normalized_url) or ""
+        try:
+            data = instagram.fetch(shortcode)
+        except instagram.InstagramError as exc:
+            ingest.set_status(
+                conn, job.id, "failed", error_category="instagram_unavailable",
+                error_message=str(exc)[:400],
+            )
+            return
+        ingest.store_artifact(conn, job.id, "instagram_metadata", data.to_json().encode("utf-8"))
+        content = data.prompt_text()
+        thumbnail_url = data.thumbnail_url
+
+    ingest.set_status(conn, job.id, "extracting")
+    # require_steps=False for the same reason as YouTube: a reel's method is usually spoken, so an
+    # ingredient list plus the source link is still worth keeping.
+    applied = _ai_extract_and_apply(
+        conn, job, content,
+        extractor="instagram", source_type="web", operation="extract_instagram",
+        require_steps=False,
+    )
+    if not applied:
+        ingest.set_status(
+            conn, job.id, "failed", error_category="no_recipe",
+            error_message="Couldn't find a recipe in that Instagram post's caption.",
+        )
+        return
+    refreshed = ingest.get_job(conn, job.id)
+    if refreshed and refreshed.recipe_id:
+        _maybe_set_image(conn, refreshed.recipe_id, thumbnail_url)
 
 
 def _page_text(html: str) -> str:

@@ -23,6 +23,25 @@ Hard constraints this imposes:
 
 **Ship in v1, not backlog**: a second Shortcut variant that runs JavaScript-in-Safari to capture the rendered page HTML and POSTs `{"url", "html"}` — this defeats every bot-wall for free because the fetch happened in the user's real browser session (Mealie's newer shortcut does this). The design panel's family-UX judge flagged a failed share-from-Safari as the single highest-friction moment the family will hit; don't defer the fix.
 
+#### 1.1a Instagram reels (same Shortcut, no new token)
+
+An Instagram reel's recipe lives in its **caption**, so ingestion is a caption fetch plus the same LLM extractor as YouTube — `require_steps=False`, because a reel's method is normally spoken aloud.
+
+**Measured constraint (2026-07-27, on the deploy target):** yt-dlp 2026.07.04 cannot read Instagram anonymously *at all*. Every post — valid shortcode or invented one — returns `Instagram sent an empty media response ... use --cookies-from-browser`. The failure is identical for a nonexistent post, so it is an auth wall, not a lookup miss. **We therefore never call yt-dlp for Instagram and never store an Instagram credential**; a logged-in scraping session risks the family's real account for a marginal gain.
+
+Two sources instead, in order:
+
+1. **Supplied Safari HTML** (the §1.1 JavaScript variant). The page was fetched inside the sharer's own logged-in session, so this works for private and followers-only posts. It wins whenever present and skips the network entirely.
+2. **The public `/p/<shortcode>/embed/captioned/` page**, which serves a public post's caption with no login. Parsed defensively — inline `contextJSON` first (complete and unescaped), then the rendered `.Caption` block, then the truncated `og:description`. Instagram offers no contract here, so a parse miss must degrade to a clean failure, never an exception.
+
+A post that is private, removed, or caption-less fails with `error_category = instagram_unavailable` and a message naming the Safari workaround. That message is the feature's real UX for the followers-only case; keep it actionable.
+
+**Canonicalization matters more here than for YouTube.** The Instagram app shares `/reel/<code>`, the website shares `/p/<code>`, and IGTV shares `/tv/<code>` — all the *same* post. `ingest.instagram_shortcode()` collapses them to one idempotency key (`https://www.instagram.com/reel/<code>`), or the same reel shared by two routes would create two recipes. A bare `/<username>` is a profile, not a post, and must fall through to the ordinary web path.
+
+Two deliberate schema choices, both to avoid a migration:
+- `source_type` stays **`web`**. The `recipes` CHECK constraint (migration 005) allows only `youtube/web/manual/photo`, and widening it means a full SQLite table rebuild. Provenance is carried by `extraction_runs.extractor = 'instagram'` and the source URL.
+- `video_id` stays **NULL**. It is YouTube-specific — cook mode builds a `youtube.com/watch?v=` deep link from it, so an Instagram shortcode there would render a broken timestamp link.
+
 ### 1.2 Android — PWA Web Share Target (dormant — optional HTTPS upgrade required)
 
 The household is iPhone + PC, and the zero-cost LAN setup runs plain HTTP, so this path ships **disabled by default**: Android's share target requires an installed PWA served over trusted HTTPS. Android users on the LAN still have the paste box like any browser. If Android + the free mkcert upgrade (see `02-architecture.md` §9) ever land, the installed PWA (Chrome) registers via the manifest:

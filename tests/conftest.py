@@ -22,6 +22,11 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     monkeypatch.setenv("RC_SETUP_TOKEN", "test-setup-token")
     monkeypatch.delenv("RC_HTTPS", raising=False)
     monkeypatch.delenv("RC_BACKUP_DIR", raising=False)
+    # A developer shell often exports the real provider keys (the prod launcher pulls them from
+    # the User registry). Tests must decide for themselves whether AI is enabled, or the
+    # "no key configured" paths silently stop being exercised on that machine.
+    monkeypatch.delenv("RC_ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("RC_OPENAI_API_KEY", raising=False)
     config.reset_settings_cache()
     yield d
     config.reset_settings_cache()
