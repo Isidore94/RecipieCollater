@@ -72,6 +72,10 @@ def _render_library(
     tier: str | None = None,
     maxmin: str | None = None,
     rating: str | None = None,
+    notice: str | None = None,
+    error: str | None = None,
+    undo: int | None = None,
+    undo_kind: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> Response:
     recipes_list = recipe_service.list_recipes(
@@ -94,6 +98,7 @@ def _render_library(
         filter_maxmin=maxmin or "",
         filter_rating=rating or "",
         tags=recipe_service.list_tags(db, status=status) if status == "cookbook" else [],
+        notice=notice, error=error, undo=undo, undo_kind=undo_kind,
         **(extra or {}),
     )
 
@@ -123,6 +128,9 @@ def _inbox_response(
     *,
     query: str | None = None,
     error: str | None = None,
+    notice: str | None = None,
+    undo: int | None = None,
+    undo_kind: str | None = None,
     status_code: int = 200,
 ) -> Response:
     return render(
@@ -138,6 +146,7 @@ def _inbox_response(
         tags=[],
         filter_tag="", filter_tier="", filter_maxmin="", filter_rating="",
         ingest_error=error,
+        notice=notice, undo=undo, undo_kind=undo_kind,
         status_code=status_code,
         **_jobs_context(db),
     )
@@ -147,10 +156,15 @@ def _inbox_response(
 def inbox(
     request: Request,
     q: str | None = None,
+    notice: str | None = None,
+    undo: int | None = None,
+    undo_kind: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
-    return _inbox_response(request, db, user, query=q)
+    return _inbox_response(
+        request, db, user, query=q, notice=notice, undo=undo, undo_kind=undo_kind
+    )
 
 
 @router.post("/inbox/ingest")
@@ -332,6 +346,10 @@ def cookbook(
     tier: str | None = None,
     maxmin: str | None = None,
     rating: str | None = None,
+    notice: str | None = None,
+    error: str | None = None,
+    undo: int | None = None,
+    undo_kind: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
@@ -353,6 +371,7 @@ def cookbook(
     return _render_library(
         request, db, user, "cookbook", "Cookbook", q,
         tag=tag, tier=tier, maxmin=maxmin, rating=rating,
+        notice=notice, error=error, undo=undo, undo_kind=undo_kind,
     )
 
 

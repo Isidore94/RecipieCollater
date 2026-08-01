@@ -105,11 +105,13 @@ def test_set_status_rejects_unknown(migrated_db: sqlite3.Connection) -> None:
         recipes.set_status(migrated_db, recipe_id, "deleted")
 
 
-def test_delete(migrated_db: sqlite3.Connection) -> None:
+def test_delete_archives_so_it_can_come_back(migrated_db: sqlite3.Connection) -> None:
+    """Delete returns the archive id to restore from; deleting a ghost returns nothing."""
     recipe_id = recipes.create_recipe(migrated_db, recipes.RecipeInput(title="Soup"))
-    assert recipes.delete_recipe(migrated_db, recipe_id) is True
+    archive_id = recipes.delete_recipe(migrated_db, recipe_id)
+    assert archive_id
     assert recipes.get_recipe(migrated_db, recipe_id) is None
-    assert recipes.delete_recipe(migrated_db, recipe_id) is False
+    assert recipes.delete_recipe(migrated_db, recipe_id) is None
 
 
 def test_list_by_status_and_search(migrated_db: sqlite3.Connection) -> None:
@@ -150,3 +152,68 @@ def test_validation_rejects_bad_input(migrated_db: sqlite3.Connection) -> None:
             recipes.create_recipe(migrated_db, bad)
     # A validation failure must not leave a half-written recipe behind.
     assert migrated_db.execute("SELECT COUNT(*) FROM recipes").fetchone()[0] == 0
+
+
+def test_restore_brings_the_recipe_back_whole(migrated_db: sqlite3.Connection) -> None:
+    """Deleting cascades ingredients, steps and tags away; restore must rebuild all of them."""
+    units.seed_core_units(migrated_db)
+    recipe_id = recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="Banana Bread", base_servings="4", tldr="Mash, mix, bake.",
+            cook_minutes=60, source_name="Grandma",
+            ingredients=[
+                recipes.IngredientInput(quantity_text="3", food="ripe bananas"),
+                recipes.IngredientInput(quantity_text="250", unit="g", food="flour"),
+            ],
+            steps=[recipes.StepInput(instruction="Mash the bananas"),
+                   recipes.StepInput(instruction="Bake for an hour")],
+            tags=["baking", "easy"],
+        ),
+    )
+    recipes.set_status(migrated_db, recipe_id, "cookbook")
+    recipes.set_rating(migrated_db, recipe_id, 9)
+    recipes.set_notes(migrated_db, recipe_id, "Double the bananas.")
+
+    archive_id = recipes.delete_recipe(migrated_db, recipe_id)
+    assert archive_id and recipes.get_recipe(migrated_db, recipe_id) is None
+
+    restored = recipes.restore_recipe(migrated_db, archive_id)
+    assert restored.title == "Banana Bread"
+    assert restored.status == "cookbook"
+    assert restored.rating == 9
+    assert restored.notes == "Double the bananas."
+    assert restored.cook_minutes == 60
+    assert restored.source_name == "Grandma"
+    assert [i.food_name for i in restored.ingredients] == ["ripe bananas", "flour"]
+    assert [s.instruction for s in restored.steps] == ["Mash the bananas", "Bake for an hour"]
+    assert sorted(restored.tags) == ["baking", "easy"]
+
+
+def test_a_restored_recipe_is_searchable_again(migrated_db: sqlite3.Connection) -> None:
+    """Restore goes through the normal create path, so the FTS index is rebuilt with it."""
+    recipe_id = recipes.create_recipe(migrated_db, recipes.RecipeInput(title="Lentil Dahl"))
+    archive_id = recipes.delete_recipe(migrated_db, recipe_id)
+    assert archive_id
+    assert not recipes.list_recipes(migrated_db, status="inbox", query="dahl")
+
+    recipes.restore_recipe(migrated_db, archive_id)
+    assert [r.title for r in recipes.list_recipes(migrated_db, status="inbox", query="dahl")] == [
+        "Lentil Dahl"
+    ]
+
+
+def test_restore_is_single_shot(migrated_db: sqlite3.Connection) -> None:
+    recipe_id = recipes.create_recipe(migrated_db, recipes.RecipeInput(title="Soup"))
+    archive_id = recipes.delete_recipe(migrated_db, recipe_id)
+    assert archive_id
+    recipes.restore_recipe(migrated_db, archive_id)
+
+    with pytest.raises(recipes.RestoreUnavailable, match="already been restored"):
+        recipes.restore_recipe(migrated_db, archive_id)
+    assert len(recipes.list_recipes(migrated_db, status="inbox")) == 1
+
+
+def test_restoring_something_unknown_is_refused(migrated_db: sqlite3.Connection) -> None:
+    with pytest.raises(recipes.RestoreUnavailable, match="no longer available"):
+        recipes.restore_recipe(migrated_db, 9999)

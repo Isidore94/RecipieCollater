@@ -184,7 +184,9 @@
     </form>
     {% endif %}
     <form method="post" action="/recipes/{{ recipe.slug }}/delete" class="inline-form"
-          onsubmit="return confirm('Delete this recipe? This cannot be undone.');">
+          {# The recipe itself can be restored; the cook log cannot, so say so when there is
+             one to lose and point at Archive, which keeps everything. #}
+          onsubmit="return confirm({% if cook_log %}'Delete {{ recipe.title }}? You can undo this, but the {{ cook_log|length }} time{{ 's' if cook_log|length != 1 }} you have cooked it will not come back. Archive keeps it and its history out of the way instead.'{% else %}'Delete {{ recipe.title }}? You can undo this right afterwards.'{% endif %});">
       <button type="submit" class="btn-danger">Delete</button>
     </form>
   </div>

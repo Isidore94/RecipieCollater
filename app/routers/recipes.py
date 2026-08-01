@@ -572,6 +572,28 @@ async def delete(
     _: None = Depends(require_csrf),
 ) -> Response:
     detail = recipes.get_recipe_by_slug(db, slug)
-    if detail is not None:
-        recipes.delete_recipe(db, detail.id)
-    return RedirectResponse("/inbox", status_code=303)
+    if detail is None:
+        return flash.redirect("/cookbook", error="That recipe no longer exists.")
+    archive_id = recipes.delete_recipe(db, detail.id, deleted_by=user.id)
+    back = "/cookbook" if detail.status == "cookbook" else "/inbox"
+    return flash.redirect(
+        back, notice=f"Deleted {detail.title}.", undo=archive_id, undo_kind="recipe"
+    )
+
+
+@router.post("/restore/{archive_id}")
+async def restore(
+    request: Request,
+    archive_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    """Bring back a recipe deleted from the banner that confirmed it."""
+    try:
+        restored = recipes.restore_recipe(db, archive_id, saved_by=user.id)
+    except recipes.RecipeError as exc:
+        return flash.redirect("/cookbook", error=str(exc))
+    return flash.redirect(
+        f"/recipes/{restored.slug}", notice=f"{restored.title} is back."
+    )

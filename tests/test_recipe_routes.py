@@ -85,7 +85,8 @@ def test_promote_then_delete(admin_client: TestClient) -> None:
         "/recipes/tomato-pasta/delete", headers=SAME_ORIGIN, follow_redirects=False
     )
     assert deleted.status_code == 303
-    assert deleted.headers["location"] == "/inbox"
+    # It was promoted, so the delete returns to the cookbook it was removed from.
+    assert deleted.headers["location"].startswith("/cookbook")
     # The recipe is gone: viewing it redirects back to the inbox.
     gone = admin_client.get("/recipes/tomato-pasta", follow_redirects=False)
     assert gone.status_code == 303

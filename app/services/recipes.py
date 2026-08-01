@@ -15,6 +15,7 @@ import re
 import sqlite3
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
+from typing import Any
 from urllib.parse import urlsplit
 
 from app.security import now_iso
@@ -550,10 +551,115 @@ def set_status(conn: sqlite3.Connection, recipe_id: int, status: str) -> bool:
     return cur.rowcount > 0
 
 
-def delete_recipe(conn: sqlite3.Connection, recipe_id: int) -> bool:
-    cur = conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
+class RestoreUnavailable(RecipeError):
+    """This deleted recipe cannot be brought back (unknown, or already restored)."""
+
+
+def delete_recipe(
+    conn: sqlite3.Connection, recipe_id: int, *, deleted_by: int | None = None
+) -> int | None:
+    """Delete a recipe, archiving it first. Returns the archive id to offer a restore from.
+
+    The archive lives outside the recipe's foreign-key graph on purpose: recipe_revisions
+    cascades on delete, so the snapshots kept "for cheap undo" are destroyed by the very
+    operation someone would want to undo.
+    """
+    detail = get_recipe(conn, recipe_id)
+    if detail is None:
+        return None
+    cur = conn.execute(
+        "INSERT INTO deleted_recipes (slug, title, payload, deleted_by) VALUES (?, ?, ?, ?)",
+        (detail.slug, detail.title, json.dumps(asdict(detail)), deleted_by),
+    )
+    archive_id = int(cur.lastrowid or 0)
+    conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
     conn.commit()
-    return cur.rowcount > 0
+    return archive_id
+
+
+def _input_from_payload(payload: dict[str, Any]) -> RecipeInput:
+    """Rebuild the creation input from an archived RecipeDetail.
+
+    Ingredients go back through their free text (unit name, food name) rather than the old ids,
+    because create_recipe resolves those itself and the ids may since have been merged away.
+    """
+    return RecipeInput(
+        title=payload["title"],
+        tldr=payload.get("tldr"),
+        description=payload.get("description"),
+        tier=payload.get("tier"),
+        base_servings=payload.get("base_servings") or "4",
+        servings_text=payload.get("servings_text"),
+        prep_minutes=payload.get("prep_minutes"),
+        cook_minutes=payload.get("cook_minutes"),
+        total_minutes=payload.get("total_minutes"),
+        active_minutes=payload.get("active_minutes"),
+        elapsed_minutes=payload.get("elapsed_minutes"),
+        source_type=payload.get("source_type") or "manual",
+        source_url=payload.get("source_url"),
+        source_name=payload.get("source_name"),
+        ingredients=[
+            IngredientInput(
+                original_text=ing.get("original_text") or "",
+                section=ing.get("section"),
+                quantity_text=ing.get("quantity_text"),
+                unit=ing.get("unit_name"),
+                food=ing.get("food_name"),
+                note=ing.get("note"),
+                scaling_mode=ing.get("scaling_mode") or "linear",
+                package_quantity_text=ing.get("package_quantity_text"),
+            )
+            for ing in payload.get("ingredients") or []
+        ],
+        steps=[
+            StepInput(
+                instruction=step.get("instruction") or "",
+                section=step.get("section"),
+                minutes=step.get("minutes"),
+                video_seconds=step.get("video_seconds"),
+            )
+            for step in payload.get("steps") or []
+        ],
+        tags=list(payload.get("tags") or []),
+    )
+
+
+def restore_recipe(
+    conn: sqlite3.Connection, archive_id: int, *, saved_by: int | None = None
+) -> RecipeDetail:
+    """Bring an archived recipe back and return it. Single-shot: a replay is refused.
+
+    The recipe returns with its ingredients, steps, tags, timings, source, rating and notes. Its
+    cook log does not: those rows referenced an id that no longer exists, and re-pointing them at
+    a new recipe would be inventing history.
+    """
+    row = conn.execute(
+        "SELECT * FROM deleted_recipes WHERE id = ?", (archive_id,)
+    ).fetchone()
+    if row is None:
+        raise RestoreUnavailable("that recipe is no longer available to restore")
+    if row["restored_at"] is not None:
+        raise RestoreUnavailable("that recipe has already been restored")
+
+    payload = json.loads(row["payload"])
+    new_id = create_recipe(conn, _input_from_payload(payload), created_by=saved_by)
+    if payload.get("status") and payload["status"] != "inbox":
+        set_status(conn, new_id, payload["status"])
+    if payload.get("rating"):
+        set_rating(conn, new_id, int(payload["rating"]))
+    if payload.get("notes"):
+        set_notes(conn, new_id, payload["notes"])
+    if payload.get("image_path"):
+        set_image(conn, new_id, payload["image_path"])
+
+    conn.execute(
+        "UPDATE deleted_recipes SET restored_at = ? WHERE id = ?", (now_iso(), archive_id)
+    )
+    conn.commit()
+    restored = get_recipe(conn, new_id)
+    if restored is None:  # pragma: no cover - just created above
+        raise RestoreUnavailable("could not restore that recipe")
+    return restored
 
 
 def set_title(conn: sqlite3.Connection, recipe_id: int, title: str) -> bool:

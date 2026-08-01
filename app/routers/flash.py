@@ -33,12 +33,14 @@ def redirect(
     notice: str | None = None,
     error: str | None = None,
     undo: int | None = None,
+    undo_kind: str = "pantry",
 ) -> RedirectResponse:
     """303 back to ``path``, carrying at most one banner message.
 
     ``error`` wins when both are given: a partial failure is the thing the user needs to see.
-    ``undo`` names a pantry adjustment the banner can offer to reverse, so "used up" and
-    "deleted" are recoverable from the confirmation itself rather than from a history screen.
+    ``undo`` names something the banner can offer to reverse - a pantry adjustment, or a
+    deleted recipe when ``undo_kind`` says so - so a wrong tap is recoverable from the
+    confirmation itself rather than from a history screen.
     """
     if error:
         path = _query(path, "error", error)
@@ -46,5 +48,5 @@ def redirect(
         path = _query(path, "notice", notice)
         if undo is not None:
             separator = "&" if "?" in path else "?"
-            path = f"{path}{separator}undo={undo}"
+            path = f"{path}{separator}undo={undo}&undo_kind={quote(undo_kind)}"
     return RedirectResponse(path, status_code=303)

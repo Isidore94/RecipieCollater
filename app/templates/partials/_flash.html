@@ -1,0 +1,16 @@
+{# The one-shot banner every screen shows after a mutation. When the change is reversible it
+   carries the way back, because the moment someone realises it was the wrong tap is right now,
+   looking at the confirmation - not later, hunting for a history screen. #}
+{% if notice %}
+<div class="banner banner-ok banner-undo" role="status">
+  <span>{{ notice }}</span>
+  {% if undo %}
+  <form method="post" class="inline-post"
+        action="{% if undo_kind == 'recipe' %}/recipes/restore/{{ undo }}{% else %}/pantry/adjustments/{{ undo }}/undo{% endif %}">
+    {% if undo_kind != 'recipe' %}<input type="hidden" name="next" value="{{ back }}">{% endif %}
+    <button type="submit" class="btn-secondary">Undo</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}

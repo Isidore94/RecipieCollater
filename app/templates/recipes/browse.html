@@ -14,6 +14,8 @@
   <a href="/archive"{% if status == 'archived' %} class="is-active"{% endif %}>Archive</a>
 </nav>
 
+{% include "partials/_flash.html" %}
+
 {% if status == 'inbox' %}
 <section class="card ingest-card" x-data="{ paste: false }">
   <h2 class="ingest-title">Add a recipe from the web
