@@ -11,7 +11,6 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
@@ -19,6 +18,7 @@ from starlette.datastructures import FormData
 
 from app.auth import current_user, require_csrf
 from app.deps import get_db
+from app.routers import flash
 from app.services import pantry, recipes, shopping
 from app.services.users import User
 from app.templating import render
@@ -31,9 +31,8 @@ def _str(form: FormData, key: str) -> str:
     return raw.strip() if isinstance(raw, str) else ""
 
 
-def _notice_redirect(notice: str | None = None) -> Response:
-    url = f"/shopping?notice={quote(notice)}" if notice else "/shopping"
-    return RedirectResponse(url, status_code=303)
+def _notice_redirect(notice: str | None = None, error: str | None = None) -> Response:
+    return flash.redirect("/shopping", notice=notice, error=error)
 
 
 def _picks_from_form(form: FormData) -> list[tuple[int, str | None]]:
@@ -52,6 +51,7 @@ def _picks_from_form(form: FormData) -> list[tuple[int, str | None]]:
 def index(
     request: Request,
     notice: str | None = None,
+    error: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
@@ -61,7 +61,7 @@ def index(
         request, "shopping/index.html", active_nav="shopping", user=user,
         aisles=shopping.grouped(db, list_id), remaining=remaining, total=total,
         reminders_text=shopping.to_reminders_text(db, list_id),
-        sources=shopping.sources_by_item(db, list_id), notice=notice,
+        sources=shopping.sources_by_item(db, list_id), notice=notice, error=error,
     )
 
 
@@ -91,9 +91,12 @@ async def add_manual(
     _: None = Depends(require_csrf),
 ) -> Response:
     async with request.form() as form:
-        with contextlib.suppress(shopping.ShoppingError):
-            shopping.add_manual(db, shopping.active_list(db), _str(form, "text"))
-    return _notice_redirect()
+        text = _str(form, "text")
+        try:
+            shopping.add_manual(db, shopping.active_list(db), text)
+        except shopping.ShoppingError as exc:
+            return _notice_redirect(error=str(exc))
+    return _notice_redirect(f"Added {text}.")
 
 
 @router.post("/add-staples")
@@ -124,8 +127,8 @@ async def add_from_recipe(
             outcome = shopping.add_from_recipe(
                 db, shopping.active_list(db), detail.id, servings=servings, missing_only=True
             )
-        except shopping.ShoppingError:
-            return _notice_redirect()
+        except shopping.ShoppingError as exc:
+            return _notice_redirect(error=str(exc))
     return _notice_redirect(f"{detail.title}: {outcome.notice}")
 
 
@@ -197,7 +200,9 @@ def restock(
     list_id = shopping.active_list(db)
     candidates = shopping.restock_candidates(db, list_id)
     if not candidates:
-        return RedirectResponse("/shopping", status_code=303)
+        return _notice_redirect(
+            "Nothing on the list is tracked in the pantry, so there is nothing to put away."
+        )
     return render(
         request, "shopping/restock.html", active_nav="shopping", user=user,
         candidates=candidates, locations=pantry.list_locations(db),
@@ -251,12 +256,14 @@ async def set_purchase(
     _: None = Depends(require_csrf),
 ) -> Response:
     async with request.form() as form:
-        with contextlib.suppress(shopping.ShoppingError):
+        try:
             shopping.set_purchase_info(
                 db, food_id, quantity_text=_str(form, "quantity") or None,
                 unit=_str(form, "unit") or None, label=_str(form, "label") or None,
             )
-    return _notice_redirect()
+        except shopping.ShoppingError as exc:
+            return _notice_redirect(error=str(exc))
+    return _notice_redirect("Saved how you buy this.")
 
 
 @router.post("/items/{item_id}/toggle")

@@ -16,6 +16,7 @@
 </header>
 
 {% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
 {% if restock_count %}
 <form method="post" action="/shopping/add-staples" class="pantry-restock">

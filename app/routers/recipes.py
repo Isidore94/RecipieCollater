@@ -22,6 +22,7 @@ from app.auth import current_user, require_csrf
 from app.config import get_settings
 from app.deps import get_db
 from app.extraction import ExtractedRecipe
+from app.routers import flash
 from app.services import ai_draft, cooking, matching, quantity, recipes
 from app.services.users import User
 from app.templating import render
@@ -371,12 +372,14 @@ def view(
     request: Request,
     slug: str,
     servings: str | None = None,
+    notice: str | None = None,
+    error: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
     detail = recipes.get_recipe_by_slug(db, slug)
     if detail is None:
-        return RedirectResponse("/inbox", status_code=303)
+        return flash.redirect("/inbox", error="That recipe no longer exists.")
     target = _safe_servings(servings, detail.base_servings)
     return render(
         request, "recipes/view.html", user=user, recipe=detail,
@@ -384,6 +387,7 @@ def view(
         base_servings=detail.base_servings, presets=_presets(detail.base_servings),
         cook_log=cooking.list_cook_log(db, detail.id),
         coverage=matching.recipe_coverage(db, detail.id),
+        notice=notice, error=error,
     )
 
 
@@ -514,10 +518,13 @@ async def rename(
 ) -> Response:
     """Title-only rename (imported YouTube titles are clickbait); the slug/URL stays stable."""
     detail = recipes.get_recipe_by_slug(db, slug)
-    if detail is not None:
-        with contextlib.suppress(ValueError):
-            recipes.set_title(db, detail.id, _text(await request.form(), "title"))
-    return RedirectResponse(f"/recipes/{slug}", status_code=303)
+    if detail is None:
+        return flash.redirect("/cookbook", error="That recipe no longer exists.")
+    try:
+        recipes.set_title(db, detail.id, _text(await request.form(), "title"))
+    except ValueError as exc:
+        return flash.redirect(f"/recipes/{slug}", error=str(exc))
+    return flash.redirect(f"/recipes/{slug}", notice="Renamed.")
 
 
 @router.post("/{slug}/rating")
@@ -529,10 +536,16 @@ async def rate(
     _: None = Depends(require_csrf),
 ) -> Response:
     detail = recipes.get_recipe_by_slug(db, slug)
-    if detail is not None:
-        with contextlib.suppress(ValueError):
-            recipes.set_rating(db, detail.id, int(_text(await request.form(), "rating") or 0))
-    return RedirectResponse(f"/recipes/{slug}", status_code=303)
+    if detail is None:
+        return flash.redirect("/cookbook", error="That recipe no longer exists.")
+    try:
+        rating = int(_text(await request.form(), "rating") or 0)
+        recipes.set_rating(db, detail.id, rating)
+    except ValueError as exc:
+        return flash.redirect(f"/recipes/{slug}", error=str(exc))
+    return flash.redirect(
+        f"/recipes/{slug}", notice="Rating cleared." if not rating else f"Rated {rating}/10."
+    )
 
 
 @router.post("/{slug}/notes")
@@ -544,9 +557,10 @@ async def save_notes(
     _: None = Depends(require_csrf),
 ) -> Response:
     detail = recipes.get_recipe_by_slug(db, slug)
-    if detail is not None:
-        recipes.set_notes(db, detail.id, _text(await request.form(), "notes"))
-    return RedirectResponse(f"/recipes/{slug}", status_code=303)
+    if detail is None:
+        return flash.redirect("/cookbook", error="That recipe no longer exists.")
+    recipes.set_notes(db, detail.id, _text(await request.form(), "notes"))
+    return flash.redirect(f"/recipes/{slug}", notice="Notes saved.")
 
 
 @router.post("/{slug}/delete")

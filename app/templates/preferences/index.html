@@ -10,6 +10,9 @@
 <p class="muted">These guide the assistant. <strong>Allergies</strong> and <strong>exclusions</strong>
   are hard limits &mdash; it never suggests a recipe that hits them. The rest are soft hints.</p>
 
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
+
 {% set groups = [
   ('allergy', 'Allergies (hard)', 'peanut, shellfish…'),
   ('exclude', 'Never suggest (hard)', 'pork, cilantro…'),

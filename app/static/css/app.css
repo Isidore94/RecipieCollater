@@ -159,6 +159,8 @@ button:active, a.btn-primary:active, .btn-secondary:active { filter: brightness(
 .banner { padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; }
 .banner-ok { background: var(--ok-bg); color: var(--ok-ink); }
 .banner-err { background: var(--err-bg); color: var(--err-ink); }
+/* Something waiting to be done is neither a success nor an error. */
+.banner-todo { background: var(--paper); color: var(--ink); border: 1px solid var(--brand); }
 
 /* Recipe meta line: dot separators drawn between whatever parts are actually present. */
 .meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

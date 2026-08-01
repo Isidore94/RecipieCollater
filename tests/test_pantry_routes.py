@@ -115,3 +115,30 @@ def test_stock_take_page(admin_client: TestClient, migrated_db: sqlite3.Connecti
 def test_pantry_requires_login(client: TestClient) -> None:
     resp = client.get("/pantry", follow_redirects=False)
     assert resp.status_code in (301, 302, 303, 307, 401)
+
+
+def test_add_item_without_a_location_says_so(admin_client: TestClient) -> None:
+    """It used to redirect silently, so the button looked broken on a fresh pantry."""
+    resp = admin_client.post(
+        "/pantry/items", data={"display_name": "Olive oil"}, headers=SAME_ORIGIN,
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303 and "error=" in resp.headers["location"]
+    page = admin_client.get(resp.headers["location"])
+    assert "banner-err" in page.text and "Add a location first" in page.text
+
+
+def test_adding_a_location_confirms_it(admin_client: TestClient) -> None:
+    resp = admin_client.post(
+        "/pantry/locations", data={"name": "Kitchen cupboard"}, headers=SAME_ORIGIN,
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303 and "notice=" in resp.headers["location"]
+    assert "banner-ok" in admin_client.get(resp.headers["location"]).text
+
+
+def test_nameless_location_is_rejected_out_loud(admin_client: TestClient) -> None:
+    resp = admin_client.post(
+        "/pantry/locations", data={"name": "  "}, headers=SAME_ORIGIN, follow_redirects=False
+    )
+    assert resp.status_code == 303 and "error=" in resp.headers["location"]

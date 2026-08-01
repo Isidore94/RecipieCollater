@@ -7,15 +7,14 @@ default servings are scalars.
 
 from __future__ import annotations
 
-import contextlib
 import sqlite3
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import RedirectResponse
 from starlette.datastructures import FormData
 
 from app.auth import current_user, require_csrf
 from app.deps import get_db
+from app.routers import flash
 from app.services import preferences
 from app.services.users import User
 from app.templating import render
@@ -31,13 +30,15 @@ def _str(form: FormData, key: str) -> str:
 @router.get("")
 def index(
     request: Request,
+    notice: str | None = None,
+    error: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
     prefs = preferences.load(db)
     return render(
         request, "preferences/index.html", active_nav="plan", user=user,
-        rows=preferences.list_rows(db), scalars=prefs.scalars,
+        rows=preferences.list_rows(db), scalars=prefs.scalars, notice=notice, error=error,
     )
 
 
@@ -49,9 +50,14 @@ async def add(
     _: None = Depends(require_csrf),
 ) -> Response:
     async with request.form() as form:
-        with contextlib.suppress(preferences.PreferenceError):
-            preferences.add_preference(db, _str(form, "kind"), _str(form, "value"))
-    return RedirectResponse("/preferences", status_code=303)
+        value = _str(form, "value")
+        if not value:
+            return flash.redirect("/preferences", error="Type something to add first.")
+        try:
+            preferences.add_preference(db, _str(form, "kind"), value)
+        except preferences.PreferenceError as exc:
+            return flash.redirect("/preferences", error=str(exc))
+    return flash.redirect("/preferences", notice=f"Added {value}.")
 
 
 @router.post("/{pref_id}/remove")
@@ -63,7 +69,7 @@ async def remove(
     _: None = Depends(require_csrf),
 ) -> Response:
     preferences.remove_preference(db, pref_id)
-    return RedirectResponse("/preferences", status_code=303)
+    return flash.redirect("/preferences", notice="Removed.")
 
 
 @router.post("/scalars")
@@ -73,8 +79,17 @@ async def set_scalars(
     user: User = Depends(current_user),
     _: None = Depends(require_csrf),
 ) -> Response:
+    rejected: list[str] = []
     async with request.form() as form:
         for key in ("max_weekday_minutes", "max_weekend_minutes", "default_servings", "tier_mix"):
-            with contextlib.suppress(preferences.PreferenceError):
+            try:
                 preferences.set_scalar(db, key, _str(form, key))
-    return RedirectResponse("/preferences", status_code=303)
+            except preferences.PreferenceError:
+                # Save the fields that are valid and name the ones that are not, rather than
+                # dropping the whole submission on the floor.
+                rejected.append(key.replace("_", " "))
+    if rejected:
+        return flash.redirect(
+            "/preferences", error="Saved, except: " + ", ".join(rejected) + "."
+        )
+    return flash.redirect("/preferences", notice="Saved.")

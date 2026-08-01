@@ -5,9 +5,11 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.services import preferences, recipes
 from app.services.units import seed_core_units
+from tests.conftest import SAME_ORIGIN
 
 
 def test_add_dedupes_and_lists(migrated_db: sqlite3.Connection) -> None:
@@ -89,3 +91,23 @@ def test_hard_filter_matches_plurals(migrated_db: sqlite3.Connection) -> None:
         ),
     )
     assert preferences.recipe_violates_hard(migrated_db, rid3, ["nut"]) is None
+
+
+def test_empty_preference_is_rejected_out_loud(admin_client: TestClient) -> None:
+    """An add that failed used to reload the page unchanged, indistinguishable from success."""
+    resp = admin_client.post(
+        "/preferences/add", data={"kind": "allergy", "value": "  "}, headers=SAME_ORIGIN,
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303 and "error=" in resp.headers["location"]
+    assert "banner-err" in admin_client.get(resp.headers["location"]).text
+
+
+def test_adding_a_preference_confirms_it(admin_client: TestClient) -> None:
+    resp = admin_client.post(
+        "/preferences/add", data={"kind": "allergy", "value": "peanut"}, headers=SAME_ORIGIN,
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303 and "notice=" in resp.headers["location"]
+    page = admin_client.get(resp.headers["location"]).text
+    assert "banner-ok" in page and "peanut" in page

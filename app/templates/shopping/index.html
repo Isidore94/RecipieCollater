@@ -12,6 +12,7 @@
 </header>
 
 {% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
 <form method="post" action="/shopping/add" class="shop-add">
   <input name="text" required placeholder="Add an item&hellip;" aria-label="Add an item" autocomplete="off">

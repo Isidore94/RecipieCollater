@@ -15,6 +15,7 @@ from starlette.datastructures import FormData
 
 from app.auth import current_user, require_csrf
 from app.deps import get_db
+from app.routers import flash
 from app.services import pantry
 from app.services.users import User
 from app.templating import render
@@ -75,6 +76,7 @@ def index(
     location: int | None = None,
     q: str | None = None,
     notice: str | None = None,
+    error: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
@@ -85,7 +87,7 @@ def index(
     return render(
         request, "pantry/index.html", active_nav="pantry", user=user,
         locations=locations, active_location=active, items=items, restock_count=restock_count,
-        query=q or "", notice=notice,
+        query=q or "", notice=notice, error=error,
     )
 
 
@@ -115,10 +117,13 @@ async def add_location(
 ) -> Response:
     async with request.form() as form:
         name = _str(form, "name")
-        if name:
+        if not name:
+            return flash.redirect("/pantry", error="Give the location a name first.")
+        try:
             loc_id = pantry.create_location(db, name, is_freezer=_checked(form, "is_freezer"))
-            return RedirectResponse(f"/pantry?location={loc_id}", status_code=303)
-    return RedirectResponse("/pantry", status_code=303)
+        except pantry.PantryError as exc:
+            return flash.redirect("/pantry", error=str(exc))
+    return flash.redirect(f"/pantry?location={loc_id}", notice=f"Added {name}.")
 
 
 @router.post("/items")
@@ -132,7 +137,11 @@ async def add_item(
         location_id = _int(form, "location_id")
         back = _back(form)
         if location_id is None:
-            return RedirectResponse(back, status_code=303)
+            return flash.redirect(
+                back,
+                error="Add a location first (a cupboard, the freezer\u2026), "
+                      "then add items to it.",
+            )
         data = pantry.PantryItemInput(
             display_name=_str(form, "display_name"),
             location_id=location_id,
@@ -146,10 +155,11 @@ async def add_item(
             expires_on=_str(form, "expires_on") or None,
             step_down_on_cook=_checked(form, "step_down_on_cook"),
         )
-        # A bad add just returns to the pantry; the form is forgiving by design.
-        with contextlib.suppress(pantry.PantryError):
+        try:
             pantry.add_item(db, data, user_id=user.id)
-    return RedirectResponse(back, status_code=303)
+        except pantry.PantryError as exc:
+            return flash.redirect(back, error=str(exc))
+    return flash.redirect(back, notice=f"Added {data.display_name}.")
 
 
 @router.post("/items/{item_id}/adjust")
@@ -198,12 +208,15 @@ async def set_staple(
     _: None = Depends(require_csrf),
 ) -> Response:
     async with request.form() as form:
-        with contextlib.suppress(pantry.PantryError):
+        back = _back(form)
+        try:
             pantry.set_staple(
                 db, item_id, is_staple=_checked(form, "is_staple"),
                 min_quantity_text=_str(form, "min_quantity_text") or None, user_id=user.id,
             )
-        return RedirectResponse(_back(form), status_code=303)
+        except pantry.PantryError as exc:
+            return flash.redirect(back, error=str(exc))
+        return flash.redirect(back, notice="Saved.")
 
 
 @router.post("/items/{item_id}/expiry")
@@ -215,9 +228,12 @@ async def set_expiry(
     _: None = Depends(require_csrf),
 ) -> Response:
     async with request.form() as form:
-        with contextlib.suppress(pantry.PantryError):
+        back = _back(form)
+        try:
             pantry.set_expiry(db, item_id, _str(form, "expires_on") or None, user_id=user.id)
-        return RedirectResponse(_back(form), status_code=303)
+        except pantry.PantryError as exc:
+            return flash.redirect(back, error=str(exc))
+        return flash.redirect(back, notice="Saved.")
 
 
 @router.post("/items/{item_id}/remove")
@@ -231,8 +247,14 @@ async def remove_item(
     async with request.form() as form:
         reason = _str(form, "reason")
         reason = reason if reason in ("manual_remove", "spoiled") else "manual_remove"
-        with contextlib.suppress(pantry.PantryError):
-            pantry.remove_item(
-                db, item_id, reason=reason, delete=_checked(form, "delete"), user_id=user.id
-            )
-        return RedirectResponse(_back(form), status_code=303)
+        back = _back(form)
+        deleted = _checked(form, "delete")
+        try:
+            pantry.remove_item(db, item_id, reason=reason, delete=deleted, user_id=user.id)
+        except pantry.PantryError as exc:
+            return flash.redirect(back, error=str(exc))
+        if deleted:
+            done = "Deleted."
+        else:
+            done = "Marked as gone bad." if reason == "spoiled" else "Marked as used up."
+        return flash.redirect(back, notice=done)

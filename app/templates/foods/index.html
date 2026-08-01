@@ -7,13 +7,16 @@
   <a href="/pantry" class="btn-secondary">Pantry</a>
 </header>
 
-<p class="muted">Everything joins on foods &mdash; coverage, deductions, aisles, pack sizes.
-  Review imports, merge duplicates (&ldquo;chicken breasts&rdquo; into &ldquo;chicken
-  breast&rdquo;), and group cuts under a family so &ldquo;what can I make with chicken?&rdquo;
-  finds every cut.</p>
+<p class="muted">This is the app&rsquo;s list of ingredient names. Tidying it up here is what
+  lets the pantry, the shopping list and &ldquo;what can I make?&rdquo; agree with each other:
+  merge duplicates (&ldquo;chicken breasts&rdquo; into &ldquo;chicken breast&rdquo;) and group
+  cuts under one family so a search for chicken finds every one of them.</p>
+
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
 {% if pending_count %}
-<p class="banner banner-ok">{{ pending_count }} imported food{{ 's' if pending_count != 1 }}
+<p class="banner banner-todo">{{ pending_count }} imported food{{ 's' if pending_count != 1 }}
   waiting for review &mdash; confirm them so trusted auto-deductions can apply.</p>
 {% endif %}
 

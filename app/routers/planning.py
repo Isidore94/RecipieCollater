@@ -7,18 +7,17 @@ Phase 4.6 trip builder; iCal export is a GET so the phone's calendar can fetch i
 
 from __future__ import annotations
 
-import contextlib
 import sqlite3
 from datetime import date, timedelta
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import PlainTextResponse
 from starlette.datastructures import FormData
 
 from app.auth import current_user, require_csrf
 from app.config import get_settings
 from app.deps import get_db
+from app.routers import flash
 from app.services import planning, recipes, shopping
 from app.services.users import User
 from app.templating import render
@@ -40,11 +39,8 @@ def _week_start(raw: str | None) -> date:
     return planning.week_start()
 
 
-def _redirect(start: date, notice: str | None = None) -> Response:
-    url = f"/plan?start={start.isoformat()}"
-    if notice:
-        url += f"&notice={quote(notice)}"
-    return RedirectResponse(url, status_code=303)
+def _redirect(start: date, notice: str | None = None, error: str | None = None) -> Response:
+    return flash.redirect(f"/plan?start={start.isoformat()}", notice=notice, error=error)
 
 
 def _week_label(week: date) -> str:
@@ -71,6 +67,7 @@ def board(
     request: Request,
     start: str | None = None,
     notice: str | None = None,
+    error: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
@@ -86,7 +83,7 @@ def board(
         cookbook=recipes.list_recipes(db, status="cookbook"),
         menus=planning.list_menus(db),
         shopping_remaining=remaining,
-        notice=notice,
+        notice=notice, error=error,
     )
 
 
@@ -111,9 +108,11 @@ async def add_entry(
                 )
             elif note:
                 planning.add_note_entry(db, plan_date, note, slot=slot, user_id=user.id)
-        except planning.PlanningError:
-            pass
-    return _redirect(week)
+        except planning.PlanningError as exc:
+            return _redirect(week, error=str(exc))
+        if not recipe_raw.isdigit() and not note:
+            return _redirect(week, error="Pick a recipe, or type a note for that day.")
+    return _redirect(week, "Added to the plan")
 
 
 @router.post("/entry/{entry_id}/remove")
@@ -127,7 +126,7 @@ async def remove_entry(
     async with request.form() as form:
         week = _week_start(_str(form, "week_start"))
         planning.remove_entry(db, entry_id)
-    return _redirect(week)
+    return _redirect(week, "Removed from the plan")
 
 
 @router.post("/entry/{entry_id}/move")
@@ -140,9 +139,11 @@ async def move_entry(
 ) -> Response:
     async with request.form() as form:
         week = _week_start(_str(form, "week_start"))
-        with contextlib.suppress(planning.PlanningError):
+        try:
             planning.move_entry(db, entry_id, _str(form, "plan_date"))
-    return _redirect(week)
+        except planning.PlanningError as exc:
+            return _redirect(week, error=str(exc))
+    return _redirect(week, "Moved")
 
 
 @router.post("/shopping")
@@ -167,8 +168,10 @@ async def save_menu(
 ) -> Response:
     async with request.form() as form:
         week = _week_start(_str(form, "week_start"))
-        with contextlib.suppress(planning.PlanningError):
+        try:
             planning.save_week_as_menu(db, week, _str(form, "name"))
+        except planning.PlanningError as exc:
+            return _redirect(week, error=str(exc))
     return _redirect(week, "Saved this week as a menu")
 
 
@@ -182,9 +185,12 @@ async def apply_menu(
     async with request.form() as form:
         week = _week_start(_str(form, "week_start"))
         menu_raw = _str(form, "menu_id")
-        if menu_raw.isdigit():
-            with contextlib.suppress(planning.PlanningError):
-                planning.apply_menu_to_week(db, int(menu_raw), week, user_id=user.id)
+        if not menu_raw.isdigit():
+            return _redirect(week, error="Pick a saved menu first.")
+        try:
+            planning.apply_menu_to_week(db, int(menu_raw), week, user_id=user.id)
+        except planning.PlanningError as exc:
+            return _redirect(week, error=str(exc))
     return _redirect(week, "Menu applied to this week")
 
 

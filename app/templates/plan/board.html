@@ -12,6 +12,7 @@
 </header>
 
 {% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
 <nav class="week-nav no-print">
   <a href="/plan?start={{ prev_week }}" class="btn-secondary">&larr; Prev</a>
