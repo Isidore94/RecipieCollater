@@ -1,5 +1,8 @@
 # Usability review — August 2026
 
+> **Status: Tier 1 fixed** (commits following this document), plus the Tier 2/3 items called out
+> below as *Fixed*. The rest stand as the backlog.
+
 Goal of this review: *"I want my wife to use this. It needs to be easy to use, quick to use, and enjoyable to use."*
 
 Method: full code read of every template, router, and static asset, a docs-vs-code gap analysis,
@@ -17,7 +20,7 @@ store, and waiting on the AI.
 
 ## Tier 1 — showstoppers (she will hit these in the first week)
 
-### 1. The screen sleeps mid-cook, and timers silently fail
+### 1. The screen sleeps mid-cook, and timers silently fail — **FIXED**
 `app/static/js/cook.js:185-194` implements only `navigator.wakeLock`, which requires a secure
 context. The app's documented deployment is plain HTTP (`http://recipes.local`), so the wake
 lock never activates — `wake()` returns immediately — and the phone sleeps mid-recipe with
@@ -34,7 +37,7 @@ Fix: ship the NoSleep video fallback (small silent looping video, played on cook
 wakeLock opportunistically on top), and surface a visible "screen will stay awake" / "couldn't
 keep screen awake" state so failure is at least honest.
 
-### 2. Every AI operation is a frozen page with no feedback
+### 2. Every AI operation is a frozen page with no feedback — **FIXED**
 Four synchronous LLM round-trips are plain `<form method=post>` with no spinner, no disabled
 button, nothing: chat (`app/routers/assistant.py:68`), AI draft (`recipes.py:284`), photo draft
 (`recipes.py:314`, easily 20s), receipt scan (`receipts.py:56`, 10–30s). The page just sits
@@ -49,7 +52,7 @@ no message at all — the proposal just sits there.
 Fix: htmx-ify these four forms with an `hx-indicator` spinner + disabled submit; route errors
 to an error banner.
 
-### 3. Manual entry rejects "3 bananas" and "2 eggs"
+### 3. Manual entry rejects "3 bananas" and "2 eggs" — **FIXED**
 Verified live: entering qty `3`, unit blank, ingredient `ripe bananas` — the only natural way a
 person writes countable ingredients — hard-fails with *"'3 ripe bananas' has an amount but no
 recognised unit"* (`app/services/recipes.py:248-253`). The `each` unit exists in the ontology,
@@ -61,7 +64,7 @@ blank rows × 6 fields** (36 stacked inputs on mobile, `recipes.py:31` + `app.cs
 each exposing a raw `linear / fixed / to_taste / round_to_package` enum select. Start with 2–3
 rows, move scaling behind an "advanced" disclosure, add per-row remove.
 
-### 4. The shopping list is at its worst in the store
+### 4. The shopping list is at its worst in the store — **FIXED**
 The check-off button is ~26px tall (`app.css:380`, vs. the app's own 44px baseline), only the
 tiny ☐ is tappable (the item text is an inert span, `shopping/index.html:57`), and every check
 is a **full page reload that scrolls back to the top** — mid-aisle, one-handed, with a cart.
@@ -71,7 +74,7 @@ This is the app's most-tapped control. Same reload-to-top pattern hits pantry ga
 Fix: htmx swap on the row, whole-row tap target, 44px minimum. This one change is probably the
 biggest single quality-of-life win in the app.
 
-### 5. Scaling doesn't follow through
+### 5. Scaling doesn't follow through — **FIXED**
 Scale a recipe 4 → 8 and:
 - "Cook this →" carries no servings (`view.html:44`) — cook mode shows the 4-serving amounts
   (`cooking.py:51` falls back to base).
@@ -82,7 +85,7 @@ Scale a recipe 4 → 8 and:
 She scales for guests, cooks, and the numbers are silently wrong. Fix: make the scaler swap
 update the hidden input and the Cook link (or store the chosen servings server-side).
 
-### 6. Add-to-Home-Screen is broken on iPhone
+### 6. Add-to-Home-Screen is broken on iPhone — **FIXED**
 - Both icons are SVG only (`manifest.webmanifest:11-12`, `base.html:14`); iOS requires PNG for
   `apple-touch-icon`, so she gets a screenshot thumbnail instead of an app icon.
 - `"start_url": "/inbox"` (`manifest.webmanifest:5`) — the installed app opens on the triage
@@ -103,7 +106,8 @@ home screen" walkthrough linked from onboarding success.
    From her seat: "I pressed the button and nothing happened."
 2. **No way to move a planned meal to another day.** `POST /plan/entry/{id}/move`
    (`planning.py:114-126`) is implemented; no template calls it. She must delete and re-add.
-3. **Ingest success is invisible; failure is raw and permanent.** A finished job silently
+3. **Ingest success is invisible; failure is raw and permanent.** — *Fixed:* finished jobs
+   announce the recipe and link to it; failures offer Try again / dismiss. A finished job silently
    vanishes from the poll (`_ingest_jobs.html`) — no "Added: Banana Bread →". A failed job
    shows the verbatim error forever ("the site returned HTTP 402", verified live) with no
    retry and no dismiss.
@@ -113,7 +117,7 @@ home screen" walkthrough linked from onboarding success.
 5. **Pantry first-run is a dead end.** "+ Location" is a ~17px `<details>` summary
    (`app.css:307`); the prominent "+ Add an item" silently no-ops when no location exists
    (`pantry.py:120-121`).
-6. **Destructive actions are uneven.** Pantry item delete has *no* confirm
+6. **Destructive actions are uneven.** — *Partly fixed:* pantry item delete now confirms. Pantry item delete has *no* confirm
    (`pantry/index.html:147-152`); food merge is irreversible behind a generic confirm
    (`foods/index.html:76-88`); recipe Delete sits in the same button row as Promote
    (`view.html:177-205`). Meanwhile the one excellent undo (cook deductions,
@@ -167,12 +171,29 @@ home screen" walkthrough linked from onboarding success.
 - Empty states that tell you what to do next (Home, Pantry, Shopping).
 - Clipboard fallback for non-secure contexts in `shopping.js` is careful, correct work.
 
-## If you only do five things before she touches it
+## What was fixed
 
-1. Screen-wake fallback + audible/visible timer completion in cook mode (Tier 1.1).
-2. htmx check-off with whole-row 44px targets on the shopping list, and the same inline-swap
-   treatment for pantry gauges (Tier 1.4).
-3. Spinners + disabled buttons on all four AI forms; error styling for assistant errors
-   (Tier 1.2).
-4. Default blank unit to `each`, slim the manual form (Tier 1.3).
-5. PNG home-screen icon + `start_url: "/"` + scaled-servings follow-through (Tier 1.5/1.6).
+All six Tier 1 items, plus the ingest-feedback and pantry-delete items from Tier 2 and the
+button-styling, jargon, touch-target and `:active` items from Tier 3. Verified in a browser at
+iPhone viewport, with regression tests covering the count-unit default, the scaling
+follow-through, the inline check-off, and ingest retry/dismiss.
+
+Two bugs surfaced while fixing these and were fixed with them: a `display:` rule outranks
+`[hidden]`'s UA `display: none`, which would have left the new AI spinner and timer banner
+permanently on screen and the ingredient rows' "more" fields permanently expanded; and the
+wakeLock branch could throw without falling through to the video.
+
+## The backlog (unchanged from the review above)
+
+Highest value next, in order:
+
+1. **Errors swallowed by `contextlib.suppress`** across ~20 mutations (Tier 2.1) — "I pressed
+   the button and nothing happened" is still possible in the pantry, foods, preferences and
+   plan screens.
+2. **No way to move a planned meal to another day** (Tier 2.2) — the route exists, the UI
+   doesn't call it.
+3. **No logout / switch-user** (Tier 2.8), and PIN entry has no confirm field.
+4. **Undo beyond cook deductions** (Tier 2.6) — pantry adjustments already write the history
+   rows for it.
+5. **Success feedback and the unused empty-state component** (Tier 3) — ratings, notes,
+   rename and promote still reload silently.
