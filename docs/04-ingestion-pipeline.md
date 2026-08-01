@@ -58,9 +58,11 @@ Known quirk to handle: Android's share system usually delivers the URL in **`tex
 
 ### 1.3 PC — paste box, bookmarklet, drag-and-drop
 
-- **Paste box** at the top of the Test Recipes inbox — primary desktop flow, zero install.
-- **Bookmarklet** generated from the configured `APP_BASE_URL`; the default opens `http://recipes.local/new?url=…`. Protocol/host are never duplicated in a template.
-- **Drag-and-drop** of a link onto the inbox page (`text/uri-list`).
+All three live on **`/add`**, one click from the desktop rail. The paste box also stays at the top of the Test Recipes inbox, where the link lands.
+
+- **Paste box** — primary desktop flow, zero install. Same field takes YouTube, a recipe site, or an Instagram reel, plus the optional HTML paste for sites that block automated fetching. Progress, "Added: *title* →", retry and dismiss render below it from the shared job list.
+- **Bookmarklet** generated from the configured `APP_BASE_URL`; it opens `http://recipes.local/add?url=…` **prefilled and waits for a click** — a GET must never queue a job (CONVENTIONS §7), and the pause is where a handed-over link gets corrected. Protocol/host are never duplicated in a template. (It targets `/add`, not the manual `/new` form this section originally named.) A `?url=` that is not `http(s)` is dropped by `safe_url`.
+- **Drag-and-drop** of a link onto the `/add` box (`text/uri-list`, falling back to `text/plain`; comment lines and the trailing page title some browsers append are skipped). Alpine-only nicety — the form still posts without JS.
 - No browser extension — maintenance burden without real gain (Mealie's community reached the same conclusion).
 
 ### 1.4 Manual entry & photo import

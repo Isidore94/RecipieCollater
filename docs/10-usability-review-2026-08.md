@@ -113,7 +113,9 @@ home screen" walkthrough linked from onboarding success.
    vanishes from the poll (`_ingest_jobs.html`) — no "Added: Banana Bread →". A failed job
    shows the verbatim error forever ("the site returned HTTP 402", verified live) with no
    retry and no dismiss.
-4. **The add-a-recipe surface is hidden.** The paste box exists only on Inbox, Inbox has no
+4. **The add-a-recipe surface is hidden.** — *Fixed:* `/add` is a standing button on the rail
+   and the primary button on every library tab, and it takes a pasted, dropped, or
+   bookmarkleted link. The paste box exists only on Inbox, Inbox has no
    nav tab (`templating.py:50-57`), and the prominent "+ New recipe" leads to the intimidating
    manual form instead. Home only links "add your first recipe" when the whole app is empty.
 5. **Pantry first-run is a dead end.** "+ Location" is a ~17px `<details>` summary
@@ -218,14 +220,23 @@ wakeLock branch could throw without falling through to the video.
    with the aisle as a weaker fallback and gauge as the safe default. Migration 016 remembers
    what a person actually chose per food, which always beats the inference. An item's tracking
    can also be changed in place, carrying its level across.
+3. **The hidden add-a-recipe surface** (Tier 2.4). The paste box lived only on Inbox, which has
+   no nav tab, and the one prominent button led to the manual form — so the way nearly every
+   recipe actually arrives was the hardest thing to find. `/add` now owns it: paste, drop, or
+   bookmarklet a YouTube/recipe/Instagram link, with the job list underneath. It is a standing
+   button at the top of the desktop rail, in the mobile tools row, and the primary button on
+   every library tab; the manual form is one step further in, from `/add`. The bookmarklet
+   (docs/04 §1.3, never built) is the PC counterpart of the Apple Shortcut: one click on any
+   recipe page opens `/add?url=…` prefilled, then waits, because a GET must not queue a job.
+   Re-pasting a known link now says "Already added: *title*" instead of reloading unchanged —
+   the URL is its own idempotency key, so a resubmit produced no job and, past the inbox's
+   two-minute recently-done window, no visible trace either.
 
 ## Still open
 
 - **Irreversible food merge** (Tier 2.6) — still guarded only by a generic `confirm()`.
 - **Recipe delete has no restore** — `app/services/recipes.py` snapshots revisions for "cheap
   undo" but nothing reads them back; the pantry undo above is the pattern to copy.
-- **The add-a-recipe surface is still hidden** (Tier 2.4): the paste box lives only on Inbox,
-  which has no nav tab, while "+ New recipe" leads to the manual form.
 - **Trip planner does not scale** (Tier 2.9) — every recipe as a checkbox, no search.
 - **Receipts can still be stranded** (Tier 2.7) — no receipts index to find a pending one.
 - **Assistant has no conversation history** (Tier 2.10), and replies render markdown literally.

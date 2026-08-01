@@ -101,6 +101,13 @@ a { color: var(--brand); }
     border-right: 1px solid var(--line);
   }
   .rail-brand { font-family: var(--font-display); font-size: 18px; margin: 4px 8px 14px; }
+  .rail-add {
+    display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0 0 10px;
+    padding: 11px 12px; border-radius: 10px; background: var(--brand); color: var(--brand-ink);
+    font-weight: 600; text-decoration: none; min-height: 44px;
+  }
+  .rail-add:hover { filter: brightness(1.05); }
+  .rail-add.is-active { box-shadow: inset 0 0 0 2px var(--ink); }
   .rail-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   .rail-link {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
@@ -309,6 +316,16 @@ button:active, a.btn-primary:active, .btn-secondary:active { filter: brightness(
 .ingest-job-actions .btn-secondary { font-size: 13px; padding: 4px 10px; min-height: 36px; }
 .ingest-job.is-failed .ingest-job-status { color: var(--err-ink); }
 .ingest-job-error { flex-basis: 100%; color: var(--err-ink); font-size: 12px; }
+.ingest-more { float: right; font-size: 13px; font-weight: 400; }
+
+/* Add a recipe: the PC counterpart of the phone Shortcut (docs/04 section 1.3). */
+.add-blurb { margin: 0 0 12px; }
+.add-hint { font-size: 13px; margin: 10px 0 0; }
+/* A dragged link needs a target it can see it is over. */
+.add-card.is-dropping { border-color: var(--brand); box-shadow: 0 0 0 3px var(--ok-bg); }
+.add-bookmarklet-row { margin: 12px 0 0; }
+.add-bookmarklet { cursor: grab; font-weight: 600; }
+.add-ways { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
 
 /* "Share from your phone" setup page. */
 .shortcut-steps { padding-left: 20px; line-height: 1.6; }

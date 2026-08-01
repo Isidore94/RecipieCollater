@@ -46,6 +46,10 @@
   <div class="app-shell">
     <nav class="rail" aria-label="Primary">
       <div class="rail-brand">🍳 <span>RecipeCollater</span></div>
+      {# The PC equivalent of the phone's share sheet, and the one action that has to be one
+         click from anywhere - a link is usually found while you're on some other page. #}
+      <a href="/add" class="rail-add{% if active_nav == 'add' %} is-active{% endif %}"
+         {% if active_nav == 'add' %}aria-current="page"{% endif %}>+ Add a recipe</a>
       <ul class="rail-list">
         {% for item in nav_items %}
         <li>
@@ -84,6 +88,7 @@
 
     <main id="main" class="main">
       <div class="mobile-tools">
+        <a href="/add">Add a recipe</a>
         <a href="/shortcut">Add to phone</a>
         {% if user.is_admin %}<a href="/admin/dashboard">Dashboard</a>{% endif %}
         {% if user.is_admin %}<a href="/admin/devices">Devices</a>{% endif %}

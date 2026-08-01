@@ -1,8 +1,9 @@
-"""Primary navigation: Home (discovery), the library tabs, and the ingest inbox.
+"""Primary navigation: Home (discovery), the library tabs, the ingest inbox, and Add a recipe.
 
 Home leads with food - tonight's picks, use-it-up, almost-have-it, new-to-try - instead of a
 triage queue (docs/07 section 2). The Cookbook composes FTS search with tier/tag/time/rating
-filter chips and links to the "what can I make now?" pantry view.
+filter chips and links to the "what can I make now?" pantry view. /add is the PC counterpart of
+the iPhone Shortcut (docs/04 section 1.3): paste, drop, or bookmarklet a link.
 """
 
 from __future__ import annotations
@@ -15,12 +16,14 @@ from fastapi.responses import RedirectResponse
 from starlette.datastructures import FormData
 
 from app.auth import current_user, require_csrf
+from app.config import get_settings
 from app.deps import get_db
+from app.routers import flash
 from app.routers.ingest_api import schedule_processing
 from app.services import cooking, discovery, ingest, matching
 from app.services import recipes as recipe_service
 from app.services.users import User
-from app.templating import render
+from app.templating import render, safe_url
 
 router = APIRouter()
 
@@ -203,6 +206,111 @@ async def dismiss_job(
     if request.headers.get("HX-Request"):
         return render(request, "recipes/_ingest_jobs.html", user=user, **_jobs_context(db))
     return RedirectResponse("/inbox", status_code=303)
+
+
+# --------------------------------------------------------------------------------------
+# Add a recipe from a link - the PC counterpart of the iPhone Shortcut (docs/04 section 1.3)
+# --------------------------------------------------------------------------------------
+
+
+def bookmarklet(base_url: str) -> str:
+    """A 'send this page' bookmark built from APP_BASE_URL alone (CONVENTIONS 11).
+
+    Dragged onto the bookmarks bar once, it turns any recipe page or YouTube video into a click:
+    the same job the Shortcut queues from an iPhone's share sheet, without an install.
+    """
+    return (
+        "javascript:void(window.open('"
+        + base_url.rstrip("/")
+        + "/add?url='+encodeURIComponent(location.href),'_blank'))"
+    )
+
+
+def _add_response(
+    request: Request,
+    db: sqlite3.Connection,
+    user: User,
+    *,
+    url: str = "",
+    notice: str | None = None,
+    error: str | None = None,
+    status_code: int = 200,
+) -> Response:
+    return render(
+        request,
+        "add.html",
+        active_nav="add",
+        user=user,
+        prefill_url=url,
+        bookmarklet=bookmarklet(get_settings().app_base_url),
+        notice=notice,
+        ingest_error=error,
+        status_code=status_code,
+        **_jobs_context(db),
+    )
+
+
+@router.get("/add")
+def add_page(
+    request: Request,
+    url: str | None = None,
+    notice: str | None = None,
+    error: str | None = None,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    """Paste, drop, or bookmarklet a YouTube/recipe-site link from a PC.
+
+    The bookmarklet lands here with ?url= filled in and then waits for a click rather than
+    queueing on arrival: a GET must never mutate (CONVENTIONS 7), and the pause is also the
+    chance to correct a link the page handed over. `safe_url` keeps a hand-crafted
+    'javascript:' value out of the field.
+    """
+    return _add_response(request, db, user, url=safe_url(url), notice=notice, error=error)
+
+
+def _already_here(db: sqlite3.Connection, job: ingest.IngestJob) -> str:
+    """What to say when a link is already in the system, so a resubmit isn't a silent no-op.
+
+    The URL is its own idempotency key, so re-pasting produces no job and - once the inbox's
+    'recently done' window has passed - nothing in the job list either. Without this the page
+    just reloaded unchanged.
+    """
+    if job.recipe_id is not None:
+        recipe = recipe_service.get_recipe(db, job.recipe_id)
+        if recipe is not None:
+            return f"Already added: {recipe.title}. Find it in your inbox or cookbook."
+    if job.status == "failed":
+        return "That link is already here and it failed - use Try again below."
+    return "That link is already being read."
+
+
+@router.post("/add")
+async def add_from_browser(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    async with request.form() as form:
+        url = _form_str(form, "url")
+        html = _form_str(form, "html")
+    if not url:
+        return _add_response(
+            request, db, user, error="Enter a recipe link to add.", status_code=400
+        )
+    try:
+        job, created = ingest.enqueue_job(
+            db, url, html=html or None, submitted_by=user.id, source="paste"
+        )
+    except ingest.IngestError as exc:
+        return _add_response(request, db, user, url=url, error=str(exc), status_code=400)
+    if not created:
+        return flash.redirect("/add", notice=_already_here(db, job))
+    schedule_processing(job.id)
+    # Back to /add rather than /inbox: adding links comes in runs of three or four, and the
+    # progress list below the box already says where each one got to.
+    return flash.redirect("/add", notice="Reading that link now - it lands in your inbox.")
 
 
 @router.get("/inbox/jobs")

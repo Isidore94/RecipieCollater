@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Add a recipe · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Add a recipe</h1>
+  <a href="/inbox" class="btn-secondary">Open the inbox &rarr;</a>
+</header>
+
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+
+{# Drag-and-drop of a link (docs/04 section 1.3) is an Alpine nicety on top of a plain form:
+   with JS off the box still takes a paste and posts normally. text/uri-list is the standard
+   drag flavour for a link; its comment lines start with '#', and Firefox drops the page title
+   on a second line, so only the first real line is used. #}
+<section class="card ingest-card add-card"
+         x-data="{
+           paste: false,
+           dropping: false,
+           take(event) {
+             const raw = event.dataTransfer.getData('text/uri-list')
+               || event.dataTransfer.getData('text/plain') || '';
+             const link = raw.split('\n').map(s => s.trim())
+               .find(s => s && !s.startsWith('#'));
+             if (link) { this.$refs.url.value = link; this.$refs.url.focus(); }
+           }
+         }"
+         @dragover.prevent="dropping = true"
+         @dragleave.prevent="dropping = false"
+         @drop.prevent="dropping = false; take($event)"
+         :class="dropping && 'is-dropping'">
+  <h2 class="ingest-title">Paste a YouTube or recipe-website link</h2>
+  <p class="muted add-blurb">A cooking video, a recipe page, or an Instagram reel. It&rsquo;s read
+    in the background &mdash; you don&rsquo;t have to wait here &mdash; and lands in your inbox
+    ready to look over.</p>
+  {% if ingest_error %}<p class="form-error" role="alert">{{ ingest_error }}</p>{% endif %}
+  <form method="post" action="/add" class="ingest-form">
+    <div class="ingest-row">
+      <input type="url" name="url" required inputmode="url" x-ref="url" autofocus
+             value="{{ prefill_url }}"
+             placeholder="https://www.youtube.com/watch?v=&hellip;"
+             aria-label="Recipe or video link" class="ingest-input">
+      <button type="submit" class="btn-primary">Add</button>
+    </div>
+    <label class="ingest-toggle">
+      <input type="checkbox" x-model="paste">
+      Paste the page&rsquo;s HTML instead (for sites that block automated fetching)
+    </label>
+    <textarea name="html" rows="5" x-show="paste" x-cloak class="ingest-textarea"
+              placeholder="Optional: paste the recipe page's HTML source here"
+              aria-label="Page HTML"></textarea>
+  </form>
+  <p class="muted add-hint">Or drag a link from another tab straight onto this box.</p>
+  {% include "recipes/_ingest_jobs.html" %}
+</section>
+
+<section class="card">
+  <h2 class="ingest-title">One click from any page</h2>
+  <p class="muted">Drag this button onto your browser&rsquo;s bookmarks bar. Then, on any recipe
+    page or YouTube video, click it &mdash; this page opens with the link already filled in, and
+    one press adds it. It&rsquo;s the PC version of the iPhone share shortcut.</p>
+  <p class="add-bookmarklet-row">
+    <a class="btn-secondary add-bookmarklet" href="{{ bookmarklet }}"
+       onclick="return false;" draggable="true">🍳 Send to RecipeCollater</a>
+  </p>
+  <p class="muted add-hint">Clicking it here does nothing &mdash; it only works once it&rsquo;s on
+    the bookmarks bar, and only while this PC is on and you&rsquo;re on the home network
+    (it opens <code>{{ app_base_url }}</code>).</p>
+</section>
+
+<section class="card">
+  <h2 class="ingest-title">Other ways in</h2>
+  <ul class="add-ways">
+    <li><a href="/recipes/new">Type one in yourself</a> &mdash; or photograph a cookbook page and
+      let AI read it.</li>
+    <li><a href="/shortcut">Share from your phone</a> &mdash; the Apple Shortcut that adds the
+      same links from the iOS share sheet.</li>
+    <li><a href="/inbox">Everything you&rsquo;ve added</a> waits in the inbox until you promote it
+      to the cookbook.</li>
+  </ul>
+</section>
+{% endblock %}

@@ -5,6 +5,33 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### Add a recipe from a link, on a PC (2026-08-01)
+
+No schema change. The PC half of docs/04 §1.3, and the fix for Tier 2.4 of the usability
+review: pasting a link was possible only from the Inbox, which has no nav tab, while the one
+prominent button (“+ New recipe”) led to the manual form.
+
+- **`/add`** — a first-class page for the thing that starts almost every recipe: paste a
+  YouTube video, a recipe website, or an Instagram reel, and it is read in the background
+  exactly as the iPhone Shortcut's links are. The HTML-paste fallback for sites that block
+  automated fetching came along with it, and the existing job list sits underneath, so
+  progress, “Added: <title> →”, retry and dismiss all work without leaving the page.
+- **Reachable from everywhere**: a “+ Add a recipe” button at the top of the desktop rail
+  (and in the mobile tools row), the primary button on every library tab, the cookbook's
+  empty state, and Home's first-run line — all previously pointing at the manual form or at
+  nothing.
+- **Bookmarklet** (docs/04 §1.3, previously unbuilt), generated from `APP_BASE_URL` alone
+  (CONVENTIONS §11): one click on any recipe page opens `/add?url=…` prefilled. It stops
+  there rather than queueing on arrival, because a GET must not mutate (CONVENTIONS §7) —
+  and the pause is the chance to fix a link the page handed over. A non-`http(s)` `?url=` is
+  dropped by `safe_url`.
+- **Drag-and-drop** a link onto the box (`text/uri-list`, comment and title lines skipped),
+  as an Alpine nicety over a form that still works without JS.
+- Re-submitting a link that is already known now says so — “Already added: Apple Pie” /
+  “already being read” — instead of reloading an unchanged page. The URL is its own
+  idempotency key, so a resubmit creates no job and, past the inbox's two-minute
+  recently-done window, showed nothing at all.
+
 ### Instagram reel ingestion (2026-07-27)
 
 No schema change. The existing Apple Shortcut and existing tokens now import Instagram

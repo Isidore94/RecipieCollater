@@ -30,13 +30,15 @@ Chat returns):
 
 | Tab | Contents |
 |---|---|
-| **Inbox** | Triage queue: processing states, new arrivals, review flags. Badge with count. Paste box lives here. |
+| **Inbox** | Triage queue: processing states, new arrivals, review flags. Badge with count. Paste box lives here, and on `/add`. |
 | **Cookbook** | The curated library: search, filters (tier, tags, max time, rating, "have ingredients", last-cooked), sort. |
 | **Pantry** | Location chips + item grid, stock-take mode, staples view. |
 | **Plan** | Week board + shopping list (segmented control between them), saved menus. |
 | **Chat** | The AI assistant (persistent conversations). |
 
 Global: instant-search overlay (FTS5, keystroke-fast on LAN), "+" action (paste URL / new recipe / add pantry item), settings (devices, tokens, AI spend, backups, export).
+
+The "+" action's first half is built: **`+ Add a recipe`** sits above the rail (and in the mobile tools row) and leads to `/add` — paste, drop, or bookmarklet a link, with manual entry one step further in. The instant-search overlay and the pantry-item branch of "+" are still open.
 
 ## 3. Key screens
 
@@ -81,7 +83,7 @@ Global: instant-search overlay (FTS5, keystroke-fast on LAN), "+" action (paste 
 - **Home-screen app over plain HTTP**: iOS Add-to-Home-Screen supplies an icon/standalone presentation. There is no service worker in the default setup. Shopping is exported to a native/text list before leaving; no UI promises that a killed web tab will work away from home. Optional trusted HTTPS may later enable a minimal app-shell service worker, never an API cache.
 - **iOS specifics**: A2HS instructions shown on the device-onboarding success page; identity lives in the HttpOnly cookie (survives A2HS via the iOS 17.2+ one-time cookie copy; pairing-code fallback screen for cookie-less launches); the ingest path is the Shortcut, not the PWA.
 - **Android** (dormant — household is iPhone+PC): paste box works in any browser today; install prompt + `share_target` activate only with the HTTPS upgrade (see ingestion doc).
-- **Desktop**: same responsive pages stretched to a grid + left rail; keyboard shortcuts (`/` search, `n` new) as low-cost polish.
+- **Desktop**: same responsive pages stretched to a grid + left rail, with `+ Add a recipe` standing above the rail links and a bookmarklet on `/add` as the share-sheet equivalent; keyboard shortcuts (`/` search, `n` new) as low-cost polish.
 
 ## 5. Performance budget
 
