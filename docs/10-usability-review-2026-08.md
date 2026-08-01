@@ -205,12 +205,25 @@ wakeLock branch could throw without falling through to the video.
 5. **Success feedback.** Ratings, notes, rename, promote, preferences and pantry edits all
    confirm what they did instead of reloading silently.
 
+## Then fixed (third pass)
+
+1. **Undo for pantry changes.** The history rows existed and nothing read them back, so "Used
+   up", "Went bad" and Delete were one-way. Undo is offered on the confirmation banner itself
+   and is single-shot, so a double tap cannot over-restore. Migration 015 adds `undone_at` to
+   enforce that for a lone adjustment, and `undo_payload` to snapshot a deleted item — deleting
+   drops the row, so without the snapshot a wrong delete is unrecoverable.
+2. **Quantity mode chosen by what the food is.** Everything defaulted to the gauge, so
+   countable things arrived as "half an avocado". `app/services/quantity_mode.py` infers from
+   the name (longest whole-word phrase wins, so "coconut milk" gauges while "coconut" counts),
+   with the aisle as a weaker fallback and gauge as the safe default. Migration 016 remembers
+   what a person actually chose per food, which always beats the inference. An item's tracking
+   can also be changed in place, carrying its level across.
+
 ## Still open
 
-- **Undo beyond cook deductions** (Tier 2.6). Pantry adjustments already write the history rows
-  for it and recipes snapshot revisions for "cheap undo"; neither has a restore path. The cook
-  deduction undo (`app/services/deductions.py:356-421`) is the pattern to copy.
 - **Irreversible food merge** (Tier 2.6) — still guarded only by a generic `confirm()`.
+- **Recipe delete has no restore** — `app/services/recipes.py` snapshots revisions for "cheap
+  undo" but nothing reads them back; the pantry undo above is the pattern to copy.
 - **The add-a-recipe surface is still hidden** (Tier 2.4): the paste box lives only on Inbox,
   which has no nav tab, while "+ New recipe" leads to the manual form.
 - **Trip planner does not scale** (Tier 2.9) — every recipe as a checkbox, no search.
