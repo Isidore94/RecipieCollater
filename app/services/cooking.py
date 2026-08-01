@@ -389,16 +389,22 @@ class RecipeStaleness:
 
 
 def list_recipes_by_staleness(
-    conn: sqlite3.Connection, *, status: str = "cookbook"
+    conn: sqlite3.Connection, *, status: str = "cookbook", limit: int | None = None
 ) -> list[RecipeStaleness]:
-    """Recipes ordered by "haven't made in a while": never-cooked first, then oldest cook first."""
+    """Recipes ordered by "haven't made in a while": never-cooked first, then oldest cook first.
+
+    ``limit`` because this is a prompt, not a catalogue: the answer to "what haven't we made
+    lately" is the top of the list, and rendering all several hundred is a slow page nobody
+    scrolls to the end of.
+    """
     rows = conn.execute(
         """SELECT r.slug, r.title, MAX(cl.cooked_at) AS last_cooked, COUNT(cl.id) AS cook_count
            FROM recipes r LEFT JOIN cook_log cl ON cl.recipe_id = r.id
            WHERE r.status = ?
            GROUP BY r.id
-           ORDER BY (MAX(cl.cooked_at) IS NULL) DESC, MAX(cl.cooked_at) ASC, r.created_at ASC""",
-        (status,),
+           ORDER BY (MAX(cl.cooked_at) IS NULL) DESC, MAX(cl.cooked_at) ASC, r.created_at ASC
+           LIMIT ?""",
+        (status, limit if limit is not None else -1),  # -1: SQLite's "no limit"
     ).fetchall()
     return [
         RecipeStaleness(

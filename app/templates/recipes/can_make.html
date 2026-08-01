@@ -9,16 +9,16 @@
 <form method="get" class="library-search" role="search">
   <input type="search" name="q" value="{{ query }}" placeholder="chicken, pasta&hellip;"
          aria-label="Filter recipes">
-  {% if filter_tag %}<input type="hidden" name="tag" value="{{ filter_tag }}">{% endif %}
+  {% for t in filter_tags %}<input type="hidden" name="tag" value="{{ t }}">{% endfor %}
   <button type="submit" class="btn-secondary">Search</button>
-  {% if query %}<a href="/can-make{% if filter_tag %}?tag={{ filter_tag | urlencode }}{% endif %}" class="btn-secondary">Clear</a>{% endif %}
+  {% if query %}<a href="/can-make" class="btn-secondary">Clear</a>{% endif %}
 </form>
 
-{% if tags %}
+{% if chips %}
 <div class="filter-bar no-print">
-  {% for tc in tags %}
-  <a href="/can-make?q={{ query | urlencode }}{% if filter_tag != tc.name %}&amp;tag={{ tc.name | urlencode }}{% endif %}"
-     class="chip{% if filter_tag == tc.name %} is-on{% endif %}">{{ tc.name }}</a>
+  {% for chip in chips %}
+  <a href="{{ chip.url }}" class="chip{% if chip.is_on %} is-on{% endif %}"
+     {% if chip.is_on %}aria-current="true"{% endif %}>{{ chip.label }}</a>
   {% endfor %}
 </div>
 {% endif %}

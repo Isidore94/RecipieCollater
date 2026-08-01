@@ -41,6 +41,7 @@ from app.routers import (
     recipes,
     shopping,
     shortcut,
+    tags,
 )
 from app.services.quantity import QuantityError
 from app.services.units import seed_core_units
@@ -131,6 +132,7 @@ def create_app() -> FastAPI:
     app.include_router(pantry.router)
     app.include_router(shopping.router)
     app.include_router(foods.router)
+    app.include_router(tags.router)
     app.include_router(receipts.router)
     app.include_router(planning.router)
     app.include_router(preferences.router)

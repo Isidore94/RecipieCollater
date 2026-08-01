@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Tags · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Tags</h1>
+  <a href="/cookbook" class="btn-secondary">Cookbook</a>
+</header>
+
+<p class="muted">Tags are the chips you filter the cookbook with, and they feed the search box
+  too. Tidy them here: fix a stray capital, fold two words that mean the same thing into one,
+  or drop a tag that stopped being useful. Every tag below links to the recipes carrying it.</p>
+
+{% include "partials/_flash.html" %}
+
+{% if drifted %}
+<p class="banner banner-todo">Worth a look:
+  {% for name in drifted %}<strong>{{ name }}</strong>{% if not loop.last %}, {% endif %}{% endfor %}.
+  {% if drifted | length == 1 %}This one sits{% else %}These sit{% endif %} slightly apart from
+  the rest &mdash; a stray capital, or two spellings of one word. Renaming or merging
+  {% if drifted | length == 1 %}it{% else %}them{% endif %} keeps the chips tidy.</p>
+{% endif %}
+
+{% if tags %}
+<ul class="tag-list">
+  {% for t in tags %}
+  <li class="card tag-row">
+    <div class="tag-head">
+      <a class="chip" href="/cookbook?tag={{ t.name | urlencode }}">{{ t.name }}</a>
+      <span class="muted">{{ t.count }} recipe{{ 's' if t.count != 1 }}</span>
+    </div>
+
+    <details class="tag-manage">
+      <summary class="muted">edit</summary>
+
+      <form method="post" action="/tags/{{ t.id }}/rename" class="tag-form">
+        <label>Rename to
+          <input name="name" value="{{ t.name }}" maxlength="{{ max_tag_length }}"
+                 aria-label="New name for {{ t.name }}">
+        </label>
+        <button type="submit" class="btn-secondary">Rename</button>
+      </form>
+
+      {# Only the integer count is interpolated into the confirm text. Tag names must not be:
+         they can arrive from an ingested web page, and HTML escaping does not protect a JS
+         string context, so a name there would be a stored-XSS vector (same rule as /foods). #}
+      <form method="post" action="/tags/{{ t.id }}/merge" class="tag-form"
+            onsubmit="return confirm('Merge this tag into the selected one? {{ t.count }} recipe{{ 's' if t.count != 1 }} affected. You can undo this afterwards.');">
+        <label>Merge into
+          <select name="target_id" aria-label="Tag to keep">
+            <option value="">&mdash; pick the tag to keep &mdash;</option>
+            {% for other in tags %}{% if other.id != t.id %}
+            <option value="{{ other.id }}">{{ other.name }}</option>
+            {% endif %}{% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn-danger">Merge</button>
+      </form>
+
+      <form method="post" action="/tags/{{ t.id }}/delete" class="tag-form"
+            onsubmit="return confirm('Remove this tag from {{ t.count }} recipe{{ 's' if t.count != 1 }}? You can undo this afterwards.');">
+        <button type="submit" class="btn-danger">Delete tag</button>
+      </form>
+    </details>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+{% with emoji='🏷️', blurb='No tags yet.',
+        note='Tags appear as recipes are added — the reader fills them in, and you can edit them on any recipe.' %}
+{% include "partials/_empty.html" %}
+{% endwith %}
+{% endif %}
+
+<section class="card">
+  <h2>The usual set</h2>
+  <p class="muted">What the recipe reader picks from &mdash; at most one per group, plus the
+    cuisine. Sticking near these keeps the chips small enough to be useful.</p>
+  <dl class="vocab-list">
+    {% for group, words in vocabulary.items() %}
+    <dt>{{ group }}</dt>
+    <dd>{% for w in words %}<span class="chip-tag">{{ w }}</span>{% endfor %}</dd>
+    {% endfor %}
+  </dl>
+</section>
+{% endblock %}

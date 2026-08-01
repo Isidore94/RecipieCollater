@@ -43,7 +43,8 @@
 <form method="get" class="library-search" role="search">
   <input type="search" name="q" value="{{ query }}"
          placeholder="Search titles, ingredients, tags&hellip;" aria-label="Search recipes">
-  {% if filter_tag %}<input type="hidden" name="tag" value="{{ filter_tag }}">{% endif %}
+  {# Searching must not drop the chips you already tapped, so each one rides along. #}
+  {% for t in filter_tags %}<input type="hidden" name="tag" value="{{ t }}">{% endfor %}
   {% if filter_tier %}<input type="hidden" name="tier" value="{{ filter_tier }}">{% endif %}
   {% if filter_maxmin %}<input type="hidden" name="maxmin" value="{{ filter_maxmin }}">{% endif %}
   {% if filter_rating %}<input type="hidden" name="rating" value="{{ filter_rating }}">{% endif %}
@@ -52,28 +53,18 @@
 </form>
 
 {% if status == 'cookbook' %}
-{% macro filter_url(tag=None, tier=None, maxmin=None, rating=None) -%}
-  {%- set t = filter_tag if tag is none else tag -%}
-  {%- set ti = filter_tier if tier is none else tier -%}
-  {%- set mm = filter_maxmin if maxmin is none else maxmin -%}
-  {%- set ra = filter_rating if rating is none else rating -%}
-  /cookbook?q={{ query | urlencode }}{% if t %}&amp;tag={{ t | urlencode }}{% endif %}{% if ti %}&amp;tier={{ ti }}{% endif %}{% if mm %}&amp;maxmin={{ mm }}{% endif %}{% if ra %}&amp;rating={{ ra }}{% endif %}
-{%- endmacro %}
 <div class="filter-bar no-print">
   <a href="/can-make" class="chip chip-action">&#10024; What can I make?</a>
-  <a href="{{ filter_url(rating='8' if filter_rating != '8' else '') }}"
-     class="chip{% if filter_rating == '8' %} is-on{% endif %}">&#9733; 8+</a>
-  <a href="{{ filter_url(maxmin='45' if filter_maxmin != '45' else '') }}"
-     class="chip{% if filter_maxmin == '45' %} is-on{% endif %}">&le; 45 min</a>
-  {% for t in ['meal_prep', 'family', 'company'] %}
-  <a href="{{ filter_url(tier=t if filter_tier != t else '') }}"
-     class="chip{% if filter_tier == t %} is-on{% endif %}">{{ t.replace('_', ' ') }}</a>
+  {% for chip in chips %}
+  <a href="{{ chip.url }}" class="chip{% if chip.is_on %} is-on{% endif %}"
+     {% if chip.is_on %}aria-current="true"{% endif %}>{{ chip.label }}</a>
   {% endfor %}
-  {% for tc in tags %}
-  <a href="{{ filter_url(tag=tc.name if filter_tag != tc.name else '') }}"
-     class="chip{% if filter_tag == tc.name %} is-on{% endif %}">{{ tc.name }}</a>
-  {% endfor %}
+  <a href="/tags" class="chip chip-action">Manage tags</a>
 </div>
+{% if filter_tags | length > 1 %}
+<p class="muted filter-note no-print">Showing recipes with
+  <strong>all</strong> of these tags. Tap a chip again to drop it.</p>
+{% endif %}
 <p class="sort-toggle no-print">
   {% if stale_sort or use_it_up is defined %}
   <a href="/cookbook" class="btn-secondary">All recipes</a>
@@ -110,6 +101,9 @@
 </ul>
 
 {% elif recipes %}
+{% if pages > 1 %}
+<p class="muted list-count">Showing {{ showing_from }}&ndash;{{ showing_to }} of {{ total }}</p>
+{% endif %}
 <ul class="recipe-cards">
   {% for r in recipes %}
   {% with cov = coverage.get(r.id) if coverage is defined else None %}
@@ -117,8 +111,17 @@
   {% endwith %}
   {% endfor %}
 </ul>
+{% if pages > 1 %}
+<nav class="pager no-print" aria-label="Pages">
+  {% if prev_url %}<a href="{{ prev_url }}" rel="prev" class="btn-secondary">&larr; Newer</a>
+  {% else %}<span class="btn-secondary is-disabled" aria-disabled="true">&larr; Newer</span>{% endif %}
+  <span class="muted">Page {{ page }} of {{ pages }}</span>
+  {% if next_url %}<a href="{{ next_url }}" rel="next" class="btn-secondary">Older &rarr;</a>
+  {% else %}<span class="btn-secondary is-disabled" aria-disabled="true">Older &rarr;</span>{% endif %}
+</nav>
+{% endif %}
 {% else %}
-{% if query or filter_tag or filter_tier or filter_maxmin or filter_rating %}
+{% if query or filter_tags or filter_tier or filter_maxmin or filter_rating %}
 {% with emoji='🔍', blurb='Nothing matched that.',
         note='Try fewer words, or clear the filters above to see everything again.' %}
 {% include "partials/_empty.html" %}

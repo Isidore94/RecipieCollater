@@ -60,6 +60,15 @@ The "+" action's first half is built: **`+ Add a recipe`** sits above the rail (
 ### Cookbook
 - Filter bar as horizontally scrollable chips on mobile; the "✨ what can I make now?" filter combines pantry match + max time.
 - Collections come later; tiers + tags carry v1 organization.
+- **Chips stack, they do not replace.** Every chip toggles itself and keeps the others, and
+  multiple tags mean *all* of them (`?tag=chicken&tag=weeknight`). One tag stops narrowing
+  anything once it covers a third of the cookbook, which is the size this is built for.
+- **The list is paged** (`recipes.PAGE_SIZE`), with a count and Newer/Older links that carry
+  every active filter. Applies to Cookbook, Inbox and Archive alike. The two curated views
+  (`sort=stale`, `sort=useitup`) are prompts rather than catalogues and are capped instead.
+- **`/tags`** is the cookbook's counterpart to `/foods`: rename, merge and delete a tag across
+  every recipe at once, each undoable from the banner that confirms it. It also lists every
+  tag, so a tag outside the filter bar's top handful is still reachable.
 
 ### Editor
 - Same form for manual entry and post-import fixes: drag-to-reorder steps/ingredients, many-to-many step ingredient links (including divided amounts), per-ingredient scaling behavior, inline food/unit creation, image upload/replace, immutable raw-artifact viewer ("what the bot saw"), and **Re-extract to comparison**.

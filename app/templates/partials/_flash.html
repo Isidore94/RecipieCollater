@@ -8,9 +8,10 @@
   <form method="post" class="inline-post"
         action="{% if undo_kind == 'recipe' %}/recipes/restore/{{ undo }}
                {%- elif undo_kind == 'merge' %}/foods/merges/{{ undo }}/undo
+               {%- elif undo_kind == 'tag' %}/tags/edits/{{ undo }}/undo
                {%- else %}/pantry/adjustments/{{ undo }}/undo{% endif %}">
     {% if undo_kind == 'merge' %}<input type="hidden" name="q" value="{{ query }}">
-    {% elif undo_kind != 'recipe' %}<input type="hidden" name="next" value="{{ back }}">{% endif %}
+    {% elif undo_kind not in ('recipe', 'tag') %}<input type="hidden" name="next" value="{{ back }}">{% endif %}
     <button type="submit" class="btn-secondary">Undo</button>
   </form>
   {% endif %}

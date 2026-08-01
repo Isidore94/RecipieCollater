@@ -5,6 +5,41 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### Tags that survive a big cookbook (2026-08-01)
+
+Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into
+FTS, editable from the recipe form — but everything above it assumed a small library: one tag
+filter at a time, no paging, and no way to correct a tag once it was wrong. With 15 recipes
+that is invisible. The stated destination is hundreds.
+
+- **Filters stack.** `?tag=` repeats, and the chips AND together, so "chicken + weeknight +
+  8 stars" is now expressible. Previously "chicken" was the whole query, and at 300 recipes
+  that is 80 results. Bounded at `MAX_TAG_FILTERS` above the number of chips rendered, so
+  tapping every chip cannot reach a silently-ignored filter.
+- **The library pages**, at `PAGE_SIZE` a page, with a count and Newer/Older links that carry
+  every active filter — on Cookbook, Inbox *and* Archive. `list_recipes` takes `limit` opt-in
+  rather than by default: the meal-plan and shopping pickers and the assistant's cookbook
+  context all read the whole list, and a default page size would have quietly truncated them.
+  `sort=stale` is capped for the same reason it exists — it is a prompt, not a catalogue.
+- **`/tags`** — rename, merge and delete a tag across every recipe at once. Merges and deletes
+  write a receipt (`tag_edits`) recording which recipes carried the source and which of them
+  gained the target, because afterwards the target's own recipes are indistinguishable from
+  the ones it inherited — the same reasoning as food merges in 018. Undo is single-shot and
+  puts back precisely what the operation took, leaving alone a recipe that had both tags all
+  along. Renaming needs no receipt: renaming back restores it exactly.
+- **Rename reindexes search explicitly.** Migration 006's triggers watch `recipes`,
+  `recipe_ingredients` and `recipe_tags` — nothing watches `tags`, so a rename would have left
+  the old word in the index and the new one absent. `recipes.reindex_recipes` mirrors the
+  trigger body for that one case, with a test comparing its output to the trigger's.
+- **The recipe form suggests the vocabulary** as click-to-toggle chips (Alpine over a field
+  that still works without JS). The words now live once, as data, in `tag_vocabulary.py`; a
+  test asserts each appears in the prompt's prose `TAG_GUIDE`.
+- The tag screen flags *drift* — a stray capital, or two spellings of one word — rather than
+  everything outside the vocabulary. Cuisines are legitimately off-list, and a banner that
+  flagged half the tags would be ignored.
+- `recipe_tags` gained an index on `tag_id`. Its primary key covers lookups that start from a
+  recipe; every operation added here starts from the tag, and so did nothing before it.
+
 ### Add a recipe from a link, on a PC (2026-08-01)
 
 No schema change. The PC half of docs/04 §1.3, and the fix for Tier 2.4 of the usability

@@ -567,6 +567,30 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .restock-line-location { font-size: 13px; color: var(--brand); }
 .restock-line-location select { margin-left: 4px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); font-size: 13px; }
 
+/* Tag upkeep — the cookbook's counterpart to the foods screen, same shape */
+.tag-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.tag-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tag-head .chip { text-decoration: none; color: var(--ink); }
+.tag-manage summary { cursor: pointer; font-size: 13px; margin-top: 6px; min-height: 44px; display: flex; align-items: center; }
+.tag-form { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; margin-top: 10px; }
+.tag-form label { font-size: 12px; color: var(--ink-soft); }
+.tag-form input, .tag-form select { display: block; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.vocab-list dt { font-size: 12px; color: var(--ink-soft); margin-top: 8px; }
+.vocab-list dd { margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.vocab-list .chip-tag { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+
+/* Tag suggestions under the recipe form's tag field */
+.tag-suggest { display: grid; gap: 6px; margin-top: 8px; }
+.tag-suggest-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.chip-suggest { cursor: pointer; font-size: 13px; min-height: 32px; color: var(--ink); }
+.chip-suggest.is-on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+
+/* Library paging */
+.list-count { margin: 0 0 8px; font-size: 13px; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.pager .is-disabled { opacity: .45; }
+.filter-note { margin: -4px 0 10px; font-size: 13px; }
+
 /* Foods upkeep */
 .food-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .food-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

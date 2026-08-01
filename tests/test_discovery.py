@@ -117,7 +117,7 @@ def test_cookbook_filters(admin_client: TestClient, migrated_db: sqlite3.Connect
     _recipe(migrated_db, "Weeknight Pasta", ["pasta"], tags=["italian", "weeknight"], rating=9)
     _recipe(migrated_db, "Project Brisket", ["beef"], tags=["project"], rating=7, tier="company")
 
-    listed = recipes.list_recipes(migrated_db, status="cookbook", tag="italian")
+    listed = recipes.list_recipes(migrated_db, status="cookbook", tags=["italian"])
     assert [r.title for r in listed] == ["Weeknight Pasta"]
     listed = recipes.list_recipes(migrated_db, status="cookbook", min_rating=8)
     assert [r.title for r in listed] == ["Weeknight Pasta"]

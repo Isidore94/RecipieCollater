@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -805,31 +806,65 @@ _SUMMARY_SELECT_PLAIN = (
     "SELECT r.id, r.slug, r.title, r.status, r.tier, r.tldr, r.updated_at, r.rating, "
     "r.image_path, r.total_minutes, r.base_servings FROM recipes r"
 )
+_COUNT_SELECT_FTS = (
+    "SELECT COUNT(*) FROM recipe_fts f JOIN recipes r ON r.id = f.rowid WHERE recipe_fts MATCH ?"
+)
+_COUNT_SELECT_PLAIN = "SELECT COUNT(*) FROM recipes r"
+
+# A library page shows this many recipes; the rest are a page click away. Chosen to fill a
+# desktop grid without making a phone scroll forever, and to keep the query cheap at the
+# hundreds-of-recipes scale the cookbook is heading for.
+PAGE_SIZE = 48
+
+# Upper bound on how many tags one query may AND together (see normalize_tag_filters). Set
+# above the number of chips the cookbook renders, so tapping every chip on the page cannot
+# reach it: a filter that is silently ignored would show as an unlit chip that does nothing.
+MAX_TAG_FILTERS = 16
 
 
-def list_recipes(
-    conn: sqlite3.Connection,
+def normalize_tag_filters(tags: Sequence[str] | None) -> list[str]:
+    """Clean, case-insensitively de-duplicate and bound a set of tag filters.
+
+    Bounded because the filters arrive as repeated query parameters: without a cap, a
+    hand-written URL could ask for a thousand correlated subqueries.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in tags or ():
+        clean = " ".join(str(raw).split())
+        if not clean or clean.lower() in seen:
+            continue
+        seen.add(clean.lower())
+        out.append(clean)
+        if len(out) == MAX_TAG_FILTERS:
+            break
+    return out
+
+
+def _library_where(
     *,
-    status: str | None = None,
-    query: str | None = None,
-    tag: str | None = None,
-    tier: str | None = None,
-    max_minutes: int | None = None,
-    min_rating: int | None = None,
-) -> list[RecipeSummary]:
-    """Search + filter the library. Filters compose with each other and with FTS search
-    (docs/07 section 2: tier / tags / max time / rating filters on the Cookbook)."""
-    params: list[str | int] = []
+    status: str | None,
+    tags: Sequence[str] | None,
+    tier: str | None,
+    max_minutes: int | None,
+    min_rating: int | None,
+) -> tuple[list[str], list[str | int]]:
+    """The filter half of a library query, shared by the listing and its count.
+
+    Tags are ANDed: each one adds its own EXISTS, so "chicken + weeknight" means both, which
+    is the only way filtering stays useful once a tag covers a third of the cookbook.
+    """
     where: list[str] = []
+    params: list[str | int] = []
     if status:
         where.append("r.status = ?")
         params.append(status)
-    if tag and tag.strip():
+    for tag in normalize_tag_filters(tags):
         where.append(
             "EXISTS (SELECT 1 FROM recipe_tags rt JOIN tags t ON t.id = rt.tag_id "
             "WHERE rt.recipe_id = r.id AND t.name = ? COLLATE NOCASE)"
         )
-        params.append(tag.strip())
+        params.append(tag)
     if tier and tier in VALID_TIER:
         where.append("r.tier = ?")
         params.append(tier)
@@ -839,7 +874,31 @@ def list_recipes(
     if min_rating is not None and min_rating > 0:
         where.append("r.rating >= ?")
         params.append(min_rating)
+    return where, params
 
+
+def list_recipes(
+    conn: sqlite3.Connection,
+    *,
+    status: str | None = None,
+    query: str | None = None,
+    tags: Sequence[str] | None = None,
+    tier: str | None = None,
+    max_minutes: int | None = None,
+    min_rating: int | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[RecipeSummary]:
+    """Search + filter the library. Filters compose with each other and with FTS search
+    (docs/07 section 2: tier / tags / max time / rating filters on the Cookbook).
+
+    ``limit`` is opt-in and defaults to everything: several callers (the meal-plan and
+    shopping recipe pickers, the assistant's cookbook context) need the whole list, and a
+    default page size would silently truncate them.
+    """
+    where, params = _library_where(
+        status=status, tags=tags, tier=tier, max_minutes=max_minutes, min_rating=min_rating
+    )
     if query and query.strip():
         match = _fts_query(query)
         if not match:
@@ -854,7 +913,64 @@ def list_recipes(
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY r.updated_at DESC, r.id DESC"
+    if limit is not None:
+        sql += " LIMIT ? OFFSET ?"
+        params += [max(0, int(limit)), max(0, int(offset))]
     return [_summary(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def count_recipes(
+    conn: sqlite3.Connection,
+    *,
+    status: str | None = None,
+    query: str | None = None,
+    tags: Sequence[str] | None = None,
+    tier: str | None = None,
+    max_minutes: int | None = None,
+    min_rating: int | None = None,
+) -> int:
+    """How many recipes the same filters match, for "showing 1-48 of 312" and page links."""
+    where, params = _library_where(
+        status=status, tags=tags, tier=tier, max_minutes=max_minutes, min_rating=min_rating
+    )
+    if query and query.strip():
+        match = _fts_query(query)
+        if not match:
+            return 0
+        sql = _COUNT_SELECT_FTS
+        params.insert(0, match)
+        if where:
+            sql += " AND " + " AND ".join(where)
+    else:
+        sql = _COUNT_SELECT_PLAIN
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+    row = conn.execute(sql, params).fetchone()
+    return int(row[0]) if row else 0
+
+
+# The migration-006 triggers rebuild a recipe's FTS row when the recipe, its ingredients or
+# its recipe_tags links change - but nothing watches the `tags` table itself. Renaming a tag
+# therefore leaves the old word in the index and the new one absent, so search silently
+# disagrees with the chips. This mirrors the trigger body for exactly that case; it is the
+# only place outside migration 006 that writes recipe_fts.
+_REINDEX_SQL = (
+    "INSERT INTO recipe_fts(rowid, title, tldr, description, ingredients, tags) "
+    "SELECT r.id, r.title, COALESCE(r.tldr, ''), COALESCE(r.description, ''), "
+    "COALESCE((SELECT group_concat(original_text, ' ') "
+    "          FROM recipe_ingredients WHERE recipe_id = r.id), ''), "
+    "COALESCE((SELECT group_concat(t.name, ' ') "
+    "          FROM recipe_tags rt JOIN tags t ON t.id = rt.tag_id "
+    "          WHERE rt.recipe_id = r.id), '') "
+    "FROM recipes r WHERE r.id = ?"
+)
+
+
+def reindex_recipes(conn: sqlite3.Connection, recipe_ids: Sequence[int]) -> None:
+    """Rebuild the search index for these recipes. Callers hold the transaction."""
+    for recipe_id in recipe_ids:
+        conn.execute("DELETE FROM recipe_fts WHERE rowid = ?", (recipe_id,))
+        conn.execute(_REINDEX_SQL, (recipe_id,))
 
 
 @dataclass(frozen=True, slots=True)
@@ -864,9 +980,9 @@ class TagCount:
 
 
 def list_tags(
-    conn: sqlite3.Connection, *, status: str | None = None, limit: int = 12
+    conn: sqlite3.Connection, *, status: str | None = None, limit: int | None = 12
 ) -> list[TagCount]:
-    """The most-used tags (for the Cookbook filter chips)."""
+    """The most-used tags (for the Cookbook filter chips); ``limit=None`` for all of them."""
     params: list[str | int] = []
     sql = (
         "SELECT t.name, COUNT(*) AS n FROM tags t "
@@ -875,8 +991,10 @@ def list_tags(
     if status:
         sql += "WHERE r.status = ? "
         params.append(status)
-    sql += "GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE LIMIT ?"
-    params.append(limit)
+    sql += "GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE"
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
     return [
         TagCount(name=r["name"], count=int(r["n"]))
         for r in conn.execute(sql, params).fetchall()

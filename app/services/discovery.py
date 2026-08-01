@@ -9,6 +9,7 @@ assistant will call - built as GUI first so it is proven by daily use.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -72,12 +73,12 @@ def can_make(
     conn: sqlite3.Connection,
     *,
     status: str = "cookbook",
-    tag: str | None = None,
+    tags: Sequence[str] | None = None,
     query: str | None = None,
 ) -> CanMake:
     coverage = matching.batch_coverage(conn, status=status)
     result = CanMake()
-    for summary in recipes.list_recipes(conn, status=status, tag=tag, query=query):
+    for summary in recipes.list_recipes(conn, status=status, tags=tags, query=query):
         cov = coverage.get(summary.id)
         if cov is None or cov.total == 0:
             continue

@@ -23,7 +23,7 @@ from app.config import get_settings
 from app.deps import get_db
 from app.extraction import ExtractedRecipe
 from app.routers import flash
-from app.services import ai_draft, cooking, matching, quantity, recipes
+from app.services import ai_draft, cooking, matching, quantity, recipes, tag_vocabulary
 from app.services.users import User
 from app.templating import render
 
@@ -261,6 +261,7 @@ def _render_form(
         request, "recipes/form.html", user=user, action=action, form=model, heading=heading,
         blank_rows=_BLANK_ROWS, error=error, notice=notice, show_draft=show_draft,
         draft_description=draft_description, cancel_href=cancel_href, status_code=status_code,
+        tag_vocabulary=tag_vocabulary.VOCABULARY, tag_cuisines=tag_vocabulary.EXAMPLE_CUISINES,
     )
 
 

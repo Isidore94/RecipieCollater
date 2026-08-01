@@ -118,9 +118,45 @@
 
   <section class="card">
     <div class="form-grid">
-      <div>
+      {# Suggestions rather than a fixed list: the vocabulary keeps the filter chips small
+         enough to be useful, but a household must still be able to invent a word. Alpine only
+         appends text to the field (CONVENTIONS section 8 - a local nicety); without JS the
+         input and the printed list below still work. #}
+      <div x-data="{
+             add(word) {
+               const el = this.$refs.tags;
+               const parts = el.value.split(',').map(s => s.trim()).filter(Boolean);
+               const i = parts.findIndex(p => p.toLowerCase() === word.toLowerCase());
+               if (i === -1) { parts.push(word); } else { parts.splice(i, 1); }
+               el.value = parts.join(', ');
+             },
+             has(word) {
+               return this.$refs.tags.value.split(',')
+                 .some(p => p.trim().toLowerCase() === word.toLowerCase());
+             }
+           }">
         <label for="tags">Tags <span class="muted">(comma separated)</span></label>
-        <input id="tags" name="tags" value="{{ form.tags_text }}" placeholder="italian, weeknight">
+        <input id="tags" name="tags" x-ref="tags" value="{{ form.tags_text }}"
+               placeholder="italian, weeknight">
+        <div class="tag-suggest no-print">
+          {% for group, words in tag_vocabulary.items() %}
+          <span class="tag-suggest-group">
+            <span class="muted">{{ group }}</span>
+            {% for w in words %}
+            <button type="button" class="chip chip-suggest" x-on:click="add('{{ w }}')"
+                    x-bind:class="has('{{ w }}') ? 'is-on' : ''">{{ w }}</button>
+            {% endfor %}
+          </span>
+          {% endfor %}
+          <span class="tag-suggest-group">
+            <span class="muted">cuisine</span>
+            {% for w in tag_cuisines %}
+            <button type="button" class="chip chip-suggest" x-on:click="add('{{ w }}')"
+                    x-bind:class="has('{{ w }}') ? 'is-on' : ''">{{ w }}</button>
+            {% endfor %}
+            <span class="muted">or any other</span>
+          </span>
+        </div>
       </div>
       <div>
         <label for="source_name">Source</label>
