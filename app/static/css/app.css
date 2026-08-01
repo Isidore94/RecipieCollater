@@ -71,6 +71,8 @@ a { color: var(--brand); }
   margin-bottom: 14px; color: var(--ink-soft); font-size: 13px;
 }
 .mobile-tools select { min-height: 36px; padding: 6px 8px; }
+.mobile-tools form { display: flex; align-items: center; gap: 6px; margin: 0; }
+.mobile-tools .btn-link { font-size: 13px; padding: 0 2px; min-height: 36px; background: none; }
 
 .rail { display: none; }
 .tabbar {
@@ -106,6 +108,8 @@ a { color: var(--brand); }
   .rail-icon { width: 20px; height: 20px; display: inline-flex; flex: none; }
   .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding: 8px; }
   .rail-user { font-size: 13px; color: var(--ink-soft); }
+  .rail-user-form { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .rail-signout { font-size: 13px; padding: 0; min-height: 32px; }
   .rail-mini { font-size: 13px; }
   .main { padding: 28px 32px 40px; }
   .mobile-tools { display: none; }
@@ -602,6 +606,12 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .day-head { font-size: 14px; margin: 0 0 6px; }
 .day-entries { list-style: none; padding: 0; margin: 0 0 6px; }
 .plan-entry { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; padding: 6px; border-radius: 8px; background: var(--paper); margin-bottom: 5px; }
+.plan-entry-tools { display: flex; align-items: center; gap: 2px; flex: none; }
+.plan-move summary { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; cursor: pointer; list-style: none; color: var(--ink-soft); font-size: 16px; }
+.plan-move summary::-webkit-details-marker { display: none; }
+.plan-move[open] { position: relative; }
+.plan-move-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.plan-move-form select { flex: 1; min-width: 130px; }
 .plan-entry.is-note { border-left: 3px solid var(--ink-soft); }
 .plan-entry-body a { text-decoration: none; font-size: 14px; }
 .plan-slot { display: block; font-size: 11px; }

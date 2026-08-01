@@ -143,6 +143,22 @@ def list_sessions(conn: sqlite3.Connection) -> list[DeviceSession]:
     return [_row(r) for r in rows]
 
 
+def revoke_by_token(conn: sqlite3.Connection, raw_token: str) -> bool:
+    """Revoke the session a raw cookie names — how a device signs itself out.
+
+    Revoking server-side as well as clearing the cookie means a token captured from the device
+    earlier cannot be replayed, and the session stops showing as live on the Devices page.
+    """
+    if not raw_token:
+        return False
+    cur = conn.execute(
+        "UPDATE device_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+        (now_iso(), hash_token(raw_token)),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def revoke_session(conn: sqlite3.Connection, session_id: int) -> bool:
     cur = conn.execute(
         "UPDATE device_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",

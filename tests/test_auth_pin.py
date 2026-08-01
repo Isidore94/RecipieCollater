@@ -127,3 +127,41 @@ def test_non_admin_cannot_set_pin(client: TestClient) -> None:
     )
     assert resp.status_code == 303
     assert resp.headers["location"] == "/welcome"
+
+
+def test_logout_revokes_the_session_and_clears_the_cookie(admin_client: TestClient) -> None:
+    """There was no way out of a session; a shared phone had no recovery path in the UI."""
+    assert admin_client.get("/", follow_redirects=False).status_code == 200
+    token = admin_client.cookies.get("rc_session")
+    assert token
+
+    resp = admin_client.post("/logout", headers=SAME_ORIGIN, follow_redirects=False)
+    assert resp.status_code == 303 and resp.headers["location"] == "/login"
+
+    # No longer authenticated: browser navigation bounces to the unauthenticated landing.
+    landing = admin_client.get("/", follow_redirects=False)
+    assert landing.status_code == 303 and landing.headers["location"] == "/welcome"
+
+    # And the token is dead server-side too, so a copy of it cannot be replayed.
+    conn = connect(config.get_settings().db_path)
+    try:
+        assert sessions.resolve_session(conn, token) is None
+    finally:
+        conn.close()
+
+
+def test_sign_out_is_reachable_from_the_page(admin_client: TestClient) -> None:
+    body = admin_client.get("/").text
+    assert 'action="/logout"' in body and "Sign out" in body
+
+
+def test_pin_mismatch_changes_nothing(admin_client: TestClient, migrated_db) -> None:
+    """A PIN is typed blind, so a slip would lock someone out with no way to discover it."""
+    user_id = migrated_db.execute("SELECT id FROM users LIMIT 1").fetchone()["id"]
+    page = admin_client.post(
+        f"/admin/users/{user_id}/pin",
+        data={"pin": "1234", "pin_confirm": "1235"},
+        headers=SAME_ORIGIN,
+    )
+    assert "do not match" in page.text
+    assert credentials.check_login(migrated_db, "Aaron", "1234").ok is False

@@ -45,6 +45,9 @@
           <form method="post" action="/admin/users/{{ u.id }}/pin" class="inline-form">
             <input name="pin" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="12"
                    placeholder="4 to 12 digits" required aria-label="New PIN for {{ u.name }}">
+            <input name="pin_confirm" inputmode="numeric" pattern="[0-9]*" minlength="4"
+                   maxlength="12" required placeholder="repeat it"
+                   aria-label="Repeat the new PIN for {{ u.name }}">
             <button type="submit">Save PIN</button>
           </form>
           {% if u.id in pin_user_ids %}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -136,3 +136,29 @@ def test_plan_to_shopping_is_idempotent(migrated_db: sqlite3.Connection) -> None
     flour = [i for i in items if i.food_id and i.quantity_text]
     assert len(flour) == 1 and flour[0].quantity_text == "200"  # not 400
     assert any(i.display_text == "paper towels" for i in items)  # manual line preserved
+
+
+def test_move_entry_is_reachable_from_the_board(
+    admin_client: TestClient, migrated_db: sqlite3.Connection
+) -> None:
+    """The move route existed but no template called it, so a meal could only be deleted."""
+    rid = recipes.create_recipe(
+        migrated_db, recipes.RecipeInput(title="Chili", base_servings="4")
+    )
+    recipes.set_status(migrated_db, rid, "cookbook")
+    monday = planning.week_start().isoformat()
+    entry_id = planning.add_recipe_entry(migrated_db, monday, rid, slot="dinner")
+
+    board = admin_client.get(f"/plan?start={monday}").text
+    assert f'action="/plan/entry/{entry_id}/move"' in board
+
+    tuesday = (planning.week_start() + timedelta(days=1)).isoformat()
+    resp = admin_client.post(
+        f"/plan/entry/{entry_id}/move",
+        data={"week_start": monday, "plan_date": tuesday},
+        headers=SAME_ORIGIN, follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    columns = planning.week_board(migrated_db, planning.week_start())
+    placed = {c.plan_date: [e.id for e in c.entries] for c in columns}
+    assert placed[tuesday] == [entry_id] and placed[monday] == []

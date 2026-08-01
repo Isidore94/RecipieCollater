@@ -156,6 +156,7 @@ def set_user_pin(
     request: Request,
     user_id: int,
     pin: str = Form(...),
+    pin_confirm: str = Form(""),
     db: sqlite3.Connection = Depends(get_db),
     admin: User = Depends(require_admin),
     _: None = Depends(require_csrf),
@@ -163,6 +164,13 @@ def set_user_pin(
     target = get_user(db, user_id)
     if target is None:
         return _render_devices(request, db, admin, error="Unknown user.")
+    # A PIN is write-only and typed blind, so a slip locks the person out of the app with no
+    # way to discover it. Confirming is the only check available.
+    if pin_confirm and pin != pin_confirm:
+        return _render_devices(
+            request, db, admin,
+            error=f"{target.name}: the two PINs do not match. Nothing was changed.",
+        )
     try:
         credentials.set_pin(db, target.id, pin)
     except credentials.PinError as exc:

@@ -41,10 +41,27 @@
           {% else %}<span>{{ e.label }}</span>{% endif %}
           <span class="muted plan-slot">{{ e.slot }}{% if e.servings_text %} · {{ e.servings_text }}{% endif %}</span>
         </div>
-        <form method="post" action="/plan/entry/{{ e.id }}/remove" class="inline-post no-print">
-          <input type="hidden" name="week_start" value="{{ week_start }}">
-          <button type="submit" class="btn-link" aria-label="Remove">&times;</button>
-        </form>
+        <div class="plan-entry-tools no-print">
+          {# Moving a meal used to mean deleting it and adding it again on the other day. #}
+          <details class="plan-move">
+            <summary title="Move to another day" aria-label="Move {{ e.label }} to another day">&#8646;</summary>
+            <form method="post" action="/plan/entry/{{ e.id }}/move" class="plan-move-form">
+              <input type="hidden" name="week_start" value="{{ week_start }}">
+              <label class="visually-hidden" for="move-{{ e.id }}">Move to</label>
+              <select name="plan_date" id="move-{{ e.id }}">
+                {% for c in columns %}
+                <option value="{{ c.plan_date }}"{% if c.plan_date == col.plan_date %} selected{% endif %}>
+                  {{ c.weekday }} {{ c.plan_date[5:] }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn-secondary">Move</button>
+            </form>
+          </details>
+          <form method="post" action="/plan/entry/{{ e.id }}/remove" class="inline-post">
+            <input type="hidden" name="week_start" value="{{ week_start }}">
+            <button type="submit" class="btn-link" aria-label="Remove {{ e.label }}">&times;</button>
+          </form>
+        </div>
       </li>
       {% endfor %}
     </ul>
@@ -60,7 +77,12 @@
         </select>
         <input name="note" placeholder="or a note (leftovers, takeout)" aria-label="Note">
         <div class="day-add-row">
-          <input name="slot" value="dinner" aria-label="Slot" size="7">
+          <label class="visually-hidden" for="slot-{{ col.plan_date }}">Meal</label>
+          <select name="slot" id="slot-{{ col.plan_date }}">
+            {% for s in ['dinner', 'lunch', 'breakfast', 'snack'] %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
           <input name="servings" placeholder="serves" aria-label="Servings" size="5" inputmode="decimal">
           <button type="submit" class="btn-secondary">Add</button>
         </div>

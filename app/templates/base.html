@@ -75,7 +75,10 @@
             <option value="dark">Dark</option>
           </select>
         </div>
-        <span class="rail-user">{{ user.name }}</span>
+        <form method="post" action="/logout" class="rail-user-form">
+          <span class="rail-user">{{ user.name }}</span>
+          <button type="submit" class="btn-link rail-signout">Sign out</button>
+        </form>
       </div>
     </nav>
 
@@ -84,7 +87,10 @@
         <a href="/shortcut">Add to phone</a>
         {% if user.is_admin %}<a href="/admin/dashboard">Dashboard</a>{% endif %}
         {% if user.is_admin %}<a href="/admin/devices">Devices</a>{% endif %}
-        <span>{{ user.name }}</span>
+        <form method="post" action="/logout" class="inline-post">
+          <span>{{ user.name }}</span>
+          <button type="submit" class="btn-link">Sign out</button>
+        </form>
         <label class="visually-hidden" for="theme-select-mobile">Theme</label>
         <select id="theme-select-mobile" class="theme-select"
                 onchange="window.setRecipeTheme(this.value)">
