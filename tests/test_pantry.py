@@ -202,11 +202,11 @@ def _gauge_item(conn: sqlite3.Connection, name: str = "Olive oil") -> int:
 def test_undo_restores_the_previous_gauge(migrated_db: sqlite3.Connection) -> None:
     item_id = _gauge_item(migrated_db)
     adjustment = pantry.set_gauge(migrated_db, item_id, "low")
-    assert pantry.get_item(migrated_db, item_id).gauge == "low"
+    assert _item(migrated_db, item_id).gauge == "low"
 
     name = pantry.undo_adjustment(migrated_db, adjustment)
     assert name == "Olive oil"
-    assert pantry.get_item(migrated_db, item_id).gauge == "full"
+    assert _item(migrated_db, item_id).gauge == "full"
 
 
 def test_undo_is_single_shot(migrated_db: sqlite3.Connection) -> None:
@@ -217,7 +217,7 @@ def test_undo_is_single_shot(migrated_db: sqlite3.Connection) -> None:
 
     with pytest.raises(pantry.UndoUnavailable, match="already been undone"):
         pantry.undo_adjustment(migrated_db, adjustment)
-    assert pantry.get_item(migrated_db, item_id).gauge == "full"
+    assert _item(migrated_db, item_id).gauge == "full"
 
 
 def test_undo_restores_an_exact_amount(migrated_db: sqlite3.Connection) -> None:
@@ -231,10 +231,10 @@ def test_undo_restores_an_exact_amount(migrated_db: sqlite3.Connection) -> None:
         ),
     )
     adjustment = pantry.step_exact(migrated_db, item_id, "-2")
-    assert pantry.get_item(migrated_db, item_id).quantity_text == "4"
+    assert _item(migrated_db, item_id).quantity_text == "4"
 
     pantry.undo_adjustment(migrated_db, adjustment)
-    assert pantry.get_item(migrated_db, item_id).quantity_text == "6"
+    assert _item(migrated_db, item_id).quantity_text == "6"
 
 
 def test_undo_brings_back_a_deleted_item_with_its_settings(

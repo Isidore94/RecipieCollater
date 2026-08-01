@@ -155,7 +155,9 @@ def test_sign_out_is_reachable_from_the_page(admin_client: TestClient) -> None:
     assert 'action="/logout"' in body and "Sign out" in body
 
 
-def test_pin_mismatch_changes_nothing(admin_client: TestClient, migrated_db) -> None:
+def test_pin_mismatch_changes_nothing(
+    admin_client: TestClient, migrated_db: sqlite3.Connection
+) -> None:
     """A PIN is typed blind, so a slip would lock someone out with no way to discover it."""
     user_id = migrated_db.execute("SELECT id FROM users LIMIT 1").fetchone()["id"]
     page = admin_client.post(
