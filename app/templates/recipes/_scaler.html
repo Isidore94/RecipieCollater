@@ -1,0 +1,17 @@
+{# Serving scaler. Re-rendered out-of-band on every scale so the active preset and the custom
+   box match the list below them. #}
+<div class="scaler no-print" id="scaler"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <span class="muted">Servings:</span>
+  {% for p in presets %}
+  <a class="serving-btn{% if p == servings %} is-active{% endif %}"
+     href="/recipes/{{ recipe.slug }}?servings={{ p }}"
+     hx-get="/recipes/{{ recipe.slug }}/ingredients?servings={{ p }}"
+     hx-target="#ingredient-list" hx-swap="innerHTML">{{ p }}</a>
+  {% endfor %}
+  <form method="get" action="/recipes/{{ recipe.slug }}" class="scaler-custom"
+        hx-get="/recipes/{{ recipe.slug }}/ingredients"
+        hx-target="#ingredient-list" hx-swap="innerHTML">
+    <input name="servings" value="{{ servings }}" inputmode="decimal" aria-label="Servings" size="3">
+    <button type="submit">Scale</button>
+  </form>
+</div>

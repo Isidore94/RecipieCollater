@@ -1,0 +1,7 @@
+{# htmx response for the serving scaler: the rescaled ingredient list, plus out-of-band updates
+   for everything downstream of the chosen servings. Without these, scaling to 8 and tapping
+   "Cook this" or "Add missing to shopping" silently used the base servings. #}
+{% include "recipes/_ingredients.html" %}
+{% include "recipes/_cook_cta.html" %}
+{% include "recipes/_scaler.html" %}
+<span id="serves-line" hx-swap-oob="true">{% include "recipes/_serves.html" %}</span>

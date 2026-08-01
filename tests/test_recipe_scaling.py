@@ -115,3 +115,48 @@ def test_round_to_package_rejects_incompatible_dimension(migrated_db: sqlite3.Co
                 ],
             ),
         )
+
+
+def test_bare_count_defaults_to_each_and_scales(migrated_db: sqlite3.Connection) -> None:
+    """"3 bananas" is how people write countable ingredients; it must not be rejected.
+
+    A quantity with no unit is a count, so it stores as 'each' and scales — but the unit word
+    never shows, because "6 each bananas" is not English.
+    """
+    units.seed_core_units(migrated_db)
+    recipe_id = recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="Banana bread",
+            base_servings="4",
+            ingredients=[
+                recipes.IngredientInput(quantity_text="3", food="ripe bananas"),
+                recipes.IngredientInput(quantity_text="2", food="eggs"),
+            ],
+        ),
+    )
+    detail = recipes.get_recipe(migrated_db, recipe_id)
+    assert detail is not None
+    assert detail.ingredients[0].unit_name == "each"
+    # The typed wording survives on the unscaled sheet.
+    assert detail.ingredients[0].original_text == "3 ripe bananas"
+
+    scaled = recipes.scale_ingredients(detail, "8")
+    assert scaled[0].display == "6 ripe bananas"
+    assert scaled[1].display == "4 eggs"
+
+
+def test_amount_with_an_unrecognised_unit_still_fails(migrated_db: sqlite3.Connection) -> None:
+    """The 'each' default applies only to a blank unit, not to a typo'd one."""
+    units.seed_core_units(migrated_db)
+    with pytest.raises(recipes.RecipeError, match="no recognised unit"):
+        recipes.create_recipe(
+            migrated_db,
+            recipes.RecipeInput(
+                title="Nope",
+                base_servings="4",
+                ingredients=[
+                    recipes.IngredientInput(quantity_text="2", unit="glorbs", food="flour")
+                ],
+            ),
+        )

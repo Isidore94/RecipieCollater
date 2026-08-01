@@ -8,6 +8,7 @@
 </header>
 
 {% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
 {% if not messages %}
 <div class="card chat-intro">
@@ -66,12 +67,18 @@
   {% endfor %}
 </div>
 
-<form method="post" action="/chat/message" class="chat-compose">
+{# A turn is one blocking model call. Without this the page just sits there and reads as broken. #}
+<form method="post" action="/chat/message" class="chat-compose" data-busy-form
+      data-busy-label="Thinking&hellip;">
   <input type="hidden" name="conversation_id" value="{{ conversation_id }}">
   <textarea name="message" rows="2" required placeholder="Ask the assistant…"
             aria-label="Message"></textarea>
   <button type="submit" class="btn-primary">Send</button>
 </form>
+<p class="busy-note" data-busy-note hidden role="status">
+  <span class="spinner" aria-hidden="true"></span>
+  Thinking&hellip; this can take a few seconds.
+</p>
 <p class="muted chat-foot no-print">The assistant proposes; nothing changes until you Accept.
   Set <a href="/preferences">preferences</a> to sharpen its suggestions.</p>
 {% endblock %}

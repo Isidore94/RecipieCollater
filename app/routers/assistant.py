@@ -30,14 +30,14 @@ def _str(form: FormData, key: str) -> str:
 
 def _render(
     request: Request, db: sqlite3.Connection, user: User, conversation_id: int,
-    notice: str | None = None,
+    notice: str | None = None, error: str | None = None,
 ) -> Response:
     return render(
         request, "chat/index.html", active_nav="chat", user=user,
         conversation_id=conversation_id,
         messages=assistant.list_messages(db, conversation_id),
         proposals=assistant.list_proposals(db, conversation_id),
-        notice=notice,
+        notice=notice, error=error,
     )
 
 
@@ -45,11 +45,12 @@ def _render(
 def index(
     request: Request,
     notice: str | None = None,
+    error: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
     conversation_id = assistant.get_or_create_conversation(db, user_id=user.id)
-    return _render(request, db, user, conversation_id, notice=notice)
+    return _render(request, db, user, conversation_id, notice=notice, error=error)
 
 
 @router.post("/message")
@@ -69,7 +70,7 @@ async def message(
     # ask() surfaces setup problems (no AI key, empty message, spend cap) via .error rather
     # than persisting an assistant turn - show it instead of redirecting to a silent page.
     if result.error:
-        return RedirectResponse(f"/chat?notice={quote(result.error)}", status_code=303)
+        return RedirectResponse(f"/chat?error={quote(result.error)}", status_code=303)
     return RedirectResponse("/chat", status_code=303)
 
 
@@ -92,8 +93,9 @@ async def accept(
 ) -> Response:
     try:
         summary = assistant.accept_proposal(db, proposal_id, user_id=user.id)
-    except assistant.AssistantError:
-        return RedirectResponse("/chat", status_code=303)
+    except assistant.AssistantError as exc:
+        # Silently redirecting left the proposal pending with no sign anything had happened.
+        return RedirectResponse(f"/chat?error={quote(str(exc))}", status_code=303)
     notice = "Applied: " + ", ".join(summary) if summary else "Applied"
     return RedirectResponse(f"/chat?notice={quote(notice)}", status_code=303)
 

@@ -1,0 +1,5 @@
+{%- if servings and servings != base_servings -%}
+serves {{ servings }} <span class="muted">(scaled from {{ base_servings }})</span>
+{%- else -%}
+serves {{ base_servings }}
+{%- endif -%}

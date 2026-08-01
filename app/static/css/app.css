@@ -35,6 +35,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; }
 body {
   background: var(--paper); color: var(--ink);
@@ -149,6 +150,19 @@ button:hover { filter: brightness(1.05); }
 .banner-ok { background: var(--ok-bg); color: var(--ok-ink); }
 .banner-err { background: var(--err-bg); color: var(--err-ink); }
 
+/* Waiting on a blocking AI call */
+.busy-note { display: flex; align-items: center; gap: 10px; color: var(--ink-soft); font-size: 14px; margin: 10px 0; }
+.spinner {
+  width: 18px; height: 18px; flex: none; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--brand);
+  animation: rc-spin .7s linear infinite;
+}
+@keyframes rc-spin { to { transform: rotate(360deg); } }
+[data-busy-active] button[disabled] { opacity: .75; cursor: progress; }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+}
+
 /* Secrets shown once */
 .reveal { border-color: var(--brand); }
 .secret {
@@ -192,8 +206,24 @@ button:hover { filter: brightness(1.05); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-grid.times { grid-template-columns: repeat(5, 1fr); }
 .form-grid.times label { font-size: 11px; }
-.ing-row { display: grid; grid-template-columns: 0.9fr 0.6fr 0.8fr 1.4fr 1.2fr 1fr; gap: 6px; margin-bottom: 6px; }
-.ing-row input, .ing-row select { padding: 6px 8px; }
+/* One ingredient. Amount / unit / name stay on one line even on a phone; note, group and
+   scaling behaviour sit behind the row's own "more", so the form is three fields per row
+   rather than six stacked ones. */
+.ing-row { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 8px; }
+.ing-main { display: grid; grid-template-columns: 3.2rem 4rem 1fr 2.5rem; gap: 6px; align-items: center; }
+.ing-row input, .ing-row select { padding: 8px; }
+.ing-remove { background: transparent; color: var(--ink-soft); border: none; box-shadow: none;
+  font-size: 20px; min-height: 44px; padding: 0; }
+.ing-remove:hover { color: var(--danger); }
+.ing-more { margin-top: 6px; }
+.ing-more summary { display: inline-flex; align-items: center; min-height: 32px; font-size: 13px;
+  cursor: pointer; list-style: none; color: var(--ink-soft); }
+.ing-more summary::-webkit-details-marker { display: none; }
+.more-times { margin-top: 10px; }
+.more-times summary { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; cursor: pointer; }
+.ing-more-fields { display: none; gap: 6px; margin-top: 6px; }
+.ing-more[open] .ing-more-fields { display: grid; }
+.ing-scaling { display: grid; gap: 4px; font-size: 13px; color: var(--ink-soft); }
 .form-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
 .recipe-cards { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
 .recipe-card h2 { margin: 0 0 4px; font-size: 18px; }
@@ -202,7 +232,7 @@ button:hover { filter: brightness(1.05); }
 .ingredient-section { list-style: none; margin-left: -22px; margin-top: 10px; font-weight: 600; }
 .tldr { font-size: 16px; color: var(--ink-soft); font-style: italic; margin: 8px 0 16px; }
 @media (max-width: 640px) {
-  .form-grid, .form-grid.times, .ing-row { grid-template-columns: 1fr; }
+  .form-grid, .form-grid.times { grid-template-columns: 1fr; }
 }
 .scaler { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .serving-btn { display: inline-block; min-width: 34px; text-align: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--ink); background: var(--paper); }

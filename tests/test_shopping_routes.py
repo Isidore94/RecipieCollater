@@ -74,3 +74,33 @@ def test_add_staples_route(admin_client: TestClient, migrated_db: sqlite3.Connec
 def test_shopping_requires_login(client: TestClient) -> None:
     resp = client.get("/shopping", follow_redirects=False)
     assert resp.status_code in (301, 302, 303, 307, 401)
+
+
+def test_htmx_toggle_swaps_the_row_instead_of_redirecting(admin_client: TestClient) -> None:
+    """Checking an item off in the store must not reload the page and lose her scroll position."""
+    admin_client.post(
+        "/shopping/add", data={"text": "paper towels"}, headers=SAME_ORIGIN, follow_redirects=False
+    )
+    item_id = int(admin_client.get("/shopping").text.split('id="shop-item-')[1].split('"')[0])
+    resp = admin_client.post(
+        f"/shopping/items/{item_id}/toggle",
+        headers={**SAME_ORIGIN, "HX-Request": "true"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200  # a fragment, not a 303
+    assert f'id="shop-item-{item_id}"' in resp.text
+    assert "is-checked" in resp.text
+    # The running count rides along out-of-band, and the nav badge is told to refresh.
+    assert 'id="shop-count"' in resp.text and 'hx-swap-oob="true"' in resp.text
+    assert resp.headers.get("HX-Trigger") == "rc:shopping-changed"
+
+
+def test_plain_toggle_still_redirects_without_javascript(admin_client: TestClient) -> None:
+    admin_client.post(
+        "/shopping/add", data={"text": "milk"}, headers=SAME_ORIGIN, follow_redirects=False
+    )
+    item_id = int(admin_client.get("/shopping").text.split('id="shop-item-')[1].split('"')[0])
+    resp = admin_client.post(
+        f"/shopping/items/{item_id}/toggle", headers=SAME_ORIGIN, follow_redirects=False
+    )
+    assert resp.status_code == 303

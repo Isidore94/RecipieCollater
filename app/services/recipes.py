@@ -25,6 +25,9 @@ VALID_TIER: frozenset[str] = frozenset({"meal_prep", "family", "company"})
 VALID_SOURCE_TYPE: frozenset[str] = frozenset({"youtube", "web", "manual", "photo"})
 
 
+_COUNT_UNIT = "each"
+
+
 class RecipeError(ValueError):
     """Invalid recipe input (bad amount, unit, scaling mode, tier, status, or source)."""
 
@@ -226,6 +229,20 @@ def _compose_original(ing: IngredientInput) -> str:
     return text or "(ingredient)"
 
 
+def _effective_unit(ing: IngredientInput) -> str | None:
+    """The unit to store for an ingredient, defaulting a bare count to 'each'.
+
+    "3 bananas" and "2 eggs" are how people actually write countable ingredients, and requiring
+    them to name a unit was rejecting the most natural input on the form. A quantity with no
+    unit is a count, so it resolves to 'each'; the typed wording is preserved separately in
+    original_text, so the sheet still reads "3 ripe bananas".
+    """
+    unit_text = _clean(ing.unit)
+    if unit_text is not None:
+        return unit_text
+    return _COUNT_UNIT if _clean(ing.quantity_text) is not None else None
+
+
 def _validate(conn: sqlite3.Connection, data: RecipeInput) -> None:
     """Validate the whole recipe before any write, so failures never leave partial rows."""
     if not data.title.strip():
@@ -248,7 +265,7 @@ def _validate(conn: sqlite3.Connection, data: RecipeInput) -> None:
         qty = _clean(ing.quantity_text)
         if qty is not None:
             quantity.parse_quantity(qty)
-            unit_text = _clean(ing.unit)
+            unit_text = _effective_unit(ing)
             if unit_text is None or units.resolve_unit(conn, unit_text) is None:
                 raise RecipeError(f"'{label}' has an amount but no recognised unit")
         if ing.scaling_mode == "round_to_package":
@@ -264,7 +281,7 @@ def _validate(conn: sqlite3.Connection, data: RecipeInput) -> None:
                 package_unit = units.resolve_unit(conn, package_unit_text)
                 if package_unit is None:
                     raise RecipeError(f"'{label}' has an unrecognised package unit")
-                ingredient_unit = units.resolve_unit(conn, _clean(ing.unit) or "")
+                ingredient_unit = units.resolve_unit(conn, _effective_unit(ing) or "")
                 if (
                     ingredient_unit is not None
                     and package_unit.dimension != ingredient_unit.dimension
@@ -279,7 +296,7 @@ def _insert_children(
     conn: sqlite3.Connection, recipe_id: int, data: RecipeInput, *, food_status: str = "confirmed"
 ) -> None:
     for order, ing in enumerate(data.ingredients):
-        unit_text = _clean(ing.unit)
+        unit_text = _effective_unit(ing)
         unit_obj = units.resolve_unit(conn, unit_text) if unit_text else None
         package_text = _clean(ing.package_unit)
         package_obj = units.resolve_unit(conn, package_text) if package_text else None
@@ -816,7 +833,10 @@ def _scaled_display(ing: IngredientView, factor: Decimal) -> str:
     if scaled is None:
         return ing.original_text
     unit_label = ing.unit_plural if (scaled > 1 and ing.unit_plural) else ing.unit_name
-    parts = [quantity.format_quantity(scaled), unit_label]
+    # A count needs no unit word: "6 ripe bananas", not "6 each ripe bananas".
+    parts = [quantity.format_quantity(scaled)]
+    if unit_label != _COUNT_UNIT:
+        parts.append(unit_label)
     if ing.food_name:
         parts.append(ing.food_name)
     text = " ".join(parts)

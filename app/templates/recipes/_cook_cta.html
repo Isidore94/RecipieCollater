@@ -1,0 +1,11 @@
+{# The actions that must follow the serving scaler. Re-rendered out-of-band whenever the
+   ingredient list is rescaled, so cooking and shopping use the servings actually on screen
+   rather than the recipe's base. #}
+<div class="cook-cta no-print" id="cook-cta"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <a href="/recipes/{{ recipe.slug }}/cook?servings={{ servings }}" class="btn-primary">Cook this &rarr;</a>
+  <a href="/recipes/{{ recipe.slug }}/after-cook" class="btn-secondary">I made this</a>
+  <form method="post" action="/shopping/from-recipe/{{ recipe.slug }}" class="inline-post">
+    <input type="hidden" name="servings" value="{{ servings }}">
+    <button type="submit" class="btn-secondary">Add missing to shopping</button>
+  </form>
+</div>

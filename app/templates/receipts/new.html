@@ -13,7 +13,8 @@
   review. Store abbreviations are learned as you confirm them, so the same store gets faster
   every trip.</p>
 
-<form method="post" action="/receipts" enctype="multipart/form-data" class="card receipt-form">
+<form method="post" action="/receipts" enctype="multipart/form-data" class="card receipt-form"
+      data-busy-form data-busy-label="Reading the receipt&hellip;">
   <label for="photo">Receipt photo</label>
   <input id="photo" name="photo" type="file" accept="image/*" capture="environment">
 
@@ -27,4 +28,8 @@
     <button type="submit" class="btn-primary">Read it &rarr;</button>
   </div>
 </form>
+<p class="busy-note" data-busy-note hidden role="status">
+  <span class="spinner" aria-hidden="true"></span>
+  Reading the receipt &mdash; a photo can take up to half a minute. You review everything next.
+</p>
 {% endblock %}

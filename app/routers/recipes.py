@@ -28,7 +28,7 @@ from app.templating import render
 
 router = APIRouter(prefix="/recipes")
 
-_BLANK_ROWS = 6
+_BLANK_ROWS = 3
 _ALLOWED_IMAGE_EXT = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -253,12 +253,13 @@ def _render_form(
     notice: str | None = None,
     show_draft: bool = False,
     draft_description: str = "",
+    cancel_href: str = "/inbox",
     status_code: int = 200,
 ) -> Response:
     return render(
         request, "recipes/form.html", user=user, action=action, form=model, heading=heading,
         blank_rows=_BLANK_ROWS, error=error, notice=notice, show_draft=show_draft,
-        draft_description=draft_description, status_code=status_code,
+        draft_description=draft_description, cancel_href=cancel_href, status_code=status_code,
     )
 
 
@@ -399,9 +400,9 @@ def ingredients_fragment(
         return Response(status_code=404)
     target = _safe_servings(servings, detail.base_servings)
     return render(
-        request, "recipes/_ingredients.html", user=user,
+        request, "recipes/_scale_swap.html", user=user, recipe=detail,
         scaled=recipes.scale_ingredients(detail, target), servings=target,
-        base_servings=detail.base_servings,
+        base_servings=detail.base_servings, presets=_presets(detail.base_servings), oob=True,
     )
 
 
@@ -456,7 +457,7 @@ def edit_form(
         return RedirectResponse("/inbox", status_code=303)
     return _render_form(
         request, user, action=f"/recipes/{slug}/edit", model=_model_from_detail(detail),
-        heading=f"Edit: {detail.title}",
+        heading=f"Edit: {detail.title}", cancel_href=f"/recipes/{slug}",
     )
 
 
@@ -478,7 +479,8 @@ async def update(
         except ValueError as exc:
             return _render_form(
                 request, user, action=f"/recipes/{slug}/edit", model=_model_from_input(data),
-                heading=f"Edit: {detail.title}", error=str(exc), status_code=400,
+                heading=f"Edit: {detail.title}", error=str(exc),
+                cancel_href=f"/recipes/{slug}", status_code=400,
             )
         image_path = await _save_image(detail.id, _image_upload(form))
         if image_path:

@@ -260,9 +260,16 @@ def test_add_untracked_food_with_quantity_tracks_exact(
 def test_chat_message_route_surfaces_error(
     admin_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Review fix: an ask() error (no AI key) is shown, not silently dropped."""
+    """Review fix: an ask() error (no AI key) is shown, not silently dropped.
+
+    It travels as ``error=``, not ``notice=``: a missing key or a spent cap rendered in the
+    green success banner told the user the opposite of what had happened.
+    """
     monkeypatch.setattr("app.ai.get_provider", lambda settings: None)
     resp = admin_client.post(
         "/chat/message", data={"message": "plan"}, headers=SAME_ORIGIN, follow_redirects=False,
     )
-    assert resp.status_code == 303 and "notice=" in resp.headers["location"]
+    assert resp.status_code == 303 and "error=" in resp.headers["location"]
+
+    page = admin_client.get(resp.headers["location"])
+    assert "banner-err" in page.text and "banner-ok" not in page.text
