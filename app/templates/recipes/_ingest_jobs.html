@@ -1,14 +1,31 @@
-{# In-flight and failed ingest jobs. Self-refreshes via htmx every 3s while any job is active,
-   then stops polling once everything has settled (the outerHTML swap drops the trigger). #}
+{# In-flight, just-finished, and failed ingest jobs. Self-refreshes via htmx every 3s while any
+   job is active, then stops polling once everything has settled (the outerHTML swap drops the
+   trigger). A finished job announces what it added and links to it; a failed one can be retried
+   or dismissed instead of sitting there forever. #}
 <div id="ingest-jobs" class="ingest-jobs"
      {% if jobs_active %}hx-get="/inbox/jobs" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
   {% for job in jobs %}
   <div class="ingest-job is-{{ job.status }}">
     <span class="ingest-job-dot" aria-hidden="true"></span>
+    {% if job.status == 'done' and job_recipes.get(job.id) %}
+    <span class="ingest-job-status">Added</span>
+    <a class="ingest-job-title" href="/recipes/{{ job_recipes[job.id][1] }}">{{ job_recipes[job.id][0] }} &rarr;</a>
+    {% else %}
     <span class="ingest-job-url">{{ job.url }}</span>
     <span class="ingest-job-status">{{ job_labels.get(job.status, job.status) }}</span>
-    {% if job.status == 'failed' and job.error_message %}
-    <span class="ingest-job-error">{{ job.error_message }}</span>
+    {% endif %}
+    {% if job.status == 'failed' %}
+    {% if job.error_message %}<span class="ingest-job-error">{{ job.error_message }}</span>{% endif %}
+    <span class="ingest-job-actions">
+      <form method="post" action="/inbox/jobs/{{ job.id }}/retry" class="inline-post"
+            hx-post="/inbox/jobs/{{ job.id }}/retry" hx-target="#ingest-jobs" hx-swap="outerHTML">
+        <button type="submit" class="btn-secondary">Try again</button>
+      </form>
+      <form method="post" action="/inbox/jobs/{{ job.id }}/dismiss" class="inline-post"
+            hx-post="/inbox/jobs/{{ job.id }}/dismiss" hx-target="#ingest-jobs" hx-swap="outerHTML">
+        <button type="submit" class="btn-link" aria-label="Dismiss this failure">&times;</button>
+      </form>
+    </span>
     {% endif %}
   </div>
   {% endfor %}

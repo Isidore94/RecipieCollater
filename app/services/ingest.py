@@ -41,6 +41,10 @@ class IngestError(ValueError):
     """A submitted URL could not be accepted (empty, bad scheme, or unparseable)."""
 
 
+# How long a finished job keeps announcing itself in the inbox before it goes quiet.
+_RECENTLY_DONE_SECONDS = 120
+
+
 @dataclass(frozen=True, slots=True)
 class IngestJob:
     id: int
@@ -259,6 +263,33 @@ def set_status(
     conn.commit()
 
 
+def requeue_failed(conn: sqlite3.Connection, job_id: int) -> bool:
+    """Put a failed job back in the queue. Returns False if it was not failed.
+
+    A transient fetch failure (site down, rate limit, flaky Wi-Fi) used to be terminal from the
+    UI: the job sat in the inbox with a raw error and the only recourse was pasting the link
+    again, which the idempotency key then rejected as a duplicate.
+    """
+    stamp = now_iso()
+    cur = conn.execute(
+        """UPDATE ingest_jobs
+           SET status = 'queued', error_category = NULL, error_message = NULL, updated_at = ?
+           WHERE id = ? AND status = 'failed'""",
+        (stamp, job_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def discard_failed(conn: sqlite3.Connection, job_id: int) -> bool:
+    """Delete a failed job so a link she has given up on stops occupying the inbox."""
+    cur = conn.execute(
+        "DELETE FROM ingest_jobs WHERE id = ? AND status = 'failed'", (job_id,)
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def heartbeat(conn: sqlite3.Connection, job_id: int) -> None:
     stamp = now_iso()
     conn.execute(
@@ -298,12 +329,17 @@ def list_active_jobs(conn: sqlite3.Connection) -> list[IngestJob]:
 
 
 def list_pending_jobs(conn: sqlite3.Connection, *, limit: int = 25) -> list[IngestJob]:
-    """Jobs the inbox should surface: everything not yet 'done' (in-flight or failed).
+    """Jobs the inbox should surface: in-flight, failed, or just-finished.
 
-    A successful job becomes an inbox recipe card, so it drops out of this list on completion.
+    A job that finished simply vanished from this list, so the only sign a paste had worked was
+    a new card appearing somewhere further down the page. Keeping the last couple of minutes of
+    completed jobs lets the inbox say "Added: <title>" and link straight to it.
     """
     rows = conn.execute(
-        "SELECT * FROM ingest_jobs WHERE status != 'done' ORDER BY created_at DESC LIMIT ?",
-        (limit,),
+        """SELECT * FROM ingest_jobs
+           WHERE status != 'done'
+              OR updated_at >= datetime('now', ?)
+           ORDER BY created_at DESC LIMIT ?""",
+        (f"-{_RECENTLY_DONE_SECONDS} seconds", limit),
     ).fetchall()
     return [_row_to_job(r) for r in rows]

@@ -31,6 +31,7 @@ _JOB_STATUS_LABEL = {
     "extracting": "Reading recipe",
     "normalizing": "Saving",
     "failed": "Couldn't add",
+    "done": "Added",
 }
 
 
@@ -96,10 +97,19 @@ def _render_library(
 
 def _jobs_context(db: sqlite3.Connection) -> dict[str, Any]:
     jobs = ingest.list_pending_jobs(db)
+    # A finished job names the recipe it produced, so the inbox can say what it added and
+    # link to it rather than leaving her to spot a new card.
+    titles: dict[int, tuple[str, str]] = {}
+    for job in jobs:
+        if job.status == "done" and job.recipe_id is not None:
+            recipe = recipe_service.get_recipe(db, job.recipe_id)
+            if recipe is not None:
+                titles[job.id] = (recipe.title, recipe.slug)
     return {
         "jobs": jobs,
         "jobs_active": any(j.status in ingest.ACTIVE_STATUSES for j in jobs),
         "job_labels": _JOB_STATUS_LABEL,
+        "job_recipes": titles,
     }
 
 
@@ -162,6 +172,36 @@ async def ingest_from_browser(
         return _inbox_response(request, db, user, error=str(exc), status_code=400)
     if created:
         schedule_processing(job.id)
+    return RedirectResponse("/inbox", status_code=303)
+
+
+@router.post("/inbox/jobs/{job_id}/retry")
+async def retry_job(
+    request: Request,
+    job_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    """Requeue a failed ingest. The idempotency key blocks re-pasting, so retry has to live here."""
+    if ingest.requeue_failed(db, job_id):
+        schedule_processing(job_id)
+    if request.headers.get("HX-Request"):
+        return render(request, "recipes/_ingest_jobs.html", user=user, **_jobs_context(db))
+    return RedirectResponse("/inbox", status_code=303)
+
+
+@router.post("/inbox/jobs/{job_id}/dismiss")
+async def dismiss_job(
+    request: Request,
+    job_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    ingest.discard_failed(db, job_id)
+    if request.headers.get("HX-Request"):
+        return render(request, "recipes/_ingest_jobs.html", user=user, **_jobs_context(db))
     return RedirectResponse("/inbox", status_code=303)
 
 

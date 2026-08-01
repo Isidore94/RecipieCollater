@@ -2,9 +2,26 @@
 {% block title %}Share from your phone · RecipeCollater{% endblock %}
 {% block content %}
 <header class="page-head">
-  <h1>Share from your phone</h1>
+  <h1>Put this on your phone</h1>
 </header>
 
+{# The one-minute version comes first: most people want the icon, not the Shortcut. #}
+<section class="card a2hs">
+  <h2>Add the app icon (1 minute)</h2>
+  <p class="muted">This puts RecipeCollater on your home screen so it opens full-screen, like a
+    normal app, with no address bar.</p>
+  <ol class="a2hs-steps">
+    <li>Open <strong>{{ app_base_url }}</strong> in <strong>Safari</strong> on your iPhone
+      (it has to be Safari &mdash; Chrome can&rsquo;t add to the home screen).</li>
+    <li>Tap the <strong>Share</strong> button at the bottom &mdash; the square with an arrow
+      pointing up.</li>
+    <li>Scroll down and tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+  </ol>
+  <p class="muted">On Android, open the same address in Chrome, tap the &hellip; menu, and choose
+    <strong>Add to Home screen</strong>.</p>
+</section>
+
+<h2 class="a2hs-next">Share recipes straight from other apps (optional)</h2>
 <p class="muted">
   Set up an Apple Shortcut once, then share any recipe page, YouTube video, or Instagram reel
   straight into your inbox from the iOS share sheet. It works on an iPhone, iPad, or a Mac &mdash;

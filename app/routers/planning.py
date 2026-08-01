@@ -47,6 +47,25 @@ def _redirect(start: date, notice: str | None = None) -> Response:
     return RedirectResponse(url, status_code=303)
 
 
+def _week_label(week: date) -> str:
+    """A human heading for the week board: "This week", "Next week", or "Aug 4 - 10".
+
+    An ISO date ("Week of 2026-07-27") is precise and unreadable; the relative names are what
+    people actually call the two weeks they look at most.
+    """
+    current = planning.week_start()
+    if week == current:
+        return "This week"
+    if week == current + timedelta(days=7):
+        return "Next week"
+    if week == current - timedelta(days=7):
+        return "Last week"
+    end = week + timedelta(days=6)
+    if week.month == end.month:
+        return f"{week:%b} {week.day} \u2013 {end.day}"
+    return f"{week:%b} {week.day} \u2013 {end:%b} {end.day}"
+
+
 @router.get("")
 def board(
     request: Request,
@@ -59,7 +78,7 @@ def board(
     remaining, _total = shopping.counts(db, shopping.active_list(db))
     return render(
         request, "plan/board.html", active_nav="plan", user=user,
-        week_start=week.isoformat(),
+        week_start=week.isoformat(), week_label=_week_label(week),
         prev_week=(week - timedelta(days=7)).isoformat(),
         next_week=(week + timedelta(days=7)).isoformat(),
         this_week=planning.week_start().isoformat(),

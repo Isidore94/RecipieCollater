@@ -12,11 +12,14 @@
       </form>
     </details>
   </div>
-  <p class="muted">
-    <span class="chip-tag">{{ recipe.status }}</span>
-    {% if recipe.tier %} · {{ recipe.tier }}{% endif %}
-    {% if recipe.base_servings %} · <span id="serves-line">{% include "recipes/_serves.html" %}</span>{% endif %}
-    {% if recipe.total_minutes %} · {{ recipe.total_minutes }} min{% endif %}
+  {# Only the parts that exist, separated by a dot — no leading separator when the status
+     chip is absent, which it is for anything already in the cookbook. #}
+  <p class="muted meta-line">
+    {%- if recipe.status == 'inbox' %}<span class="chip-tag">New — not in the cookbook yet</span>
+    {%- elif recipe.status == 'archived' %}<span class="chip-tag">Archived</span>{% endif -%}
+    {%- if recipe.tier %}<span>{{ recipe.tier }}</span>{% endif -%}
+    {%- if recipe.base_servings %}<span id="serves-line">{% include "recipes/_serves.html" %}</span>{% endif -%}
+    {%- if recipe.total_minutes %}<span>{{ recipe.total_minutes }} min</span>{% endif -%}
   </p>
 </header>
 

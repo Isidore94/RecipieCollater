@@ -3,10 +3,11 @@
 {% block content %}
 
 <header class="page-head">
-  <h1>Week of {{ week_start }}</h1>
+  <h1>{{ week_label }}</h1>
   <div class="head-actions">
     <a href="/preferences" class="btn-secondary">Preferences</a>
-    <a href="/plan/export.ics?start={{ week_start }}" class="btn-secondary">iCal</a>
+    <a href="/plan/export.ics?start={{ week_start }}" class="btn-secondary"
+       title="Subscribe to this week in your calendar app">Add to calendar</a>
   </div>
 </header>
 

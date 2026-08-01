@@ -141,7 +141,17 @@ input:focus, select:focus { border-color: var(--brand); }
 button, .btn-primary {
   cursor: pointer; background: var(--brand); color: var(--brand-ink); border: none; font-weight: 600;
 }
-button:hover { filter: brightness(1.05); }
+/* .btn-primary is worn by <a> as often as by <button>; without this an anchor keeps its
+   underline and link colour and reads as text sitting on a coloured block. */
+a.btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 16px; border-radius: 10px; min-height: 44px;
+  text-decoration: none; color: var(--brand-ink); white-space: nowrap;
+}
+.btn-secondary { white-space: nowrap; }
+button:hover, a.btn-primary:hover { filter: brightness(1.05); }
+/* Touch has no hover, so without this every tap feels dead until the page turns over. */
+button:active, a.btn-primary:active, .btn-secondary:active { filter: brightness(.92); }
 .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
 .code-input { letter-spacing: .3em; text-transform: uppercase; text-align: center; font-size: 20px; }
 
@@ -149,6 +159,16 @@ button:hover { filter: brightness(1.05); }
 .banner { padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; }
 .banner-ok { background: var(--ok-bg); color: var(--ok-ink); }
 .banner-err { background: var(--err-bg); color: var(--err-ink); }
+
+/* Recipe meta line: dot separators drawn between whatever parts are actually present. */
+.meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.meta-line > span + span::before { content: "\00b7"; margin-right: 8px; color: var(--line); }
+
+/* Add-to-home-screen walkthrough */
+.a2hs { border-color: var(--brand); }
+.a2hs-steps { margin: 10px 0 6px; padding-left: 22px; }
+.a2hs-steps li { margin-bottom: 8px; }
+.a2hs-next { margin-top: 26px; }
 
 /* Waiting on a blocking AI call */
 .busy-note { display: flex; align-items: center; gap: 10px; color: var(--ink-soft); font-size: 14px; margin: 10px 0; }
@@ -197,7 +217,7 @@ button:hover { filter: brightness(1.05); }
 
 /* ---- Phase 1: recipe form, view, and browse ---- */
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.btn-secondary { display: inline-block; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); text-decoration: none; cursor: pointer; font-size: 14px; }
+.btn-secondary { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); text-decoration: none; cursor: pointer; font-size: 14px; }
 .recipe-form label { display: block; margin: 12px 0 4px; font-size: 13px; color: var(--ink-soft); }
 .recipe-form input, .recipe-form textarea, .recipe-form select {
   width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
@@ -267,6 +287,12 @@ button:hover { filter: brightness(1.05); }
 .ingest-job.is-failed .ingest-job-dot { background: var(--danger); }
 .ingest-job-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
 .ingest-job-status { font-weight: 600; color: var(--ink); }
+.ingest-job.is-done { border-color: var(--ok-ink); }
+.ingest-job.is-done .ingest-job-dot { background: var(--ok-ink); }
+.ingest-job.is-done .ingest-job-status { color: var(--ok-ink); }
+.ingest-job-title { flex: 1; font-weight: 600; text-decoration: none; }
+.ingest-job-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.ingest-job-actions .btn-secondary { font-size: 13px; padding: 4px 10px; min-height: 36px; }
 .ingest-job.is-failed .ingest-job-status { color: var(--err-ink); }
 .ingest-job-error { flex-basis: 100%; color: var(--err-ink); font-size: 12px; }
 
@@ -296,8 +322,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .banner-ok { color: var(--ok-ink); background: var(--ok-bg); padding: 8px 12px; border-radius: 8px; }
 
 /* Cook mode */
-.cook-cta { display: flex; gap: 8px; margin: 4px 0 14px; }
-.cook-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.cook-cta { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 14px; }
+.cook-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
 .cook-head h1 { flex: 1; font-size: 20px; margin: 0; }
 .cook-ingredients summary { font-weight: 600; cursor: pointer; }
 .checklist { list-style: none; padding: 0; margin: 10px 0 0; }
@@ -405,7 +431,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .deduct-skipped ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px; }
 
 /* Shopping list (Phase 4d) */
-.head-actions { display: flex; gap: 8px; }
+.head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pantry-restock { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
 .shop-add { display: flex; gap: 8px; margin-bottom: 12px; }
 .shop-add input { flex: 1; }

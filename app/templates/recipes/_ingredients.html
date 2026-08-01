@@ -9,8 +9,10 @@
     <li class="ingredient-section">{{ ing.section }}</li>
     {% set section.current = ing.section %}
     {% endif %}
-    <li>{{ ing.display }}{% if ing.scaling_mode not in ('linear', 'to_taste') %}
-      <span class="muted">({{ ing.scaling_mode }})</span>{% endif %}</li>
+    <li>{{ ing.display }}{% if ing.scaling_mode == 'fixed' %}
+      <span class="muted">(same however many you make)</span>
+      {%- elif ing.scaling_mode == 'round_to_package' %}
+      <span class="muted">(rounded up to whole packs)</span>{% endif %}</li>
   {% else %}
     <li class="muted">No ingredients yet.</li>
   {% endfor %}
