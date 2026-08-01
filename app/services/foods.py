@@ -15,9 +15,11 @@ All amount strings validate through app.services.quantity (CONVENTIONS 1).
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 
+from app.security import now_iso
 from app.services import quantity, units
 
 
@@ -198,6 +200,15 @@ def family_ids(conn: sqlite3.Connection, food_id: int) -> set[int]:
 # Merge (collapse a duplicate food into its canonical one)
 # --------------------------------------------------------------------------------------
 
+@dataclass(frozen=True, slots=True)
+class MergeResult:
+    """What a merge did, so the caller can describe it and offer to undo it."""
+
+    merge_id: int
+    source_name: str
+    target_name: str
+
+
 _REFERENCE_UPDATES: tuple[tuple[str, str], ...] = (
     ("recipe_ingredients", "food_id"),
     ("pantry_items", "food_id"),
@@ -210,18 +221,53 @@ _REFERENCE_UPDATES: tuple[tuple[str, str], ...] = (
 
 
 def merge_foods(
-    conn: sqlite3.Connection, source_id: int, target_id: int, *, commit: bool = True
-) -> None:
+    conn: sqlite3.Connection, source_id: int, target_id: int, *,
+    merged_by: int | None = None, commit: bool = True,
+) -> MergeResult:
     """Rewrite every reference from source to target, alias the source name, drop the source.
 
     The source's aliases (and its own name) become aliases of the target, so the next import of
     "chicken breasts" resolves straight to the canonical food.
+
+    Returns a receipt recording exactly which rows moved, which is the only way this can be
+    undone: afterwards nothing distinguishes the target's own references from inherited ones.
     """
     if source_id == target_id:
         raise FoodError("cannot merge a food into itself")
     _exists(conn, source_id)
     _exists(conn, target_id)
     source = conn.execute("SELECT * FROM foods WHERE id = ?", (source_id,)).fetchone()
+    target = conn.execute("SELECT name FROM foods WHERE id = ?", (target_id,)).fetchone()
+
+    # Capture what is about to move, before it moves.
+    moved: dict[str, list[int]] = {}
+    for table, column in _REFERENCE_UPDATES:
+        rows = conn.execute(
+            f"SELECT rowid AS rid FROM {table} WHERE {column} = ?",  # noqa: S608 - fixed ids
+            (source_id,),
+        ).fetchall()
+        if rows:
+            moved[f"{table}.{column}"] = [int(r["rid"]) for r in rows]
+    moved_aliases = [
+        r["alias"]
+        for r in conn.execute(
+            "SELECT alias FROM food_aliases WHERE food_id = ?", (source_id,)
+        ).fetchall()
+    ]
+    receipt = conn.execute(
+        "INSERT INTO food_merges (source_name, target_id, target_name, payload, merged_by) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (
+            source["name"], target_id, target["name"] if target else "",
+            json.dumps({
+                "source": dict(source),
+                "moved": moved,
+                "aliases": moved_aliases,
+            }),
+            merged_by,
+        ),
+    )
+    receipt_id = int(receipt.lastrowid or 0)
 
     for table, column in _REFERENCE_UPDATES:
         conn.execute(
@@ -281,6 +327,65 @@ def merge_foods(
         walk = row["parent_food_id"] if row else None
     if commit:
         conn.commit()
+    return MergeResult(
+        merge_id=receipt_id,
+        source_name=str(source["name"]),
+        target_name=str(target["name"]) if target else "",
+    )
+
+
+class MergeUndoUnavailable(FoodError):
+    """This merge cannot be reversed (unknown, or already undone)."""
+
+
+def undo_merge(conn: sqlite3.Connection, merge_id: int, *, commit: bool = True) -> str:
+    """Split a merged food back out, returning the name that came back.
+
+    Only the rows the merge actually moved are returned, which is why the receipt records them:
+    the target's own references are indistinguishable from inherited ones by the time anyone
+    looks. Single-shot, so a replay cannot create a second copy of the food.
+    """
+    row = conn.execute("SELECT * FROM food_merges WHERE id = ?", (merge_id,)).fetchone()
+    if row is None:
+        raise MergeUndoUnavailable("that merge is no longer available to undo")
+    if row["undone_at"] is not None:
+        raise MergeUndoUnavailable("that merge has already been undone")
+
+    payload = json.loads(row["payload"])
+    source = payload["source"]
+    restored = conn.execute(
+        "INSERT INTO foods (name, plural_name, category, density_mg_per_ml, status, "
+        "purchase_quantity_text, purchase_unit_id, purchase_label, default_quantity_mode) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            source["name"], source.get("plural_name"), source.get("category"),
+            source.get("density_mg_per_ml"), source.get("status") or "confirmed",
+            source.get("purchase_quantity_text"), source.get("purchase_unit_id"),
+            source.get("purchase_label"), source.get("default_quantity_mode"),
+        ),
+    )
+    new_id = int(restored.lastrowid or 0)
+
+    for key, rowids in (payload.get("moved") or {}).items():
+        table, _, column = key.partition(".")
+        if (table, column) not in _REFERENCE_UPDATES or not rowids:
+            continue
+        marks = ",".join("?" for _ in rowids)
+        conn.execute(
+            f"UPDATE {table} SET {column} = ? WHERE rowid IN ({marks})",  # noqa: S608
+            [new_id, *rowids],
+        )
+    for alias in payload.get("aliases") or []:
+        conn.execute(
+            "UPDATE OR IGNORE food_aliases SET food_id = ? WHERE alias = ?", (new_id, alias)
+        )
+    # The merge aliased the source's own name onto the target; that alias is now the food again.
+    conn.execute("DELETE FROM food_aliases WHERE alias = ?", (source["name"],))
+
+    conn.execute("UPDATE food_merges SET undone_at = ? WHERE id = ?", (now_iso(), merge_id))
+    if commit:
+        conn.commit()
+    return str(source["name"])
 
 
 # --------------------------------------------------------------------------------------

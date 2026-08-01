@@ -48,6 +48,8 @@ def index(
     q: str | None = None,
     notice: str | None = None,
     error: str | None = None,
+    undo: int | None = None,
+    undo_kind: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
@@ -55,6 +57,7 @@ def index(
     return render(
         request, "foods/index.html", active_nav="pantry", user=user,
         foods=food_list, query=q or "", notice=notice, error=error,
+        undo=undo, undo_kind=undo_kind,
         pending_count=sum(1 for f in food_list if f.status == "pending"),
     )
 
@@ -88,10 +91,31 @@ async def merge(
         if target_id is None:
             return _back(form, error="Pick which food to merge this one into.")
         try:
-            foods.merge_foods(db, food_id, target_id)
+            merged = foods.merge_foods(db, food_id, target_id, merged_by=user.id)
         except foods.FoodError as exc:
             return _back(form, error=str(exc))
-        return _back(form, notice="Merged.")
+        return flash.redirect(
+            _back_url(form),
+            notice=f"Merged {merged.source_name} into {merged.target_name}.",
+            undo=merged.merge_id, undo_kind="merge",
+        )
+
+
+@router.post("/merges/{merge_id}/undo")
+async def undo_merge(
+    request: Request,
+    merge_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    """Split a merged food back out, moving back exactly the rows the merge moved."""
+    async with request.form() as form:
+        try:
+            name = foods.undo_merge(db, merge_id)
+        except foods.FoodError as exc:
+            return _back(form, error=str(exc))
+        return _back(form, notice=f"Split {name} back out.")
 
 
 @router.post("/{food_id}/parent")

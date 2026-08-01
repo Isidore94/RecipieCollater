@@ -65,12 +65,12 @@ def test_real_migration_001_is_only_phase0_tables(tmp_path: Path) -> None:
 def test_fresh_install_and_idempotent_rerun(tmp_path: Path) -> None:
     db_path = tmp_path / "app.db"
     first = run_migrations(db_path, backup_dir=tmp_path / "bk")
-    assert first.applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-    assert first.current_version == 17
+    assert first.applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    assert first.current_version == 18
     second = run_migrations(db_path, backup_dir=tmp_path / "bk")
     assert second.already_current is True
     assert second.applied == []
-    assert current_version(db_path) == 17
+    assert current_version(db_path) == 18
 
 
 def test_snapshot_taken_before_each_apply(tmp_path: Path) -> None:
@@ -213,7 +213,7 @@ def test_real_upgrade_from_phase0_001_to_002(tmp_path: Path) -> None:
         conn.close()
 
     result = run_migrations(db_path, backup_dir=tmp_path / "new-backups")
-    assert result.applied == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    assert result.applied == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
     conn = connect(db_path)
     try:
         columns = {

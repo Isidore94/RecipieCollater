@@ -232,11 +232,27 @@ wakeLock branch could throw without falling through to the video.
    the URL is its own idempotency key, so a resubmit produced no job and, past the inbox's
    two-minute recently-done window, no visible trace either.
 
-## Still open
+## Then fixed (fourth pass) — nothing destructive is one-way any more
 
-- **Irreversible food merge** (Tier 2.6) — still guarded only by a generic `confirm()`.
-- **Recipe delete has no restore** — `app/services/recipes.py` snapshots revisions for "cheap
-  undo" but nothing reads them back; the pantry undo above is the pattern to copy.
+1. **Deleting a recipe.** Deleting cascaded ingredients, steps, tags, revisions, cook log and
+   plan entries away, and `recipe_revisions` could not help because it cascades too — the
+   snapshots kept "for cheap undo" are destroyed by the operation someone would want to undo.
+   Migration 017 archives the recipe as JSON outside its foreign-key graph; restore rebuilds it
+   through the normal create path, so ingredients, steps, tags and the FTS entry all come back,
+   along with status, rating, notes and photo. The cook log does not come back — those rows
+   referenced an id that no longer exists — so the confirmation says so when there is a log to
+   lose, and points at Archive.
+2. **Merging two foods.** A merge rewrites references across seven tables and deletes the
+   source, after which nothing distinguishes the target's own references from inherited ones —
+   so it was genuinely irreversible, on a screen whose target is picked from a list of every
+   food. Migration 018 records a receipt of exactly which rows moved, which is the only thing
+   that makes an undo possible; the confirmation now also states how many recipes and pantry
+   items will move.
+
+Both undos are single-shot, like the pantry and cook-batch ones: a replayed request is refused
+rather than applied twice.
+
+## Still open
 - **Trip planner does not scale** (Tier 2.9) — every recipe as a checkbox, no search.
 - **Receipts can still be stranded** (Tier 2.7) — no receipts index to find a pending one.
 - **Assistant has no conversation history** (Tier 2.10), and replies render markdown literally.

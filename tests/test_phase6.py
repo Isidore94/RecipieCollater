@@ -52,7 +52,7 @@ def test_dashboard_gather(migrated_db: sqlite3.Connection) -> None:
     )
     stats = admin_stats.gather(migrated_db, get_settings())
     assert stats.recipe_count == 1 and stats.cookbook_count == 1
-    assert stats.schema_version == 17
+    assert stats.schema_version == 18
     assert stats.spend_month_micros == 1234
     assert any(p.provider == "openai" for p in stats.provider_spend)
     assert stats.db_bytes > 0

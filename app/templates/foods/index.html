@@ -12,8 +12,7 @@
   merge duplicates (&ldquo;chicken breasts&rdquo; into &ldquo;chicken breast&rdquo;) and group
   cuts under one family so a search for chicken finds every one of them.</p>
 
-{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
-{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
+{% include "partials/_flash.html" %}
 
 {% if pending_count %}
 <p class="banner banner-todo">{{ pending_count }} imported food{{ 's' if pending_count != 1 }}
@@ -73,11 +72,11 @@
         </label>
         <button type="submit" class="btn-secondary">Set family</button>
       </form>
-      {# The confirm text is deliberately static: interpolating the food name into a JS string
-         would be a stored-XSS vector (HTML entity escaping does not protect JS context, and
-         food names arrive from ingested web pages). #}
+      {# Only integers are interpolated into the confirm. Food names must not be: they arrive
+         from ingested web pages, and HTML entity escaping does not protect a JS string
+         context, so a name would be a stored-XSS vector. #}
       <form method="post" action="/foods/{{ f.id }}/merge" class="food-form"
-            onsubmit="return confirm('Merge this food into the selected one? Every recipe, pantry item and list line moves over.');">
+            onsubmit="return confirm('Merge this food into the selected one? {{ f.recipe_count }} recipe{{ 's' if f.recipe_count != 1 }} and {{ f.pantry_count }} pantry item{{ 's' if f.pantry_count != 1 }} move over. You can undo this afterwards.');">
         <input type="hidden" name="q" value="{{ query }}">
         <label>Merge into
           <select name="target_id">

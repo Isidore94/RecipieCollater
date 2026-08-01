@@ -162,3 +162,43 @@ def test_merge_never_leaves_a_self_parent(migrated_db: sqlite3.Connection) -> No
     ).fetchone()
     assert row["parent_food_id"] is None  # not itself
     foods.set_parent(migrated_db, breast, None)  # and set_parent still works
+
+
+def test_undo_merge_splits_the_food_back_out(migrated_db: sqlite3.Connection) -> None:
+    """A merge rewrites references across seven tables; only a receipt can say which moved."""
+    seed_core_units(migrated_db)
+    kept_recipe = _recipe(migrated_db, "chicken breast")
+    dupe_recipe = _recipe(migrated_db, "chicken breasts")
+    keep = _food_id(migrated_db, "chicken breast")
+    dupe = _food_id(migrated_db, "chicken breasts")
+
+    merged = foods.merge_foods(migrated_db, dupe, keep)
+    assert merged.source_name == "chicken breasts" and merged.target_name == "chicken breast"
+    assert migrated_db.execute("SELECT 1 FROM foods WHERE id = ?", (dupe,)).fetchone() is None
+
+    name = foods.undo_merge(migrated_db, merged.merge_id)
+    assert name == "chicken breasts"
+
+    # The food is back, and only the lines that moved came back with it.
+    restored = _food_id(migrated_db, "chicken breasts")
+    detail = recipes.get_recipe(migrated_db, dupe_recipe)
+    assert detail is not None and detail.ingredients[0].food_id == restored
+    kept = recipes.get_recipe(migrated_db, kept_recipe)
+    assert kept is not None and kept.ingredients[0].food_id == keep
+
+
+def test_undo_merge_is_single_shot(migrated_db: sqlite3.Connection) -> None:
+    seed_core_units(migrated_db)
+    _recipe(migrated_db, "onion")
+    _recipe(migrated_db, "onions")
+    merged = foods.merge_foods(
+        migrated_db, _food_id(migrated_db, "onions"), _food_id(migrated_db, "onion")
+    )
+    foods.undo_merge(migrated_db, merged.merge_id)
+
+    with pytest.raises(foods.MergeUndoUnavailable, match="already been undone"):
+        foods.undo_merge(migrated_db, merged.merge_id)
+    count = migrated_db.execute(
+        "SELECT COUNT(*) AS n FROM foods WHERE name = 'onions'"
+    ).fetchone()["n"]
+    assert count == 1
