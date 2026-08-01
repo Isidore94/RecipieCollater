@@ -16,6 +16,7 @@ inside ``record_cook``'s single transaction; routes call them with the default `
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -252,17 +253,20 @@ def _record_adjustment(
     to_have: int | None = None,
     cook_log_id: int | None = None,
     batch_id: str | None = None,
-) -> None:
-    conn.execute(
+    undo_payload: str | None = None,
+) -> int:
+    """Write one history row and return its id, so a caller can offer to undo just this change."""
+    cur = conn.execute(
         """INSERT INTO pantry_adjustments
            (pantry_item_id, food_id, delta_quantity_text, canonical_delta, from_gauge, to_gauge,
-            from_have, to_have, reason, source, cook_log_id, batch_id, user_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            from_have, to_have, reason, source, cook_log_id, batch_id, user_id, undo_payload)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             item_id, food_id, delta_quantity_text, canonical_delta, from_gauge, to_gauge,
-            from_have, to_have, reason, source, cook_log_id, batch_id, user_id,
+            from_have, to_have, reason, source, cook_log_id, batch_id, user_id, undo_payload,
         ),
     )
+    return int(cur.lastrowid or 0)
 
 
 def _row(conn: sqlite3.Connection, item_id: int) -> sqlite3.Row:
@@ -284,8 +288,8 @@ def set_exact(
     cook_log_id: int | None = None,
     batch_id: str | None = None,
     commit: bool = True,
-) -> None:
-    """Set an exact item's quantity, recording the signed delta (canonical + text)."""
+) -> int:
+    """Set an exact item's quantity, recording the signed delta. Returns the adjustment id."""
     item = _row(conn, item_id)
     if item["quantity_mode"] != "exact":
         raise PantryError("not an exact-quantity item")
@@ -305,13 +309,14 @@ def set_exact(
            WHERE id = ?""",
         (quantity.plain_str(new_value), new_canonical, stamp, user_id, item_id),
     )
-    _record_adjustment(
+    adjustment_id = _record_adjustment(
         conn, item_id, item["food_id"], reason=reason, user_id=user_id,
         delta_quantity_text=quantity.format_quantity(delta), canonical_delta=canonical_delta,
         cook_log_id=cook_log_id, batch_id=batch_id,
     )
     if commit:
         conn.commit()
+    return adjustment_id
 
 
 def step_exact(
@@ -322,7 +327,7 @@ def step_exact(
     reason: str = "correction",
     user_id: int | None = None,
     commit: bool = True,
-) -> None:
+) -> int:
     """Nudge an exact item by a signed amount (+/- steppers), clamped at zero."""
     item = _row(conn, item_id)
     if item["quantity_mode"] != "exact":
@@ -334,7 +339,7 @@ def step_exact(
     new_value = _current_value(item) + delta
     if new_value < 0:
         new_value = Decimal(0)
-    set_exact(
+    return set_exact(
         conn, item_id, quantity.plain_str(new_value), reason=reason, user_id=user_id,
         commit=commit,
     )
@@ -350,19 +355,20 @@ def set_gauge(
     cook_log_id: int | None = None,
     batch_id: str | None = None,
     commit: bool = True,
-) -> None:
-    """Set a gauge item to an explicit level (stock-take, restock, cook step-down)."""
+) -> int:
+    """Set a gauge item to an explicit level. Returns the adjustment id, for a one-tap undo."""
     if gauge not in _GAUGE_CYCLE:
         raise PantryError(f"unknown gauge: {gauge!r}")
     item = _row(conn, item_id)
     if item["quantity_mode"] != "gauge":
         raise PantryError("not a gauge item")
-    _apply_gauge(
+    adjustment_id = _apply_gauge(
         conn, item, gauge, reason=reason, user_id=user_id, cook_log_id=cook_log_id,
         batch_id=batch_id,
     )
     if commit:
         conn.commit()
+    return adjustment_id
 
 
 def cycle_gauge(
@@ -394,12 +400,12 @@ def _apply_gauge(
     user_id: int | None,
     cook_log_id: int | None = None,
     batch_id: str | None = None,
-) -> None:
+) -> int:
     conn.execute(
         "UPDATE pantry_items SET gauge = ?, updated_at = ?, updated_by = ? WHERE id = ?",
         (new_gauge, now_iso(), user_id, item["id"]),
     )
-    _record_adjustment(
+    return _record_adjustment(
         conn, int(item["id"]), item["food_id"], reason=reason, user_id=user_id,
         from_gauge=item["gauge"], to_gauge=new_gauge, cook_log_id=cook_log_id, batch_id=batch_id,
     )
@@ -415,8 +421,8 @@ def set_have(
     cook_log_id: int | None = None,
     batch_id: str | None = None,
     commit: bool = True,
-) -> None:
-    """Set a binary item's have/out state."""
+) -> int:
+    """Set a binary item's have/out state. Returns the adjustment id, for a one-tap undo."""
     item = _row(conn, item_id)
     if item["quantity_mode"] != "binary":
         raise PantryError("not a have/out item")
@@ -425,12 +431,13 @@ def set_have(
         "UPDATE pantry_items SET have = ?, updated_at = ?, updated_by = ? WHERE id = ?",
         (new_have, now_iso(), user_id, item_id),
     )
-    _record_adjustment(
+    adjustment_id = _record_adjustment(
         conn, item_id, item["food_id"], reason=reason, user_id=user_id,
         from_have=item["have"], to_have=new_have, cook_log_id=cook_log_id, batch_id=batch_id,
     )
     if commit:
         conn.commit()
+    return adjustment_id
 
 
 def toggle_have(
@@ -498,24 +505,29 @@ def remove_item(
     user_id: int | None = None,
     delete: bool = False,
     commit: bool = True,
-) -> None:
+) -> int:
     """Empty an item (exact->0, gauge->out, binary->out) or delete the row, writing history.
 
     ``delete`` hard-removes the row; the adjustment survives (pantry_item_id ON DELETE SET NULL,
-    food_id retained) so "you tossed spinach twice this month" still works.
+    food_id retained) so "you tossed spinach twice this month" still works. Returns the
+    adjustment id so the caller can offer to undo it.
     """
     if reason not in _REMOVE_REASONS:
         raise PantryError(f"remove reason must be one of {sorted(_REMOVE_REASONS)}")
     item = _row(conn, item_id)
     mode = item["quantity_mode"]
     stamp = now_iso()
+    # A hard delete drops the row, so the transition columns cannot describe how to get back.
+    # Snapshot the whole item first; this is the only thing that makes a wrong delete recoverable.
+    payload = json.dumps(dict(item), default=str) if delete else None
     if mode == "exact":
         old_canonical = item["canonical_quantity"]
         old_value = _current_value(item)
-        _record_adjustment(
+        adjustment_id = _record_adjustment(
             conn, item_id, item["food_id"], reason=reason, user_id=user_id,
             delta_quantity_text=quantity.format_quantity(-old_value),
             canonical_delta=(-old_canonical if old_canonical is not None else None),
+            undo_payload=payload,
         )
         conn.execute(
             "UPDATE pantry_items SET quantity_text = '0', canonical_quantity = 0, "
@@ -523,18 +535,18 @@ def remove_item(
             (stamp, user_id, item_id),
         )
     elif mode == "gauge":
-        _record_adjustment(
+        adjustment_id = _record_adjustment(
             conn, item_id, item["food_id"], reason=reason, user_id=user_id,
-            from_gauge=item["gauge"], to_gauge="out",
+            from_gauge=item["gauge"], to_gauge="out", undo_payload=payload,
         )
         conn.execute(
             "UPDATE pantry_items SET gauge = 'out', updated_at = ?, updated_by = ? WHERE id = ?",
             (stamp, user_id, item_id),
         )
     else:  # binary
-        _record_adjustment(
+        adjustment_id = _record_adjustment(
             conn, item_id, item["food_id"], reason=reason, user_id=user_id,
-            from_have=item["have"], to_have=0,
+            from_have=item["have"], to_have=0, undo_payload=payload,
         )
         conn.execute(
             "UPDATE pantry_items SET have = 0, updated_at = ?, updated_by = ? WHERE id = ?",
@@ -552,6 +564,111 @@ def remove_item(
         conn.execute("DELETE FROM pantry_items WHERE id = ?", (item_id,))
     if commit:
         conn.commit()
+    return adjustment_id
+
+
+# --------------------------------------------------------------------------------------
+# Undo (one adjustment at a time; the cook batch has its own undo in deductions.py)
+# --------------------------------------------------------------------------------------
+
+# The item's own columns, in the order the restore INSERT below expects them, so a deleted item
+# comes back configured the way it was rather than as a bare default.
+_RESTORE_COLUMNS = (
+    "display_name", "location_id", "food_id", "quantity_mode", "unit_id", "quantity_text",
+    "canonical_quantity", "gauge", "have", "is_staple", "min_quantity_text",
+    "canonical_min_quantity", "expires_on", "step_down_on_cook",
+)
+
+
+class UndoUnavailable(PantryError):
+    """This adjustment cannot be reversed (already undone, or nothing left to reverse)."""
+
+
+def describe_adjustment(conn: sqlite3.Connection, adjustment_id: int) -> str | None:
+    """A short human label for what an adjustment did, for the Undo prompt."""
+    row = conn.execute(
+        "SELECT pa.*, COALESCE(pi.display_name, f.name) AS label "
+        "FROM pantry_adjustments pa "
+        "LEFT JOIN pantry_items pi ON pi.id = pa.pantry_item_id "
+        "LEFT JOIN foods f ON f.id = pa.food_id WHERE pa.id = ?",
+        (adjustment_id,),
+    ).fetchone()
+    return row["label"] if row else None
+
+
+def undo_adjustment(
+    conn: sqlite3.Connection, adjustment_id: int, *, user_id: int | None = None
+) -> str:
+    """Reverse one pantry adjustment and return the name of the item it restored.
+
+    Single-shot, like the cook-batch undo: a replayed request (double tap, page reload, back
+    button) is rejected rather than applied twice, which would over-restore the pantry.
+
+    The reversal is itself recorded as a 'correction' adjustment, so history stays append-only
+    and shows both what happened and that it was taken back.
+    """
+    row = conn.execute(
+        "SELECT * FROM pantry_adjustments WHERE id = ?", (adjustment_id,)
+    ).fetchone()
+    if row is None:
+        raise UndoUnavailable("that change is no longer available to undo")
+    if row["undone_at"] is not None:
+        raise UndoUnavailable("that change has already been undone")
+
+    payload = row["undo_payload"]
+    item_id = row["pantry_item_id"]
+
+    if payload is not None and item_id is None:
+        # The item was deleted. Recreate it from the snapshot taken at delete time.
+        saved = json.loads(payload)
+        cur = conn.execute(
+            """INSERT INTO pantry_items
+               (display_name, location_id, food_id, quantity_mode, unit_id, quantity_text,
+                canonical_quantity, gauge, have, is_staple, min_quantity_text,
+                canonical_min_quantity, expires_on, step_down_on_cook, updated_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (*(saved.get(column) for column in _RESTORE_COLUMNS), user_id),
+        )
+        restored_id = int(cur.lastrowid or 0)
+        name = str(saved.get("display_name") or "item")
+        _record_adjustment(
+            conn, restored_id, saved.get("food_id"), reason="correction", user_id=user_id,
+            source="undo",
+        )
+    else:
+        if item_id is None:
+            raise UndoUnavailable("that item no longer exists")
+        try:
+            item = _row(conn, item_id)
+        except PantryError as exc:
+            raise UndoUnavailable('that item no longer exists') from exc
+        name = str(item["display_name"])
+        if row["from_gauge"] is not None:
+            _apply_gauge(
+                conn, item, row["from_gauge"], reason="correction", user_id=user_id
+            )
+        elif row["from_have"] is not None:
+            set_have(
+                conn, item_id, bool(row["from_have"]), reason="correction", user_id=user_id,
+                commit=False,
+            )
+        elif row["canonical_delta"] is not None or row["delta_quantity_text"] is not None:
+            delta_text = row["delta_quantity_text"]
+            if delta_text is None:
+                raise UndoUnavailable("that change cannot be undone")
+            # The stored delta is signed, so stepping by its negation returns the old amount.
+            step_exact(
+                conn, item_id, quantity.plain_str(-_signed_decimal(delta_text)),
+                reason="correction", user_id=user_id, commit=False,
+            )
+        else:
+            raise UndoUnavailable("that change cannot be undone")
+
+    conn.execute(
+        "UPDATE pantry_adjustments SET undone_at = ? WHERE id = ?", (now_iso(), adjustment_id)
+    )
+    conn.commit()
+    return name
 
 
 # --------------------------------------------------------------------------------------

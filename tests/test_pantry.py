@@ -185,3 +185,83 @@ def test_list_items_by_location(migrated_db: sqlite3.Connection) -> None:
     _add(migrated_db, "Peas", freezer, "binary")
     assert [i.display_name for i in pantry.list_items(migrated_db, location_id=freezer)] == ["Peas"]
     assert len(pantry.list_items(migrated_db)) == 2
+
+
+# --------------------------------------------------------------------------------------
+# Undo of a single adjustment (the cook batch has its own undo in test_deductions)
+# --------------------------------------------------------------------------------------
+
+
+def _gauge_item(conn: sqlite3.Connection, name: str = "Olive oil") -> int:
+    loc = pantry.create_location(conn, "Cupboard")
+    return pantry.add_item(
+        conn, pantry.PantryItemInput(display_name=name, location_id=loc, quantity_mode="gauge")
+    )
+
+
+def test_undo_restores_the_previous_gauge(migrated_db: sqlite3.Connection) -> None:
+    item_id = _gauge_item(migrated_db)
+    adjustment = pantry.set_gauge(migrated_db, item_id, "low")
+    assert pantry.get_item(migrated_db, item_id).gauge == "low"
+
+    name = pantry.undo_adjustment(migrated_db, adjustment)
+    assert name == "Olive oil"
+    assert pantry.get_item(migrated_db, item_id).gauge == "full"
+
+
+def test_undo_is_single_shot(migrated_db: sqlite3.Connection) -> None:
+    """A double tap or a reload must not reverse the same change twice and over-restore."""
+    item_id = _gauge_item(migrated_db)
+    adjustment = pantry.set_gauge(migrated_db, item_id, "out")
+    pantry.undo_adjustment(migrated_db, adjustment)
+
+    with pytest.raises(pantry.UndoUnavailable, match="already been undone"):
+        pantry.undo_adjustment(migrated_db, adjustment)
+    assert pantry.get_item(migrated_db, item_id).gauge == "full"
+
+
+def test_undo_restores_an_exact_amount(migrated_db: sqlite3.Connection) -> None:
+    seed_core_units(migrated_db)
+    loc = pantry.create_location(migrated_db, "Cupboard")
+    item_id = pantry.add_item(
+        migrated_db,
+        pantry.PantryItemInput(
+            display_name="Tinned tomatoes", location_id=loc, quantity_mode="exact",
+            quantity_text="6", unit="each",
+        ),
+    )
+    adjustment = pantry.step_exact(migrated_db, item_id, "-2")
+    assert pantry.get_item(migrated_db, item_id).quantity_text == "4"
+
+    pantry.undo_adjustment(migrated_db, adjustment)
+    assert pantry.get_item(migrated_db, item_id).quantity_text == "6"
+
+
+def test_undo_brings_back_a_deleted_item_with_its_settings(
+    migrated_db: sqlite3.Connection,
+) -> None:
+    """A hard delete drops the row, so the transition columns cannot describe the way back."""
+    loc = pantry.create_location(migrated_db, "Freezer", is_freezer=True)
+    item_id = pantry.add_item(
+        migrated_db,
+        pantry.PantryItemInput(
+            display_name="Puff pastry", location_id=loc, quantity_mode="gauge",
+            is_staple=True, expires_on="2026-12-01",
+        ),
+    )
+    adjustment = pantry.remove_item(migrated_db, item_id, delete=True)
+    assert pantry.get_item(migrated_db, item_id) is None
+
+    pantry.undo_adjustment(migrated_db, adjustment)
+    restored = [i for i in pantry.list_items(migrated_db) if i.display_name == "Puff pastry"]
+    assert len(restored) == 1
+    item = restored[0]
+    assert item.location_id == loc
+    assert item.quantity_mode == "gauge"
+    assert item.is_staple is True
+    assert item.expires_on == "2026-12-01"
+
+
+def test_undo_of_an_unknown_adjustment_is_refused(migrated_db: sqlite3.Connection) -> None:
+    with pytest.raises(pantry.UndoUnavailable, match="no longer available"):
+        pantry.undo_adjustment(migrated_db, 9999)

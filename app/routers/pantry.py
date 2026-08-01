@@ -77,6 +77,7 @@ def index(
     q: str | None = None,
     notice: str | None = None,
     error: str | None = None,
+    undo: int | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
@@ -87,7 +88,7 @@ def index(
     return render(
         request, "pantry/index.html", active_nav="pantry", user=user,
         locations=locations, active_location=active, items=items, restock_count=restock_count,
-        query=q or "", notice=notice, error=error,
+        query=q or "", notice=notice, error=error, undo=undo,
     )
 
 
@@ -173,19 +174,26 @@ async def adjust_item(
     async with request.form() as form:
         action = _str(form, "action")
         reason = _reason(form)
+        adjustment_id: int | None = None
         with contextlib.suppress(pantry.PantryError):
             if action == "cycle":
                 pantry.cycle_gauge(db, item_id, user_id=user.id)
             elif action == "gauge":
-                pantry.set_gauge(db, item_id, _str(form, "gauge"), reason=reason, user_id=user.id)
+                adjustment_id = pantry.set_gauge(
+                    db, item_id, _str(form, "gauge"), reason=reason, user_id=user.id
+                )
             elif action == "step":
-                pantry.step_exact(db, item_id, _str(form, "delta"), user_id=user.id)
+                adjustment_id = pantry.step_exact(db, item_id, _str(form, "delta"), user_id=user.id)
             elif action == "set_exact":
-                pantry.set_exact(db, item_id, _str(form, "quantity"), user_id=user.id)
+                adjustment_id = pantry.set_exact(
+                    db, item_id, _str(form, "quantity"), user_id=user.id
+                )
             elif action == "toggle":
                 pantry.toggle_have(db, item_id, user_id=user.id)
             elif action == "have":
-                pantry.set_have(db, item_id, _checked(form, "have"), reason=reason, user_id=user.id)
+                adjustment_id = pantry.set_have(
+                    db, item_id, _checked(form, "have"), reason=reason, user_id=user.id
+                )
         if request.headers.get("HX-Request"):
             # Swap just this card: a shelf stock-take is twenty taps, not twenty page loads.
             item = pantry.get_item(db, item_id)
@@ -196,7 +204,26 @@ async def adjust_item(
                 request, "pantry/_item.html", user=user, item=item, back=back,
                 active_location=_location_from(back),
             )
-        return RedirectResponse(_back(form), status_code=303)
+        # Without JavaScript there is no swapped card to re-tap, so the redirect carries the undo.
+        return flash.redirect(_back(form), notice="Updated.", undo=adjustment_id)
+
+
+@router.post("/adjustments/{adjustment_id}/undo")
+async def undo_adjustment(
+    request: Request,
+    adjustment_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+    _: None = Depends(require_csrf),
+) -> Response:
+    """Reverse the change the banner is offering to take back."""
+    async with request.form() as form:
+        back = _back(form)
+        try:
+            name = pantry.undo_adjustment(db, adjustment_id, user_id=user.id)
+        except pantry.PantryError as exc:
+            return flash.redirect(back, error=str(exc))
+    return flash.redirect(back, notice=f"Put {name} back.")
 
 
 @router.post("/items/{item_id}/staple")
@@ -250,11 +277,13 @@ async def remove_item(
         back = _back(form)
         deleted = _checked(form, "delete")
         try:
-            pantry.remove_item(db, item_id, reason=reason, delete=deleted, user_id=user.id)
+            adjustment_id = pantry.remove_item(
+                db, item_id, reason=reason, delete=deleted, user_id=user.id
+            )
         except pantry.PantryError as exc:
             return flash.redirect(back, error=str(exc))
         if deleted:
             done = "Deleted."
         else:
             done = "Marked as gone bad." if reason == "spoiled" else "Marked as used up."
-        return flash.redirect(back, notice=done)
+        return flash.redirect(back, notice=done, undo=adjustment_id)

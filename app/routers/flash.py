@@ -27,13 +27,24 @@ def _query(path: str, key: str, message: str) -> str:
     return f"{path}{separator}{key}={quote(message[:_MAX_MESSAGE])}"
 
 
-def redirect(path: str, *, notice: str | None = None, error: str | None = None) -> RedirectResponse:
+def redirect(
+    path: str,
+    *,
+    notice: str | None = None,
+    error: str | None = None,
+    undo: int | None = None,
+) -> RedirectResponse:
     """303 back to ``path``, carrying at most one banner message.
 
     ``error`` wins when both are given: a partial failure is the thing the user needs to see.
+    ``undo`` names a pantry adjustment the banner can offer to reverse, so "used up" and
+    "deleted" are recoverable from the confirmation itself rather than from a history screen.
     """
     if error:
         path = _query(path, "error", error)
     elif notice:
         path = _query(path, "notice", notice)
+        if undo is not None:
+            separator = "&" if "?" in path else "?"
+            path = f"{path}{separator}undo={undo}"
     return RedirectResponse(path, status_code=303)

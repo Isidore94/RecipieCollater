@@ -15,7 +15,18 @@
   </div>
 </header>
 
-{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if notice %}
+<div class="banner banner-ok banner-undo" role="status">
+  <span>{{ notice }}</span>
+  {% if undo %}
+  {# The moment she realises it was the wrong tap is right now, on this banner. #}
+  <form method="post" action="/pantry/adjustments/{{ undo }}/undo" class="inline-post">
+    <input type="hidden" name="next" value="{{ back }}">
+    <button type="submit" class="btn-secondary">Undo</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
 {% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
 {% if restock_count %}

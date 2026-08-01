@@ -171,6 +171,8 @@ button:active, a.btn-primary:active, .btn-secondary:active { filter: brightness(
 .banner-err { background: var(--err-bg); color: var(--err-ink); }
 /* Something waiting to be done is neither a success nor an error. */
 .banner-todo { background: var(--paper); color: var(--ink); border: 1px solid var(--brand); }
+.banner-undo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.banner-undo form { margin: 0; }
 
 /* Recipe meta line: dot separators drawn between whatever parts are actually present. */
 .meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
