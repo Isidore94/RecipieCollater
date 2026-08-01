@@ -55,6 +55,20 @@ def _back(form: FormData) -> str:
     return target if target.startswith("/pantry") else "/pantry"
 
 
+def _location_from(back: str) -> int | None:
+    """The location tab the card was rendered under, so an htmx re-render matches the page.
+
+    Only the location-filtered view hides the per-card location chip; recovering it from the
+    return URL keeps the swapped card identical to the one it replaces.
+    """
+    _, _, query = back.partition("?")
+    for part in query.split("&"):
+        key, _, value = part.partition("=")
+        if key == "location" and value.isdigit():
+            return int(value)
+    return None
+
+
 @router.get("")
 def index(
     request: Request,
@@ -162,6 +176,16 @@ async def adjust_item(
                 pantry.toggle_have(db, item_id, user_id=user.id)
             elif action == "have":
                 pantry.set_have(db, item_id, _checked(form, "have"), reason=reason, user_id=user.id)
+        if request.headers.get("HX-Request"):
+            # Swap just this card: a shelf stock-take is twenty taps, not twenty page loads.
+            item = pantry.get_item(db, item_id)
+            if item is None:
+                return Response("", status_code=200)
+            back = _back(form)
+            return render(
+                request, "pantry/_item.html", user=user, item=item, back=back,
+                active_location=_location_from(back),
+            )
         return RedirectResponse(_back(form), status_code=303)
 
 

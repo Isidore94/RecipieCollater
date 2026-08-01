@@ -1,0 +1,5 @@
+{# Out-of-band target so an inline check-off can refresh the running count without a reload. #}
+<p class="muted shop-count" id="shop-count"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {%- if remaining %}{{ remaining }} of {{ total }} left
+  {%- else %}All {{ total }} done — nice one 🎉{% endif -%}
+</p>

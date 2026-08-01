@@ -69,11 +69,18 @@ def index(
 def badge(
     db: sqlite3.Connection = Depends(get_db), user: User = Depends(current_user)
 ) -> Response:
-    """htmx fragment: the unchecked-items count for the nav tab (empty when zero)."""
+    """htmx fragment: the unchecked-items count for the nav tab (empty when zero).
+
+    The slot re-arms its own listener on every swap so an inline check-off elsewhere on the
+    page can refresh the badge by firing ``rc:shopping-changed``.
+    """
     remaining, _total = shopping.counts(db, shopping.active_list(db))
-    if not remaining:
-        return HTMLResponse("")
-    return HTMLResponse(f'<span class="tab-badge">{remaining}</span>')
+    inner = f'<span class="tab-badge">{remaining}</span>' if remaining else ""
+    return HTMLResponse(
+        '<span class="tab-badge-slot" hx-get="/shopping/badge" '
+        'hx-trigger="rc:shopping-changed from:body" hx-swap="outerHTML">'
+        f"{inner}</span>"
+    )
 
 
 @router.post("/add")
@@ -262,6 +269,21 @@ async def toggle(
 ) -> Response:
     with contextlib.suppress(shopping.ShoppingError):
         shopping.toggle(db, item_id)
+    if request.headers.get("HX-Request"):
+        # Swap the one row (plus an out-of-band count and nav badge) so checking things off
+        # in the store never reloads the page or throws away her scroll position.
+        list_id = shopping.active_list(db)
+        item = shopping.get_item(db, list_id, item_id)
+        if item is None:
+            return HTMLResponse("")
+        remaining, total = shopping.counts(db, list_id)
+        response = render(
+            request, "shopping/_row_swap.html", user=user, item=item,
+            sources=shopping.sources_by_item(db, list_id),
+            remaining=remaining, total=total, oob=True,
+        )
+        response.headers["HX-Trigger"] = "rc:shopping-changed"
+        return response
     return _notice_redirect()
 
 

@@ -42,39 +42,13 @@
 </div>
 
 {% if aisles %}
-<p class="muted shop-count">{{ remaining }} of {{ total }} left</p>
+{% include "shopping/_count.html" %}
 {% for aisle, items in aisles %}
 <section class="shop-aisle">
   <h2 class="shop-aisle-name">{{ aisle }}</h2>
   <ul class="shop-list">
     {% for item in items %}
-    <li class="shop-item{% if item.checked %} is-checked{% endif %}{% if item.needs_check %} needs-check{% endif %}">
-      <form method="post" action="/shopping/items/{{ item.id }}/toggle" class="shop-check">
-        <button type="submit" aria-label="{{ 'Uncheck' if item.checked else 'Check off' }}">
-          {{ '☑' if item.checked else '☐' }}
-        </button>
-      </form>
-      <span class="shop-text">
-        {{ item.label }}
-        {% if sources.get(item.id) %}
-        <span class="shop-source muted">{{ sources[item.id] | join(' · ') }}</span>
-        {% endif %}
-      </span>
-      {% if item.wants_purchase_info %}
-      <details class="shop-pack no-print">
-        <summary class="muted" title="Tell the list how you buy this">pack size?</summary>
-        <form method="post" action="/shopping/foods/{{ item.food_id }}/purchase" class="shop-pack-form">
-          <input name="label" placeholder="bag, can&hellip;" aria-label="Package word" size="6">
-          <input name="quantity" placeholder="2" aria-label="Package size" size="4" inputmode="decimal">
-          <input name="unit" placeholder="kg" aria-label="Package unit" size="4" list="unit-list">
-          <button type="submit" class="btn-secondary">Save</button>
-        </form>
-      </details>
-      {% endif %}
-      <form method="post" action="/shopping/items/{{ item.id }}/remove" class="shop-remove no-print">
-        <button type="submit" class="btn-link" aria-label="Remove">&times;</button>
-      </form>
-    </li>
+    {% include "shopping/_item.html" %}
     {% endfor %}
   </ul>
 </section>

@@ -8,6 +8,11 @@
     <a href="/recipes/{{ recipe.slug }}/after-cook" class="btn-primary">I made this &rarr;</a>
   </header>
 
+  {# A finished timer can't beep through a sleeping phone, so it waits here instead. #}
+  <div class="timer-alert no-print" data-timer-alert hidden role="alert"></div>
+
+  <p class="wake-status no-print" data-wake-status hidden aria-live="polite"></p>
+
   <details class="cook-ingredients card">
     <summary>All ingredients &middot; {{ view.servings }} servings</summary>
     <ul class="checklist">
@@ -65,6 +70,15 @@
   </nav>
 
   <div class="timer-tray" data-timer-tray aria-live="polite"></div>
+
+  {# Keeps the screen lit on iOS Safari over plain HTTP, where navigator.wakeLock is
+     unavailable (it needs a secure context). One second of black, muted, looping.
+     H.264 first for iOS; VP8 for browsers built without the proprietary codec. #}
+  <video data-keep-awake class="keep-awake-video" muted playsinline loop
+         preload="auto" aria-hidden="true" tabindex="-1">
+    <source src="/static/video/keep-awake.mp4" type="video/mp4">
+    <source src="/static/video/keep-awake.webm" type="video/webm">
+  </video>
 </div>
 <script src="/static/js/cook.js" defer></script>
 {% endblock %}

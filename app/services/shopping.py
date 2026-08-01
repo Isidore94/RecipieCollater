@@ -183,6 +183,12 @@ def list_items(conn: sqlite3.Connection, list_id: int) -> list[ShoppingItem]:
     return [_to_item(r) for r in rows]
 
 
+def get_item(conn: sqlite3.Connection, list_id: int, item_id: int) -> ShoppingItem | None:
+    """One line, for re-rendering a row in place after an inline check-off."""
+    row = conn.execute(_ITEM_SELECT + " AND sli.id = ?", (list_id, item_id)).fetchone()
+    return _to_item(row) if row is not None else None
+
+
 def grouped(conn: sqlite3.Connection, list_id: int) -> list[tuple[str, list[ShoppingItem]]]:
     """Items grouped by aisle, each aisle name-sorted, 'Other' last."""
     aisles: dict[str, list[ShoppingItem]] = {}

@@ -1,0 +1,66 @@
+{# One pantry card. The adjust POST swaps this fragment in place so tapping a gauge on a
+   twenty-item shelf doesn't reload the page twenty times. #}
+  <li class="card pantry-item{% if item.needs_restock %} is-low{% endif %}" id="pantry-item-{{ item.id }}">
+    <div class="pantry-item-head">
+      <span class="pantry-name">{{ item.display_name }}</span>
+      {% if not active_location %}<span class="chip-tag">{{ item.location_name }}</span>{% endif %}
+      {% if item.is_staple %}<span class="chip-tag" title="Staple">★</span>{% endif %}
+      {% if item.expires_on %}<span class="chip-tag pantry-expiry">exp {{ item.expires_on[:10] }}</span>{% endif %}
+    </div>
+
+    {% if item.quantity_mode == 'gauge' %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust" class="gauge-row" hx-post="/pantry/items/{{ item.id }}/adjust" hx-target="#pantry-item-{{ item.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="next" value="{{ back }}">
+      <input type="hidden" name="action" value="gauge">
+      {% for level in ['full', 'half', 'low', 'out'] %}
+      <button name="gauge" value="{{ level }}" class="gauge-btn{% if item.gauge == level %} is-on{% endif %}">{{ level }}</button>
+      {% endfor %}
+    </form>
+    {% elif item.quantity_mode == 'exact' %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust" class="stepper" hx-post="/pantry/items/{{ item.id }}/adjust" hx-target="#pantry-item-{{ item.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="next" value="{{ back }}">
+      <input type="hidden" name="action" value="step">
+      <button name="delta" value="-1" aria-label="Use one">&minus;</button>
+      <span class="stepper-val">{{ item.display_quantity }}</span>
+      <button name="delta" value="1" aria-label="Add one">+</button>
+    </form>
+    {% else %}
+    <form method="post" action="/pantry/items/{{ item.id }}/adjust" hx-post="/pantry/items/{{ item.id }}/adjust" hx-target="#pantry-item-{{ item.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="next" value="{{ back }}">
+      <button name="action" value="toggle" class="have-btn{% if item.have %} is-on{% endif %}">
+        {{ 'Have' if item.have else 'Out' }}
+      </button>
+    </form>
+    {% endif %}
+
+    <details class="pantry-manage">
+      <summary aria-label="More">&hellip;</summary>
+      <form method="post" action="/pantry/items/{{ item.id }}/staple" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <label class="check"><input type="checkbox" name="is_staple"{% if item.is_staple %} checked{% endif %}> Staple</label>
+        {% if item.quantity_mode == 'exact' %}
+        <input name="min_quantity_text" value="{{ item.min_quantity_text or '' }}" placeholder="min" class="pantry-min">
+        {% endif %}
+        <button type="submit" class="btn-secondary">Save</button>
+      </form>
+      <form method="post" action="/pantry/items/{{ item.id }}/expiry" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <label class="pantry-expiry-edit">Expires
+          <input type="date" name="expires_on" value="{{ item.expires_on or '' }}">
+        </label>
+        <button type="submit" class="btn-secondary">Save</button>
+      </form>
+      <form method="post" action="/pantry/items/{{ item.id }}/remove" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <button name="reason" value="manual_remove" class="btn-secondary">Used up</button>
+        <button name="reason" value="spoiled" class="btn-secondary">Went bad</button>
+      </form>
+      <form method="post" action="/pantry/items/{{ item.id }}/remove" class="pantry-menu-row">
+        <input type="hidden" name="next" value="{{ back }}">
+        <input type="hidden" name="reason" value="manual_remove">
+        <input type="hidden" name="delete" value="1">
+        <button type="submit" class="btn-danger"
+                onclick="return confirm('Delete {{ item.display_name }} from the pantry? Use \u2018Used up\u2019 instead if you just finished it.')">Delete</button>
+      </form>
+    </details>
+  </li>

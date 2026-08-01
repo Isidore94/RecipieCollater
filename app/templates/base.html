@@ -55,7 +55,8 @@
             <span class="rail-icon" aria-hidden="true">{{ icon(item.icon) }}</span>
             <span class="rail-label">{{ item.label }}</span>
             {% if item.key == 'shopping' %}
-            <span hx-get="/shopping/badge" hx-trigger="load" hx-swap="outerHTML"></span>
+            <span class="tab-badge-slot" hx-get="/shopping/badge"
+              hx-trigger="load, rc:shopping-changed from:body" hx-swap="outerHTML"></span>
             {% endif %}
           </a>
         </li>
@@ -103,7 +104,8 @@
         <span class="tab-icon" aria-hidden="true">{{ icon(item.icon) }}</span>
         <span class="tab-label">{{ item.label }}</span>
         {% if item.key == 'shopping' %}
-        <span hx-get="/shopping/badge" hx-trigger="load" hx-swap="outerHTML"></span>
+        <span class="tab-badge-slot" hx-get="/shopping/badge"
+              hx-trigger="load, rc:shopping-changed from:body" hx-swap="outerHTML"></span>
         {% endif %}
       </a>
       {% endfor %}

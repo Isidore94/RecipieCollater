@@ -117,6 +117,7 @@
     timers = timers.filter(function (t) { return t.id !== id; });
     persist();
     render();
+    renderAlert();
   }
   function render() {
     if (!tray) return;
@@ -159,6 +160,50 @@
       add(parseInt(b.getAttribute("data-seconds"), 10) || 0, b.getAttribute("data-label") || "Timer");
     });
   });
+  // A timer that finishes while the phone is asleep or the tab is backgrounded cannot beep
+  // (no service worker over plain HTTP), so every finished timer stays "unacknowledged" until
+  // she actually sees it. The banner is what greets her when she picks the phone back up.
+  var alertEl = root.querySelector("[data-timer-alert]");
+  function ago(ms) {
+    var mins = Math.floor(ms / 60000);
+    if (mins < 1) return "just now";
+    if (mins === 1) return "1 minute ago";
+    if (mins < 60) return mins + " minutes ago";
+    var hrs = Math.floor(mins / 60);
+    return hrs === 1 ? "1 hour ago" : hrs + " hours ago";
+  }
+  function renderAlert() {
+    if (!alertEl) return;
+    var pending = timers.filter(function (t) { return t.done && !t.acked; });
+    if (!pending.length) {
+      alertEl.hidden = true;
+      alertEl.innerHTML = "";
+      return;
+    }
+    alertEl.innerHTML = "";
+    var list = document.createElement("div");
+    list.className = "timer-alert-text";
+    pending.forEach(function (t) {
+      var line = document.createElement("p");
+      line.className = "timer-alert-line";
+      line.textContent = "⏱ " + t.label + " finished " + ago(Date.now() - t.endsAt);
+      list.appendChild(line);
+    });
+    var dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "btn-primary timer-alert-ok";
+    dismiss.textContent = "Got it";
+    dismiss.addEventListener("click", function () {
+      timers = timers.filter(function (t) { return !(t.done && !t.acked); });
+      persist();
+      render();
+      renderAlert();
+    });
+    alertEl.appendChild(list);
+    alertEl.appendChild(dismiss);
+    alertEl.hidden = false;
+  }
+
   function tick() {
     var now = Date.now();
     var changed = false;
@@ -168,6 +213,7 @@
         t.done = true;
         changed = true;
         beep();
+        try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
         if ("Notification" in window && Notification.permission === "granted") {
           try { new Notification("Timer done: " + t.label); } catch (e) {}
         }
@@ -177,18 +223,73 @@
         el.textContent = fmt(t.endsAt - now);
       }
     });
-    if (changed) persist();
+    if (changed) {
+      persist();
+      renderAlert();
+    }
   }
   setInterval(tick, 500);
+  // Coming back to the page is the moment a missed timer must be announced.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") {
+      tick();
+      renderAlert();
+    }
+  });
   render();
+  renderAlert();
 
-  // --- keep the screen awake (secure context only; harmless otherwise) ----------------
+  // --- keep the screen awake ----------------------------------------------------------
+  // navigator.wakeLock needs a secure context, which the default LAN deployment (plain HTTP)
+  // does not have. So the looping muted video is the workhorse and wakeLock is the bonus:
+  // iOS Safari keeps the screen lit while a video plays, HTTP or not.
   var wakeLock = null;
-  function wake() {
-    if (!("wakeLock" in navigator)) return;
-    navigator.wakeLock.request("screen").then(function (wl) { wakeLock = wl; }).catch(function () {});
+  var video = root.querySelector("[data-keep-awake]");
+  var statusEl = root.querySelector("[data-wake-status]");
+
+  function setWakeStatus(on) {
+    if (!statusEl) return;
+    statusEl.textContent = on ? "Screen stays on" : "Screen may sleep — tap here";
+    statusEl.classList.toggle("is-on", !!on);
+    statusEl.hidden = false;
   }
+
+  function playVideo() {
+    if (!video) return Promise.reject();
+    var p = video.play();
+    return p && p.then ? p : Promise.resolve();
+  }
+
+  function wake() {
+    try {
+      if (navigator.wakeLock && navigator.wakeLock.request) {
+        navigator.wakeLock
+          .request("screen")
+          .then(function (wl) {
+            wakeLock = wl;
+            setWakeStatus(true);
+            wl.addEventListener("release", function () { wakeLock = null; });
+          })
+          .catch(function () { videoWake(); });
+        return;
+      }
+    } catch (e) {}
+    videoWake();
+  }
+
+  function videoWake() {
+    playVideo().then(function () { setWakeStatus(true); }).catch(function () {
+      // Autoplay was refused; the next deliberate tap counts as the required gesture.
+      setWakeStatus(false);
+    });
+  }
+
   wake();
+  // Any tap in cook mode is a user gesture, so retry a refused autoplay off the first one.
+  root.addEventListener("click", function retry() {
+    if (wakeLock || (video && !video.paused)) return;
+    videoWake();
+  });
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible") wake();
   });

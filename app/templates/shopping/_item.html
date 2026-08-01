@@ -1,0 +1,33 @@
+{# One shopping line. Swapped in place by the toggle POST so checking something off in the
+   store never reloads the page or loses her scroll position. #}
+<li class="shop-item{% if item.checked %} is-checked{% endif %}{% if item.needs_check %} needs-check{% endif %}"
+    id="shop-item-{{ item.id }}">
+  <form method="post" action="/shopping/items/{{ item.id }}/toggle" class="shop-check"
+        hx-post="/shopping/items/{{ item.id }}/toggle"
+        hx-target="#shop-item-{{ item.id }}" hx-swap="outerHTML">
+    {# The whole row is the target: wet hands, one thumb, a moving trolley. #}
+    <button type="submit" class="shop-toggle" aria-pressed="{{ 'true' if item.checked else 'false' }}">
+      <span class="shop-box" aria-hidden="true">{{ '☑' if item.checked else '☐' }}</span>
+      <span class="shop-text">
+        {{ item.label }}
+        {% if sources.get(item.id) %}
+        <span class="shop-source muted">{{ sources[item.id] | join(' · ') }}</span>
+        {% endif %}
+      </span>
+    </button>
+  </form>
+  {% if item.wants_purchase_info %}
+  <details class="shop-pack no-print">
+    <summary class="muted" title="Tell the list how you buy this">pack size?</summary>
+    <form method="post" action="/shopping/foods/{{ item.food_id }}/purchase" class="shop-pack-form">
+      <input name="label" placeholder="bag, can&hellip;" aria-label="Package word" size="6">
+      <input name="quantity" placeholder="2" aria-label="Package size" size="4" inputmode="decimal">
+      <input name="unit" placeholder="kg" aria-label="Package unit" size="4" list="unit-list">
+      <button type="submit" class="btn-secondary">Save</button>
+    </form>
+  </details>
+  {% endif %}
+  <form method="post" action="/shopping/items/{{ item.id }}/remove" class="shop-remove no-print">
+    <button type="submit" class="btn-link" aria-label="Remove {{ item.label }}">&times;</button>
+  </form>
+</li>
