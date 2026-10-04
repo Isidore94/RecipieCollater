@@ -14,6 +14,7 @@ a duplicate. This keeps a worker retry or crash-replay from producing two recipe
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 
 from app import ai
 from app.ai import usage as ai_usage
@@ -59,7 +60,8 @@ def to_recipe_input(
         ],
         steps=[
             recipes.StepInput(
-                instruction=step.instruction, section=step.section, minutes=step.minutes
+                instruction=step.instruction, section=step.section, minutes=step.minutes,
+                video_seconds=step.video_seconds,
             )
             for step in extracted.steps
         ],
@@ -210,6 +212,7 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
         conn, job, data.prompt_text(),
         extractor="youtube", source_type="youtube", operation="extract_youtube",
         require_steps=False, confidence=confidence,
+        chapters=data.chapters, duration_seconds=data.duration_seconds,
     )
     if not applied:
         ingest.set_status(
@@ -307,6 +310,8 @@ def _ai_extract_and_apply(
     operation: str = "extract_web",
     require_steps: bool = True,
     confidence: str = "medium",
+    chapters: Sequence[youtube.Chapter] = (),
+    duration_seconds: int | None = None,
 ) -> bool:
     """Budget-gated LLM extraction that applies the recipe on success; always logs to ai_usage_log.
 
@@ -343,9 +348,19 @@ def _ai_extract_and_apply(
     )
     if not usable:
         return False
+    recipe = result.recipe
+    if recipe.steps:  # model timestamps if sane, else chapter-derived, else None
+        seconds = youtube.assign_step_seconds(
+            [step.instruction for step in recipe.steps],
+            [step.video_seconds for step in recipe.steps], chapters, duration_seconds,
+        )
+        recipe = recipe.model_copy(update={"steps": [
+            step.model_copy(update={"video_seconds": sec})
+            for step, sec in zip(recipe.steps, seconds, strict=True)
+        ]})
     ingest.set_status(conn, job.id, "normalizing")
     apply_extraction(
-        conn, job, result.recipe, extractor=extractor,
+        conn, job, recipe, extractor=extractor,
         provider=result.provider, model=result.model, confidence=confidence,
         source_type=source_type,
     )

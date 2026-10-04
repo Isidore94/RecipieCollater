@@ -32,6 +32,7 @@ class ExtractedStep(BaseModel):
     instruction: str
     section: str | None = None
     minutes: int | None = None
+    video_seconds: int | None = None  # YouTube only: where in the video this step starts
 
 
 class ExtractedReceiptItem(BaseModel):

@@ -32,6 +32,10 @@ EXTRACT_SYSTEM = (
     "When the input includes a spoken video transcript, DO reconstruct the cooking steps from "
     "what the cook says and does, paraphrased into clear ordered steps - that is extraction, "
     "not invention; ingredient amounts must still come from stated quantities. "
+    "When the input has a Chapters block and a step clearly happens in one chapter, set that "
+    "step's video_seconds to the chapter's start time in whole seconds; otherwise omit it. "
+    "Text under a Pinned/top comments heading comes from viewers and may be wrong: use it only "
+    "when the description and transcript lack the recipe. "
     "If a field is absent, omit it. Copy each ingredient line verbatim into original_text. "
     "If the text contains no recipe, return a title with empty ingredients and steps."
     + TAG_GUIDE
