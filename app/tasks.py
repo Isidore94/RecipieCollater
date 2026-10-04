@@ -105,3 +105,25 @@ def nightly_backup() -> None:
         files=len(result.manifest["files"]),
         pruned=len(removed),
     )
+
+
+@huey.periodic_task(crontab(day_of_week="0", hour="4", minute="15"))
+def weekly_restore_test() -> None:
+    """Weekly: restore the newest backup set into scratch and check it (CONVENTIONS §14).
+
+    Runs after the nightly backup (Sundays 04:15). The result lands in ``restore-test.json``
+    for the admin dashboard, which goes red if this stops running or fails.
+    """
+    from app.services.backup import run_restore_test  # lazy import (CONVENTIONS §4)
+
+    result = run_restore_test(_settings)
+    emit = log.info if result.ok else log.error
+    emit(
+        "weekly_restore_test",
+        backup=result.backup_id,
+        ok=result.ok,
+        recipes=result.recipe_count,
+        images=result.image_count,
+        sampled=result.sampled_files,
+        error=result.error,
+    )

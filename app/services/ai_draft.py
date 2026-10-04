@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from app import ai
 from app.ai import usage as ai_usage
-from app.config import get_settings
+from app.config import TASK_FAST, TASK_STRONG, get_settings
 from app.extraction import ExtractedRecipe
 
 _OPERATION = "manual_draft"
@@ -31,7 +31,7 @@ def draft_from_photo(conn: sqlite3.Connection, image: bytes) -> DraftResult:
     from app.services import receipts  # reuse the bounded-JPEG normalizer (lazy: Pillow)
 
     settings = get_settings()
-    provider = ai.get_provider(settings)
+    provider = ai.get_provider(settings.for_task(TASK_STRONG))
     if provider is None:
         return DraftResult(None, "Reading a recipe photo needs an API key on the server.")
     if not ai_usage.within_budget(conn, settings):
@@ -70,7 +70,7 @@ def draft_from_description(conn: sqlite3.Connection, description: str) -> DraftR
         return DraftResult(None, "Describe your recipe first.")
 
     settings = get_settings()
-    provider = ai.get_provider(settings)
+    provider = ai.get_provider(settings.for_task(TASK_FAST))
     if provider is None:
         return DraftResult(None, "AI drafting needs an API key configured on the server.")
 

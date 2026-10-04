@@ -55,6 +55,14 @@
         <span class="chip-tag">{{ 'healthy' if stats.last_backup_healthy else 'UNVERIFIED' }}</span>
       {% else %}<span class="muted">none yet</span>{% endif %}
     </li>
+    <li class="{{ 'status-bad' if stats.restore_test_alert }}">Last restore test
+      {% if stats.restore_test_at %}<strong>{{ stats.restore_test_at }} UTC</strong>
+        ({{ stats.restore_test_age_days }} d ago{% if stats.restore_test_backup %}, {{ stats.restore_test_backup }}{% endif %}):
+        <strong>{{ 'OK' if stats.restore_test_ok else 'FAILED' }}</strong>
+        {% if stats.restore_test_ok and stats.restore_test_alert %}<span>- overdue, runs weekly</span>{% endif %}
+        {% if stats.restore_test_error %}<span class="muted">{{ stats.restore_test_error }}</span>{% endif %}
+      {% else %}<strong>never run</strong>{% endif %}
+    </li>
     <li>yt-dlp <strong>{{ stats.ytdlp_version or 'not loaded' }}</strong></li>
   </ul>
 </section>

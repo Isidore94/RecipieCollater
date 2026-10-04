@@ -57,9 +57,13 @@ class _Client:
 
 
 def test_pricing_known_and_unknown_models() -> None:
-    assert pricing.cost_micros("claude-sonnet-5", 1_000_000, 0) == 3_000_000
-    assert pricing.cost_micros("claude-opus-4-8", 0, 1_000_000) == 75_000_000
-    assert pricing.cost_micros("claude-haiku-4-5", 1_000_000, 0) == 800_000
+    assert pricing.cost_micros("claude-sonnet-5-5", 1_000_000, 1_000_000) == 12_000_000
+    assert pricing.cost_micros("claude-sonnet-5", 1_000_000, 0) == 2_000_000
+    assert pricing.cost_micros("claude-sonnet-4-6", 1_000_000, 0) == 3_000_000
+    assert pricing.cost_micros("claude-opus-4-8", 0, 1_000_000) == 25_000_000
+    assert pricing.cost_micros("claude-opus-5-5", 1_000_000, 1_000_000) == 24_000_000
+    assert pricing.cost_micros("claude-opus-3-legacy", 1_000_000, 0) == 15_000_000
+    assert pricing.cost_micros("claude-haiku-4-5", 1_000_000, 1_000_000) == 6_000_000
     # OpenAI: the specific prefix must win over the shorter one it would otherwise shadow.
     assert pricing.cost_micros("gpt-4o-mini", 1_000_000, 0) == 150_000
     assert pricing.cost_micros("gpt-4o", 1_000_000, 0) == 2_500_000
@@ -90,7 +94,7 @@ def test_extract_parses_tool_use_and_prices_it() -> None:
     assert len(result.recipe.ingredients) == 2
     assert result.input_tokens == 1200
     assert result.output_tokens == 300
-    assert result.cost_micros == 1200 * 3 + 300 * 15  # sonnet rates, micro-USD
+    assert result.cost_micros == 1200 * 2 + 300 * 10  # sonnet 5 rates, micro-USD
 
 
 def test_draft_uses_the_same_tool_path() -> None:
@@ -134,3 +138,98 @@ def test_provider_disabled_without_api_key(data_dir: Path) -> None:
     settings = config.get_settings()
     assert settings.ai_enabled is False
     assert ai.get_provider(settings) is None
+
+
+# ---- per-task model selection ---------------------------------------------------------
+
+
+def test_model_defaults_are_fast_and_strong_tiers(data_dir: Path) -> None:
+    settings = config.get_settings()
+    assert settings.anthropic_model == "claude-sonnet-5-5"
+    assert settings.anthropic_model_fast == "claude-haiku-4-5"
+    assert settings.openai_model == "gpt-4o-mini"
+    assert settings.openai_model_fast == "gpt-4o-mini"
+
+
+def test_model_env_overrides_and_blank_falls_back(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RC_ANTHROPIC_MODEL", "claude-opus-5-5")
+    monkeypatch.setenv("RC_ANTHROPIC_MODEL_FAST", "claude-sonnet-5-5")
+    monkeypatch.setenv("RC_OPENAI_MODEL", "strong-x")
+    monkeypatch.setenv("RC_OPENAI_MODEL_FAST", "   ")  # blank -> default
+    config.reset_settings_cache()
+    settings = config.get_settings()
+    assert (settings.anthropic_model, settings.anthropic_model_fast) == (
+        "claude-opus-5-5", "claude-sonnet-5-5",
+    )
+    assert settings.openai_model == "strong-x"
+    assert settings.openai_model_fast == "gpt-4o-mini"
+
+
+def test_for_task_swaps_only_the_fast_tier(data_dir: Path) -> None:
+    settings = config.get_settings()
+    fast = settings.for_task(config.TASK_FAST)
+    assert fast.anthropic_model == settings.anthropic_model_fast
+    assert fast.openai_model == settings.openai_model_fast
+    assert settings.for_task(config.TASK_STRONG) is settings
+    assert settings.anthropic_model == "claude-sonnet-5-5"  # the original is untouched
+
+
+def test_get_provider_builds_the_tiered_anthropic_model(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RC_ANTHROPIC_API_KEY", "sk-ant-test")
+    config.reset_settings_cache()
+    settings = config.get_settings()
+    fast = ai.get_provider(settings.for_task(config.TASK_FAST))
+    strong = ai.get_provider(settings.for_task(config.TASK_STRONG))
+    assert fast is not None and strong is not None
+    assert fast.model == "claude-haiku-4-5"
+    assert strong.model == "claude-sonnet-5-5"
+
+
+def test_each_operation_asks_for_its_tier(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Extraction/tagging/receipts/text drafts run fast; assistant and photo drafts run strong."""
+    from app.services import ai_draft, assistant, receipts, recipes, tagging
+    from app.services.units import seed_core_units
+
+    monkeypatch.setenv("RC_ANTHROPIC_MODEL", "strong-model")
+    monkeypatch.setenv("RC_ANTHROPIC_MODEL_FAST", "fast-model")
+    config.reset_settings_cache()
+    seen: list[str] = []
+
+    def _record(settings: config.Settings) -> None:
+        seen.append(settings.anthropic_model)
+        return None
+
+    monkeypatch.setattr("app.ai.get_provider", _record)
+    seed_core_units(migrated_db)
+    rid = recipes.create_recipe(
+        migrated_db,
+        recipes.RecipeInput(
+            title="T", base_servings="4", tags=[],
+            ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="egg")],
+        ),
+    )
+
+    tagging.suggest_tags(migrated_db, rid)
+    receipts.capture(migrated_db, text="x")
+    ai_draft.draft_from_description(migrated_db, "soup")
+    assert seen == ["fast-model"] * 3
+
+    seen.clear()
+    ai_draft.draft_from_photo(migrated_db, b"jpeg")
+    conv = assistant.start_conversation(migrated_db)
+    assistant.ask(migrated_db, conv, "plan")
+    assert seen == ["strong-model"] * 2
+
+
+def test_pipeline_extraction_asks_for_the_fast_tier() -> None:
+    import inspect
+
+    from app.services import pipeline
+
+    assert "for_task(TASK_FAST)" in inspect.getsource(pipeline._ai_extract_and_apply)

@@ -172,7 +172,8 @@ button:active, a.btn-primary:active, .btn-secondary:active { filter: brightness(
 .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
 .code-input { letter-spacing: .3em; text-transform: uppercase; text-align: center; font-size: 20px; }
 
-.form-error, .banner-err { color: var(--err-ink); }
+.form-error, .status-bad { color: var(--err-ink); }
+.banner-err { color: var(--err-ink); }
 .banner { padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; }
 .banner-ok { background: var(--ok-bg); color: var(--ok-ink); }
 .banner-err { background: var(--err-bg); color: var(--err-ink); }

@@ -51,6 +51,13 @@ class DashboardStats:
     last_backup: str | None = None
     last_backup_healthy: bool = False
     ytdlp_version: str | None = None
+    # Restore smoke test (restore-test.json). Alert = never run, failed, or older than 7 days.
+    restore_test_at: str | None = None
+    restore_test_ok: bool = False
+    restore_test_backup: str | None = None
+    restore_test_error: str | None = None
+    restore_test_age_days: int | None = None
+    restore_test_alert: bool = True
 
 
 _ACTIVE = ("queued", "fetching", "extracting", "normalizing")
@@ -117,6 +124,9 @@ def gather(conn: sqlite3.Connection, settings: Settings) -> DashboardStats:
         last_backup = newest.name
         last_backup_healthy = backup.backup_is_healthy(newest)
 
+    restore = backup.read_restore_test(settings)
+    restore_age = backup.restore_test_age(restore) if restore else None
+
     return DashboardStats(
         recipe_count=_scalar(conn, "SELECT COUNT(*) FROM recipes"),
         cookbook_count=_scalar(conn, "SELECT COUNT(*) FROM recipes WHERE status = 'cookbook'"),
@@ -137,4 +147,15 @@ def gather(conn: sqlite3.Connection, settings: Settings) -> DashboardStats:
         last_backup=last_backup,
         last_backup_healthy=last_backup_healthy,
         ytdlp_version=_ytdlp_version(),
+        restore_test_at=restore.tested_at if restore else None,
+        restore_test_ok=bool(restore and restore.ok),
+        restore_test_backup=restore.backup_id if restore else None,
+        restore_test_error=restore.error if restore else None,
+        restore_test_age_days=restore_age.days if restore_age else None,
+        restore_test_alert=not (
+            restore
+            and restore.ok
+            and restore_age is not None
+            and restore_age <= backup.RESTORE_TEST_MAX_AGE
+        ),
     )
