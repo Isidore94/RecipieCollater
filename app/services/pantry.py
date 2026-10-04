@@ -839,6 +839,7 @@ def list_items(
     *,
     location_id: int | None = None,
     query: str | None = None,
+    limit: int | None = None,
 ) -> list[PantryItem]:
     where: list[str] = []
     params: list[object] = []
@@ -856,6 +857,9 @@ def list_items(
         if location_id is not None
         else " ORDER BY l.sort_order, pi.display_name COLLATE NOCASE"
     )
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(max(0, int(limit)))
     rows = conn.execute(sql, params).fetchall()
     return [_to_item(r) for r in rows]
 

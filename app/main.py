@@ -39,6 +39,7 @@ from app.routers import (
     preferences,
     receipts,
     recipes,
+    search,
     shopping,
     shortcut,
     tags,
@@ -128,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router)
     app.include_router(shortcut.router)
     app.include_router(recipes.router)
+    app.include_router(search.router)
     app.include_router(cooking.router)
     app.include_router(pantry.router)
     app.include_router(shopping.router)

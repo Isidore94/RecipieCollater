@@ -5,6 +5,28 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### Global search in the nav shell (2026-10-04)
+
+No schema change. The usability review's last structural gap: finding anything meant knowing
+which tab it lived on first. Now there is a search box wherever you are.
+
+- **One box, both layouts.** The desktop rail and the mobile tools row carry the same plain
+  `GET /search?q=` form, so Enter works with JavaScript off. `/` focuses it on desktop (Alpine,
+  and only a nicety); Escape or a click elsewhere closes the dropdown.
+- **`/search`** answers in groups — Recipes (the existing FTS path, `PAGE_SIZE` paging, `?tag=`
+  chips carried and removable, archived left out), Pantry items, Foods, Tags — each with an
+  "Open in ..." link that carries the query into the full screen. Empty submits show recent
+  cookbook recipes and the common tags instead of a blank page.
+- **Typeahead.** After a 250 ms debounce htmx fetches `/search/suggest`: the top 5 recipes and
+  3 foods as a small partial. The last word matches as a word-start (`"chi"*`), so "chi" finds
+  "chili"; the full page stays whole-word, like the Cookbook it links to.
+- **Cheap reads.** One bounded query per group. `list_items`, `list_foods` and `list_tags` gained
+  opt-in `limit`/`query` arguments (defaults unchanged), and `list_recipes`/`count_recipes` an
+  `exclude_status` and a `prefix` flag; the router holds no SQL. Foods and pantry items match by
+  name only — there is no alias table to search yet.
+- Tests in `tests/test_search.py`: grouping, tag filter, empty query, suggest bounds, login
+  required, and HTML escaping of the query on both endpoints.
+
 ### Tags that survive a big cookbook (2026-08-01)
 
 Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into

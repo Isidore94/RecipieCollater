@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{% if query %}Search: {{ query }}{% else %}Search{% endif %} · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>{% if query %}Results for &ldquo;{{ query }}&rdquo;{% else %}Search{% endif %}</h1>
+  {% if not query %}<p class="muted">Type a recipe, an ingredient, a pantry item or a tag in the search box.</p>{% endif %}
+</header>
+
+{% if query %}
+{% if tags %}
+<p class="chip-row no-print">
+  {% for t in tags %}
+  <a href="{{ untag_urls[t] }}" class="chip is-on" aria-current="true">{{ t }} &times;</a>
+  {% endfor %}
+</p>
+{% endif %}
+
+<section class="card search-group" aria-labelledby="sg-recipes">
+  <h2 id="sg-recipes">Recipes <span class="muted">({{ total }})</span></h2>
+  {% if recipes %}
+  {% if pages > 1 %}<p class="muted list-count">Showing {{ showing_from }}&ndash;{{ showing_to }} of {{ total }}</p>{% endif %}
+  <ul class="search-list">
+    {% for r in recipes %}
+    <li><a href="/recipes/{{ r.slug }}" class="search-row">
+      <span class="search-row-main">{{ r.title }}</span>
+      <span class="search-row-meta muted">{% if r.status == 'inbox' %}Test inbox{% else %}Cookbook{% endif %}{% if r.total_minutes %} &middot; {{ r.total_minutes }} min{% endif %}</span>
+    </a></li>
+    {% endfor %}
+  </ul>
+  {% if pages > 1 %}
+  <nav class="pager no-print" aria-label="Pages">
+    {% if prev_url %}<a href="{{ prev_url }}" rel="prev" class="btn-secondary">&larr; Previous</a>
+    {% else %}<span class="btn-secondary is-disabled" aria-disabled="true">&larr; Previous</span>{% endif %}
+    <span class="muted">Page {{ page }} of {{ pages }}</span>
+    {% if next_url %}<a href="{{ next_url }}" rel="next" class="btn-secondary">Next &rarr;</a>
+    {% else %}<span class="btn-secondary is-disabled" aria-disabled="true">Next &rarr;</span>{% endif %}
+  </nav>
+  {% endif %}
+  <p><a class="search-more" href="{{ cookbook_url }}">Open in the Cookbook &rarr;</a></p>
+  {% else %}
+  <p class="muted">No recipes match.</p>
+  {% endif %}
+</section>
+
+<section class="card search-group" aria-labelledby="sg-pantry">
+  <h2 id="sg-pantry">Pantry items</h2>
+  {% if pantry_items %}
+  <ul class="search-list">
+    {% for i in pantry_items %}
+    <li><a href="/pantry?q={{ i.display_name | urlencode }}" class="search-row">
+      <span class="search-row-main">{{ i.display_name }}</span>
+      <span class="search-row-meta muted">{{ i.location_name }}</span>
+    </a></li>
+    {% endfor %}
+  </ul>
+  <p><a class="search-more" href="{{ pantry_url }}">Open in the Pantry &rarr;</a></p>
+  {% else %}
+  <p class="muted">Nothing in the pantry matches.</p>
+  {% endif %}
+</section>
+
+<section class="card search-group" aria-labelledby="sg-foods">
+  <h2 id="sg-foods">Foods</h2>
+  {% if foods %}
+  <ul class="search-list">
+    {% for f in foods %}
+    <li><a href="/foods?q={{ f.name | urlencode }}" class="search-row">
+      <span class="search-row-main">{{ f.name }}</span>
+      <span class="search-row-meta muted">{{ f.recipe_count }} recipe{{ 's' if f.recipe_count != 1 }} &middot; {{ f.pantry_count }} in pantry</span>
+    </a></li>
+    {% endfor %}
+  </ul>
+  <p><a class="search-more" href="{{ foods_url }}">Open in Foods &rarr;</a></p>
+  {% else %}
+  <p class="muted">No foods match.</p>
+  {% endif %}
+</section>
+
+<section class="card search-group" aria-labelledby="sg-tags">
+  <h2 id="sg-tags">Tags</h2>
+  {% if found_tags %}
+  <p class="chip-row">
+    {% for t in found_tags %}
+    <a href="/cookbook?tag={{ t.name | urlencode }}" class="chip">{{ t.name }} <span class="muted">{{ t.count }}</span></a>
+    {% endfor %}
+  </p>
+  {% else %}
+  <p class="muted">No tags match.</p>
+  {% endif %}
+</section>
+
+{% else %}
+<section class="card search-group" aria-labelledby="sg-recent">
+  <h2 id="sg-recent">Recently in the Cookbook</h2>
+  {% if recent %}
+  <ul class="search-list">
+    {% for r in recent %}
+    <li><a href="/recipes/{{ r.slug }}" class="search-row">
+      <span class="search-row-main">{{ r.title }}</span>
+      {% if r.total_minutes %}<span class="search-row-meta muted">{{ r.total_minutes }} min</span>{% endif %}
+    </a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing in the cookbook yet.</p>
+  {% endif %}
+</section>
+{% if suggested_tags %}
+<section class="card search-group" aria-labelledby="sg-try">
+  <h2 id="sg-try">Try a tag</h2>
+  <p class="chip-row">
+    {% for t in suggested_tags %}
+    <a href="/search?q={{ t.name | urlencode }}" class="chip">{{ t.name }} <span class="muted">{{ t.count }}</span></a>
+    {% endfor %}
+  </p>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
