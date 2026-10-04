@@ -19,7 +19,7 @@ from starlette.datastructures import FormData
 from app.auth import current_user, require_csrf
 from app.deps import get_db
 from app.routers import flash
-from app.services import pantry, recipes, shopping
+from app.services import pantry, planning, receipts, recipes, shopping
 from app.services.users import User
 from app.templating import render
 
@@ -59,6 +59,7 @@ def index(
     remaining, total = shopping.counts(db, list_id)
     return render(
         request, "shopping/index.html", active_nav="shopping", user=user,
+        pending_receipts=receipts.pending_count(db),
         aisles=shopping.grouped(db, list_id), remaining=remaining, total=total,
         reminders_text=shopping.to_reminders_text(db, list_id),
         sources=shopping.sources_by_item(db, list_id), notice=notice, error=error,
@@ -145,8 +146,9 @@ def plan(
 ) -> Response:
     return render(
         request, "shopping/plan.html", active_nav="shopping", user=user,
-        cookbook=recipes.list_recipes(db, status="cookbook"),
-        inbox=recipes.list_recipes(db, status="inbox"),
+        picker=shopping.trip_picker(
+            db, planned={rid for rid, _ in planning.week_picks(db, planning.week_start())}
+        ),
     )
 
 

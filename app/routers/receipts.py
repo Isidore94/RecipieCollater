@@ -16,6 +16,7 @@ from starlette.datastructures import FormData, UploadFile
 
 from app.auth import current_user, require_csrf
 from app.deps import get_db
+from app.routers import flash
 from app.services import pantry, receipts
 from app.services.users import User
 from app.templating import render
@@ -26,6 +27,20 @@ router = APIRouter(prefix="/receipts")
 def _str(form: FormData, key: str) -> str:
     raw = form.get(key)
     return raw.strip() if isinstance(raw, str) else ""
+
+
+@router.get("")
+def index(
+    request: Request,
+    notice: str | None = None,
+    error: str | None = None,
+    db: sqlite3.Connection = Depends(get_db),
+    user: User = Depends(current_user),
+) -> Response:
+    return render(
+        request, "receipts/index.html", active_nav="pantry", user=user,
+        receipts=receipts.list_receipts(db), notice=notice, error=error,
+    )
 
 
 @router.get("/new")
@@ -121,5 +136,11 @@ async def discard(
     user: User = Depends(current_user),
     _: None = Depends(require_csrf),
 ) -> Response:
+    try:
+        status = receipts.review(db, receipt_id).status
+    except receipts.ReceiptError:
+        return flash.redirect("/receipts", error="That receipt no longer exists.")
+    if status != "pending":
+        return flash.redirect("/receipts", error=f"That receipt was already {status}.")
     receipts.discard(db, receipt_id)
-    return RedirectResponse("/pantry", status_code=303)
+    return flash.redirect("/receipts", notice="Receipt discarded.")

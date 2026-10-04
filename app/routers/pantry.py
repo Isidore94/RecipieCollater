@@ -16,7 +16,7 @@ from starlette.datastructures import FormData
 from app.auth import current_user, require_csrf
 from app.deps import get_db
 from app.routers import flash
-from app.services import pantry
+from app.services import pantry, receipts
 from app.services.users import User
 from app.templating import render
 
@@ -89,6 +89,7 @@ def index(
         request, "pantry/index.html", active_nav="pantry", user=user,
         locations=locations, active_location=active, items=items, restock_count=restock_count,
         query=q or "", notice=notice, error=error, undo=undo,
+        pending_receipts=receipts.pending_count(db),
     )
 
 

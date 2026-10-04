@@ -23,6 +23,25 @@ later. The Shortcut could not close that loop because there was nothing for it t
   5 seconds, fetch `status_url`, stop on done/failed, then notify with the recipe title (and open
   it) or the error message.
 
+### Receipts you can find again, and a trip planner that scales (2026-10-04)
+
+No schema change. Two items from the usability review's "still open" list (Tier 2.7, 2.9).
+
+- **`/receipts`.** A parsed-but-unapplied receipt used to be reachable only by the redirect
+  that created it; close the tab and it sat pending forever. The index lists receipts newest
+  first with status, source, date, line count and the first few items (there is no store
+  column, and inventing one would be a migration), with Resume review for pending ones.
+  Pantry and Shopping carry a "1 receipt waiting for review" nudge next to the Scan receipt
+  button, shown only while one exists. Discard now lands back on the index with a banner, and
+  refuses a receipt that is no longer pending instead of quietly reloading.
+- **Trip planner.** The recipe picker was every recipe as a checkbox. It now has a filter box
+  over title and tags (Alpine, no network; the full list stays in the form, so no-JS still
+  works), this week's meal plan pinned on top under "This week" and not repeated below, recently
+  cooked and favourite recipes ahead of the alphabetical rest, and a selected-recipes count by
+  the submit button. `list_recipes` has no sort options, so the ordering lives in
+  `shopping.trip_picker`, one `cook_log` query plus a stable Python sort, rather than new SQL
+  on the library path.
+
 ### Tags that survive a big cookbook (2026-08-01)
 
 Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into

@@ -104,3 +104,47 @@ def test_plain_toggle_still_redirects_without_javascript(admin_client: TestClien
         f"/shopping/items/{item_id}/toggle", headers=SAME_ORIGIN, follow_redirects=False
     )
     assert resp.status_code == 303
+
+
+def _mk(conn: sqlite3.Connection, title: str, tags: tuple[str, ...] = ()) -> int:
+    return recipes.create_recipe(
+        conn, recipes.RecipeInput(title=title, base_servings="4", tags=list(tags))
+    )
+
+
+def test_trip_picker_orders_and_sections(migrated_db: sqlite3.Connection) -> None:
+    from app.services import planning
+
+    zucchini = _mk(migrated_db, "Zucchini Bake")
+    apple = _mk(migrated_db, "Apple Pie")
+    fav = _mk(migrated_db, "Mid Favourite")
+    cooked = _mk(migrated_db, "Zed Stew")
+    planned = _mk(migrated_db, "Planned Curry")
+    recipes.set_rating(migrated_db, fav, 9)
+    migrated_db.execute(
+        "INSERT INTO cook_log (recipe_id, cooked_at) VALUES (?, '2026-09-01 12:00:00')", (cooked,)
+    )
+    migrated_db.commit()
+    picker = shopping.trip_picker(migrated_db, planned={planned})
+    assert [p.recipe.id for p in picker.this_week] == [planned]
+    ids = [p.recipe.id for p in picker.cookbook + picker.inbox]
+    assert planned not in ids
+    # cooked/favourite group first (recently cooked ahead of rated-only), then alphabetical
+    assert ids == [cooked, fav, apple, zucchini]
+    assert planning.week_start() is not None
+
+
+def test_plan_page_has_filter_count_and_full_list(
+    admin_client: TestClient, migrated_db: sqlite3.Connection
+) -> None:
+    from app.services import planning
+
+    rid = _mk(migrated_db, "Weeknight Tacos", ("mexican",))
+    _mk(migrated_db, "Other Soup")
+    planning.add_recipe_entry(migrated_db, planning.week_start().isoformat(), rid)
+    page = admin_client.get("/shopping/plan").text
+    assert "This week" in page and "Filter recipes" in page
+    assert 'data-hay="weeknight tacos mexican"' in page
+    assert "Other Soup" in page  # the unfiltered list stays in the form (works without JS)
+    assert page.count(f'name="recipe" value="{rid}"') == 1
+    assert "recipes selected" in page  # the Alpine selected-count label by the submit button

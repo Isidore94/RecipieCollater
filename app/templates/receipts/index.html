@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Receipts · RecipeCollater{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1>Receipts</h1>
+  <div class="head-actions">
+    <a href="/receipts/new" class="btn-primary">Scan receipt</a>
+    <a href="/pantry" class="btn-secondary">Pantry</a>
+  </div>
+</header>
+
+{% include "partials/_flash.html" %}
+
+{% if not receipts %}
+<p class="muted card">No receipts yet. <a href="/receipts/new">Scan one</a> and it will be listed
+  here until you apply or discard it.</p>
+{% else %}
+<ul class="receipt-index">
+  {% for r in receipts %}
+  <li class="card receipt-row receipt-{{ r.status }}">
+    <div class="receipt-row-main">
+      <strong>{{ r.created_at[:10] }}</strong>
+      <span class="receipt-status">{% if r.status == 'pending' %}Pending review{% else %}{{ r.status | capitalize }}{% endif %}</span>
+      <span class="muted">{{ 'Photo' if r.source == 'photo' else 'Pasted order' }} &middot;
+        {{ r.line_count }} line{{ 's' if r.line_count != 1 }}</span>
+      {% if r.preview %}<div class="muted receipt-preview">{{ r.preview }}</div>{% endif %}
+    </div>
+    <div class="receipt-row-actions">
+      {% if r.status == 'pending' %}
+      <a href="/receipts/{{ r.receipt_id }}" class="btn-primary">Resume review</a>
+      <form method="post" action="/receipts/{{ r.receipt_id }}/discard" class="inline-post">
+        <button type="submit" class="btn-secondary">Discard</button>
+      </form>
+      {% else %}
+      <a href="/receipts/{{ r.receipt_id }}" class="btn-secondary">View</a>
+      {% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

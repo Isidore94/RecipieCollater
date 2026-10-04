@@ -127,13 +127,21 @@ home screen" walkthrough linked from onboarding success.
    (`view.html:177-205`). Meanwhile the one excellent undo (cook deductions,
    `deductions.html:17-24`) shows the pattern the rest of the app should copy — pantry
    adjustments even write the history rows for it (`services/pantry.py:8`), unused.
-7. **Receipts can be stranded.** Cancel on review goes to /pantry leaving the receipt pending
-   forever; there's no receipts index to find it again (`routers/receipts.py`).
+7. **Receipts can be stranded.** — *Fixed:* `/receipts` lists every receipt newest first with its
+   status (pending review / applied / discarded), capture source, date and line count, and a
+   Resume review link for the pending ones. Pantry and Shopping show a "N receipts waiting for
+   review" nudge only while some exist, and a pending receipt can be discarded from the index
+   (CSRF-guarded POST, confirmation banner; discarding twice says so rather than no-opping).
+   Receipts record no store name (no schema column), so the row shows the first few line items
+   instead. Previously cancel on review left the receipt pending forever with no way back to it.
 8. **No logout / switch-user anywhere.** If her phone ends up on his session there's no
    recovery in the UI. Also: setting her PIN (`admin/devices.html:45-49`) has no confirm/reveal
    — a typo locks her out; and the pairing code/link has no copy button.
-9. **Trip planner won't scale.** `/shopping/plan` renders every recipe as a checkbox with no
-   search (`shopping.py:138-139`).
+9. **Trip planner won't scale.** — *Fixed:* `/shopping/plan` has a filter box (Alpine, no
+   network; matches title and tags as you type), recipes on this week's meal plan surfaced first
+   under "This week", recently cooked and favourite (rated 8+) recipes ahead of the rest, then
+   alphabetical, and a "N recipes selected" count beside the submit button. The full list stays
+   in the form, so it still works with JavaScript off.
 10. **Assistant has no memory affordance** — "New chat" discards the previous conversation
     irretrievably, and replies render markdown as literal `**bold**` in a `pre-wrap` bubble.
 
@@ -253,8 +261,6 @@ Both undos are single-shot, like the pantry and cook-batch ones: a replayed requ
 rather than applied twice.
 
 ## Still open
-- **Trip planner does not scale** (Tier 2.9) — every recipe as a checkbox, no search.
-- **Receipts can still be stranded** (Tier 2.7) — no receipts index to find a pending one.
 - **Assistant has no conversation history** (Tier 2.10), and replies render markdown literally.
 - **No global search or "+" affordance**, and no motion anywhere (Tier 3).
 - From the docs-vs-code gap analysis: big-event mode, re-extract comparison, the embedded

@@ -363,3 +363,70 @@ def test_receipt_routes_roundtrip(
     assert apply_resp.status_code == 303 and "/pantry" in apply_resp.headers["location"]
     row = migrated_db.execute("SELECT status FROM receipts WHERE id = ?", (receipt_id,)).fetchone()
     assert row["status"] == "applied"
+
+
+def _make_receipt(conn: sqlite3.Connection, status: str = "pending", lines: int = 2) -> int:
+    cur = conn.execute("INSERT INTO receipts (source, status) VALUES ('paste', ?)", (status,))
+    rid = int(cur.lastrowid or 0)
+    for i in range(lines):
+        conn.execute(
+            "INSERT INTO receipt_lines (receipt_id, sort_order, original_text) VALUES (?, ?, ?)",
+            (rid, i, f"ITEM {i}"),
+        )
+    conn.commit()
+    return rid
+
+
+def test_receipts_index_lists_newest_first_with_status(
+    admin_client: TestClient, migrated_db: sqlite3.Connection
+) -> None:
+    old = _make_receipt(migrated_db, "applied", lines=1)
+    new = _make_receipt(migrated_db, "pending", lines=3)
+    migrated_db.execute(
+        "UPDATE receipts SET created_at = '2026-01-01 00:00:00' WHERE id = ?", (old,)
+    )
+    migrated_db.commit()
+    page = admin_client.get("/receipts").text
+    assert page.index(f"/receipts/{new}") < page.index(f"/receipts/{old}")
+    assert "Pending review" in page and "Applied" in page
+    assert "3 lines" in page and "1 line" in page
+    assert "Resume review" in page
+
+
+def test_pending_receipt_nudge_on_pantry_and_shopping(
+    admin_client: TestClient, migrated_db: sqlite3.Connection
+) -> None:
+    for path in ("/pantry", "/shopping"):
+        assert "waiting for review" not in admin_client.get(path).text
+    _make_receipt(migrated_db, "pending")
+    _make_receipt(migrated_db, "discarded")
+    for path in ("/pantry", "/shopping"):
+        assert "1 receipt waiting for review" in admin_client.get(path).text
+
+
+def test_discard_pending_receipt_and_not_twice(
+    admin_client: TestClient, migrated_db: sqlite3.Connection
+) -> None:
+    rid = _make_receipt(migrated_db, "pending")
+    resp = admin_client.post(
+        f"/receipts/{rid}/discard", headers=SAME_ORIGIN, follow_redirects=False
+    )
+    assert resp.status_code == 303 and resp.headers["location"].startswith("/receipts?notice=")
+    row = migrated_db.execute("SELECT status FROM receipts WHERE id = ?", (rid,)).fetchone()
+    assert row["status"] == "discarded"
+    again = admin_client.post(
+        f"/receipts/{rid}/discard", headers=SAME_ORIGIN, follow_redirects=False
+    )
+    assert "error=" in again.headers["location"]
+    assert "waiting for review" not in admin_client.get("/pantry").text
+
+
+def test_discard_requires_csrf(admin_client: TestClient, migrated_db: sqlite3.Connection) -> None:
+    rid = _make_receipt(migrated_db, "pending")
+    resp = admin_client.post(
+        f"/receipts/{rid}/discard", headers={"sec-fetch-site": "cross-site"},
+        follow_redirects=False,
+    )
+    assert resp.status_code in (400, 403)
+    row = migrated_db.execute("SELECT status FROM receipts WHERE id = ?", (rid,)).fetchone()
+    assert row["status"] == "pending"
