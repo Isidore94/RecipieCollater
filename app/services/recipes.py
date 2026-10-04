@@ -776,6 +776,20 @@ def get_recipe(conn: sqlite3.Connection, recipe_id: int) -> RecipeDetail | None:
     return _detail_from_row(conn, row) if row else None
 
 
+TRANSCRIPT_REVIEW_NOTE = "Read from the spoken transcript, so double-check the amounts."
+
+
+def needs_transcript_review(conn: sqlite3.Connection, recipe_id: int) -> bool:
+    """True when the current extraction was a YouTube read of captions only (confidence 'thin')."""
+    row = conn.execute(
+        """SELECT er.extractor, er.confidence FROM recipes r
+           JOIN extraction_runs er ON er.id = r.current_extraction_run_id
+           WHERE r.id = ?""",
+        (recipe_id,),
+    ).fetchone()
+    return row is not None and row["extractor"] == "youtube" and row["confidence"] == "thin"
+
+
 def get_recipe_by_slug(conn: sqlite3.Connection, slug: str) -> RecipeDetail | None:
     row = conn.execute("SELECT * FROM recipes WHERE slug = ?", (slug,)).fetchone()
     return _detail_from_row(conn, row) if row else None

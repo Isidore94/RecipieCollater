@@ -389,6 +389,10 @@ def view(
         cook_log=cooking.list_cook_log(db, detail.id),
         coverage=matching.recipe_coverage(db, detail.id),
         notice=notice, error=error,
+        review_note=(
+            recipes.TRANSCRIPT_REVIEW_NOTE
+            if recipes.needs_transcript_review(db, detail.id) else None
+        ),
     )
 
 

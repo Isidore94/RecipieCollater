@@ -5,6 +5,31 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### YouTube blocks are a weather report, not a failure (2026-10-04)
+
+No schema change. On a home IP yt-dlp periodically answers "Sign in to confirm you're not a
+bot" or a 429, and until now that was a generic `youtube_fetch` error that Huey retried twice, a
+minute apart — both inside the same block — before the job died with a raw message.
+
+- **Blocks are classified.** `youtube.classify_error` reads the yt-dlp message (curly
+  apostrophes folded) into `blocked`, `unavailable` or `other`, carried on `YoutubeError.kind`.
+  A block becomes the `youtube_blocked` category with honest copy: YouTube is blocking
+  automated reads from this network, it usually clears in a few hours, retry later. A private
+  or removed video becomes `youtube_unavailable`; everything else stays `youtube_fetch`.
+- **A longer, bounded backoff for blocks only.** The job is parked as `queued` (still the
+  `youtube_blocked` category) and `process_ingest_job` is re-scheduled with Huey's `schedule()`
+  at roughly 30 minutes, 2 hours and 6 hours, then left `failed`. The attempt number travels as
+  a task argument; a scheduled retry that wakes to a job that is no longer waiting (done,
+  retried by hand, dismissed) does nothing, so replay safety is unchanged. The inbox row says
+  when the next try is due. The manual Try again button still works once it has given up.
+- **Caption-only reads say so.** When the description is thin (under 200 characters or fewer
+  than three ingredient-looking lines, after stripping links and hashtags) and the model worked
+  from the auto-caption transcript, the extraction run records confidence `thin` instead of
+  `medium` (the CHECK constraint on `extraction_runs` already allowed it; "low" would have
+  needed a migration), and the recipe sheet and the inbox "Added" row read "Read from the
+  spoken transcript, so double-check the amounts." The `youtube_metadata` artifact now records
+  `source_basis` (`description` or `captions`).
+
 ### Tags that survive a big cookbook (2026-08-01)
 
 Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into

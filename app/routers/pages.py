@@ -229,16 +229,21 @@ def _jobs_context(db: sqlite3.Connection) -> dict[str, Any]:
     # A finished job names the recipe it produced, so the inbox can say what it added and
     # link to it rather than leaving her to spot a new card.
     titles: dict[int, tuple[str, str]] = {}
+    review: set[int] = set()
     for job in jobs:
         if job.status == "done" and job.recipe_id is not None:
             recipe = recipe_service.get_recipe(db, job.recipe_id)
             if recipe is not None:
                 titles[job.id] = (recipe.title, recipe.slug)
+                if recipe_service.needs_transcript_review(db, job.recipe_id):
+                    review.add(job.id)
     return {
         "jobs": jobs,
         "jobs_active": any(j.status in ingest.ACTIVE_STATUSES for j in jobs),
         "job_labels": _JOB_STATUS_LABEL,
         "job_recipes": titles,
+        "job_review": review,
+        "review_note": recipe_service.TRANSCRIPT_REVIEW_NOTE,
     }
 
 

@@ -316,6 +316,7 @@ button:active, a.btn-primary:active, .btn-secondary:active { filter: brightness(
 .ingest-job-actions .btn-secondary { font-size: 13px; padding: 4px 10px; min-height: 36px; }
 .ingest-job.is-failed .ingest-job-status { color: var(--err-ink); }
 .ingest-job-error { flex-basis: 100%; color: var(--err-ink); font-size: 12px; }
+.ingest-job-note { flex-basis: 100%; color: var(--muted, inherit); font-size: 12px; }
 .ingest-more { float: right; font-size: 13px; font-weight: 400; }
 
 /* Add a recipe: the PC counterpart of the phone Shortcut (docs/04 section 1.3). */
