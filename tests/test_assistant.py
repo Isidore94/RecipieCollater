@@ -313,3 +313,173 @@ def test_chat_message_route_surfaces_error(
 
     page = admin_client.get(resp.headers["location"])
     assert "banner-err" in page.text and "banner-ok" not in page.text
+
+
+# --------------------------------------------------------------------------------------
+# Usability review Tier 2.10: history, bounded context, markdown, New chat
+# --------------------------------------------------------------------------------------
+
+
+def _history_of(provider: _FakeProvider, call: int) -> list[dict[str, str]]:
+    history = json.loads(provider.seen[call])["conversation_history"]
+    assert isinstance(history, list)
+    return history
+
+
+def test_prior_turns_reach_the_model_but_not_the_current_one(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider = _FakeProvider(response=AssistantResponse(message="first reply"))
+    _use(monkeypatch, provider)
+    conv = assistant.start_conversation(migrated_db)
+    assistant.ask(migrated_db, conv, "plan monday", week_start=_MON)
+    assistant.ask(migrated_db, conv, "make it vegetarian", week_start=_MON)
+    assert _history_of(provider, 0) == []
+    assert _history_of(provider, 1) == [
+        {"role": "user", "content": "plan monday"},
+        {"role": "assistant", "content": "first reply"},
+    ]
+    assert json.loads(provider.seen[1])["user_message"] == "make it vegetarian"
+
+
+def test_history_window_is_bounded(migrated_db: sqlite3.Connection) -> None:
+    conv = assistant.start_conversation(migrated_db)
+    for i in range(30):
+        migrated_db.execute(
+            "INSERT INTO ai_messages (conversation_id, role, content) VALUES (?, 'user', ?)",
+            (conv, f"m{i:02d}"),
+        )
+    window = assistant.recent_history(migrated_db, conv)
+    assert [m["content"] for m in window] == [f"m{i:02d}" for i in range(20, 30)]
+
+    # Long messages: each is clipped, and the total budget drops the oldest turns first.
+    conv2 = assistant.start_conversation(migrated_db)
+    for i in range(10):
+        migrated_db.execute(
+            "INSERT INTO ai_messages (conversation_id, role, content) VALUES (?, 'user', ?)",
+            (conv2, str(i) * 5000),
+        )
+    window2 = assistant.recent_history(migrated_db, conv2)
+    assert all(len(m["content"]) <= 1500 for m in window2)
+    assert sum(len(m["content"]) for m in window2) <= 6000
+    assert window2[-1]["content"].startswith("9")
+    assert len(window2) < 10
+
+
+def test_chat_page_shows_history_and_proposal_state(
+    admin_client: TestClient, migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_core_units(migrated_db)
+    rid = _cookbook_recipe(migrated_db, "Bowl")
+    provider = _FakeProvider(
+        response=AssistantResponse(
+            message="Here you go.",
+            meal_plan=ProposedPlan(entries=[ProposedPlanEntry(day_index=0, recipe_id=rid)]),
+        )
+    )
+    _use(monkeypatch, provider)
+    admin_client.post("/chat/message", data={"message": "old question"}, headers=SAME_ORIGIN)
+    pid = int(migrated_db.execute("SELECT id FROM ai_proposals").fetchone()["id"])
+    admin_client.post(f"/chat/proposal/{pid}/dismiss", headers=SAME_ORIGIN)
+    page = admin_client.get("/chat").text  # a fresh page load, e.g. next day
+    assert "old question" in page and "Here you go." in page
+    assert "proposal-dismissed" in page and "Accept</button>" not in page
+
+
+def test_new_chat_and_older_chats(
+    admin_client: TestClient, migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use(monkeypatch, _FakeProvider())
+    admin_client.post("/chat/message", data={"message": "first topic"}, headers=SAME_ORIGIN)
+    first = int(migrated_db.execute("SELECT id FROM ai_conversations").fetchone()["id"])
+
+    resp = admin_client.get("/chat/new", follow_redirects=False)
+    assert resp.status_code == 303
+    second = int(resp.headers["location"].split("c=")[1])
+    assert second != first
+    blank = admin_client.get(resp.headers["location"]).text
+    assert "first topic" not in blank.split("chat-thread")[1]
+    # Clicking New chat again while the new one is still empty does not pile up blanks.
+    again = admin_client.get("/chat/new", follow_redirects=False)
+    assert again.headers["location"] == resp.headers["location"]
+
+    admin_client.post(
+        "/chat/message",
+        data={"message": "second topic", "conversation_id": str(second)},
+        headers=SAME_ORIGIN,
+    )
+    # Newest conversation is the default; the older one is one link away.
+    page = admin_client.get("/chat").text
+    assert "first topic" not in page.split("chat-thread")[1]
+    assert f"/chat?c={first}" in page
+    old = admin_client.get(f"/chat?c={first}").text
+    assert "first topic" in old.split("chat-thread")[1]
+
+
+def test_cannot_post_into_another_users_conversation(
+    admin_client: TestClient, migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use(monkeypatch, _FakeProvider())
+    other = int(migrated_db.execute("INSERT INTO users (name) VALUES ('Other')").lastrowid or 0)
+    migrated_db.commit()
+    foreign = assistant.start_conversation(migrated_db, user_id=other)
+    admin_client.post(
+        "/chat/message",
+        data={"message": "hi", "conversation_id": str(foreign)},
+        headers=SAME_ORIGIN,
+    )
+    count = migrated_db.execute(
+        "SELECT count(*) AS n FROM ai_messages WHERE conversation_id = ?", (foreign,)
+    ).fetchone()["n"]
+    assert count == 0
+
+
+def test_markdown_renders_lists_bold_headings_links() -> None:
+    from app.services.markdown_safe import render
+
+    html_out = str(
+        render(
+            "## Plan\n\nHere is **bold** and _soft_ with `code`:\n\n- one\n- two\n\n"
+            "1. first\n2. second\n\nSee [the site](https://example.com/a?b=1&c=2)."
+        )
+    )
+    assert "<p><strong>Plan</strong></p>" in html_out
+    assert "<strong>bold</strong>" in html_out and "<em>soft</em>" in html_out
+    assert "<code>code</code>" in html_out
+    assert "<ul><li>one</li><li>two</li></ul>" in html_out
+    assert "<ol><li>first</li><li>second</li></ol>" in html_out
+    assert 'href="https://example.com/a?b=1&amp;c=2"' in html_out
+    assert 'rel="noopener noreferrer"' in html_out
+
+
+def test_markdown_strips_scripts_and_unsafe_links() -> None:
+    from app.services.markdown_safe import render
+
+    html_out = str(
+        render(
+            "<script>alert(1)</script> <img src=x onerror=alert(1)> "
+            "[click](javascript:alert(1)) [d](data:text/html,x) "
+            '[q](https://a.com"onmouseover="x)'
+        )
+    )
+    assert "<script" not in html_out and "<img" not in html_out
+    assert "&lt;script&gt;" in html_out
+    assert 'href="javascript' not in html_out and 'href="data' not in html_out
+    assert 'onmouseover="' not in html_out
+
+
+def test_assistant_reply_is_rendered_as_markdown_on_the_page(
+    admin_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _use(
+        monkeypatch,
+        _FakeProvider(
+            response=AssistantResponse(
+                message="**Tuesday** is set:\n- pasta\n- salad <script>x()</script>",
+            )
+        ),
+    )
+    admin_client.post("/chat/message", data={"message": "go"}, headers=SAME_ORIGIN)
+    page = admin_client.get("/chat").text
+    assert "<strong>Tuesday</strong>" in page and "<li>pasta</li>" in page
+    assert "<script>x()" not in page

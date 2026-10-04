@@ -32,6 +32,9 @@ from app.services import matching, pantry, planning, preferences, quantity, reci
 _OPERATION = "assist"
 _MAX_CANDIDATES = 40
 _MAX_PANTRY = 60
+_HISTORY_MESSAGES = 10
+_HISTORY_MSG_CHARS = 1500
+_HISTORY_CHARS = 6000
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
@@ -74,16 +77,95 @@ def start_conversation(
     return int(cur.lastrowid) if cur.lastrowid is not None else 0
 
 
-def latest_conversation(conn: sqlite3.Connection) -> int | None:
-    row = conn.execute(
-        "SELECT id FROM ai_conversations ORDER BY updated_at DESC, id DESC LIMIT 1"
-    ).fetchone()
+def latest_conversation(conn: sqlite3.Connection, user_id: int | None = None) -> int | None:
+    """The most recently active conversation visible to *user_id* (their own, plus legacy
+    unowned ones from before conversations were per-user). None means any conversation."""
+    if user_id is None:
+        row = conn.execute(
+            "SELECT id FROM ai_conversations ORDER BY updated_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id FROM ai_conversations WHERE user_id = ? OR user_id IS NULL "
+            "ORDER BY updated_at DESC, id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
     return int(row["id"]) if row else None
 
 
 def get_or_create_conversation(conn: sqlite3.Connection, *, user_id: int | None = None) -> int:
-    existing = latest_conversation(conn)
+    existing = latest_conversation(conn, user_id)
     return existing if existing is not None else start_conversation(conn, user_id=user_id)
+
+
+def new_chat(conn: sqlite3.Connection, *, user_id: int) -> int:
+    """Start a fresh conversation, reusing the latest one when it is still empty so repeated
+    "New chat" clicks do not pile up blank threads."""
+    latest = latest_conversation(conn, user_id)
+    if (
+        latest is not None
+        and not conn.execute(
+            "SELECT 1 FROM ai_messages WHERE conversation_id = ? LIMIT 1", (latest,)
+        ).fetchone()
+    ):
+        return latest
+    return start_conversation(conn, user_id=user_id)
+
+
+def conversation_visible(conn: sqlite3.Connection, conversation_id: int, user_id: int) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM ai_conversations WHERE id = ? AND (user_id = ? OR user_id IS NULL)",
+            (conversation_id, user_id),
+        ).fetchone()
+        is not None
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationSummary:
+    id: int
+    title: str | None
+    updated_at: str
+
+
+def list_conversations(
+    conn: sqlite3.Connection, user_id: int, *, limit: int = 15
+) -> list[ConversationSummary]:
+    """Newest-first conversations that actually hold messages, for the "older chats" strip."""
+    rows = conn.execute(
+        "SELECT c.id, c.title, c.updated_at FROM ai_conversations c "
+        "WHERE (c.user_id = ? OR c.user_id IS NULL) "
+        "AND EXISTS (SELECT 1 FROM ai_messages m WHERE m.conversation_id = c.id) "
+        "ORDER BY c.updated_at DESC, c.id DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    return [
+        ConversationSummary(id=int(r["id"]), title=r["title"], updated_at=r["updated_at"])
+        for r in rows
+    ]
+
+
+def recent_history(conn: sqlite3.Connection, conversation_id: int) -> list[dict[str, str]]:
+    """A bounded window of prior turns, oldest first, for the model's context.
+
+    At most _HISTORY_MESSAGES messages, each clipped to _HISTORY_MSG_CHARS, and the whole window
+    trimmed from the oldest end to _HISTORY_CHARS. Proposals are not replayed: the model sees only
+    the words, and every plan or pantry change is still re-grounded in the fresh candidate set."""
+    rows = conn.execute(
+        "SELECT role, content FROM ai_messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",
+        (conversation_id, _HISTORY_MESSAGES),
+    ).fetchall()
+    window: list[dict[str, str]] = []
+    used = 0
+    for r in rows:  # newest first, so the budget drops the oldest turns
+        text = str(r["content"])[:_HISTORY_MSG_CHARS]
+        if window and used + len(text) > _HISTORY_CHARS:
+            break
+        used += len(text)
+        window.append({"role": r["role"], "content": text})
+    window.reverse()
+    return window
 
 
 def list_messages(conn: sqlite3.Connection, conversation_id: int) -> list[Message]:
@@ -124,7 +206,11 @@ def list_proposals(conn: sqlite3.Connection, conversation_id: int) -> dict[int, 
 
 
 def build_context(
-    conn: sqlite3.Connection, message: str, *, week_start: date
+    conn: sqlite3.Connection,
+    message: str,
+    *,
+    week_start: date,
+    history: list[dict[str, str]] | None = None,
 ) -> tuple[str, list[int]]:
     """Assemble the JSON context for one turn. Returns (json_text, candidate_recipe_ids).
 
@@ -189,6 +275,7 @@ def build_context(
         "pantry_on_hand": pantry_on_hand,
         "recipes_that_use_expiring_items": expiring,
         "candidate_recipes": candidates,
+        "conversation_history": history or [],
         "user_message": message,
     }
     return json.dumps(context, ensure_ascii=False), candidate_ids
@@ -225,9 +312,14 @@ def ask(
     if provider is None:
         return AskResult(reply="", error="The assistant needs an AI key configured on the server.")
 
+    history = recent_history(conn, conversation_id)  # before this turn's own message goes in
     conn.execute(
         "INSERT INTO ai_messages (conversation_id, role, content) VALUES (?, 'user', ?)",
         (conversation_id, text),
+    )
+    conn.execute(
+        "UPDATE ai_conversations SET title = ? WHERE id = ? AND title IS NULL",
+        (" ".join(text.split())[:60], conversation_id),
     )
     conn.commit()
 
@@ -250,7 +342,7 @@ def ask(
             None,
         )
 
-    content, candidate_ids = build_context(conn, text, week_start=start)
+    content, candidate_ids = build_context(conn, text, week_start=start, history=history)
     try:
         result = provider.assist(content)
     except ai.AIError as exc:
@@ -406,6 +498,13 @@ def _insert_proposal(
 # --------------------------------------------------------------------------------------
 # Accept / dismiss (deterministic, idempotent)
 # --------------------------------------------------------------------------------------
+
+
+def proposal_conversation(conn: sqlite3.Connection, proposal_id: int) -> int | None:
+    row = conn.execute(
+        "SELECT conversation_id FROM ai_proposals WHERE id = ?", (proposal_id,)
+    ).fetchone()
+    return int(row["conversation_id"]) if row and row["conversation_id"] is not None else None
 
 
 def get_proposal(conn: sqlite3.Connection, proposal_id: int) -> Proposal | None:

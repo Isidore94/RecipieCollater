@@ -112,7 +112,10 @@ load-bearing contract is preserved — application code builds the hard-filtered
 pantry summary first (`assistant.build_context`), the model reasons over that and returns a
 validated `AssistantResponse` (message + optional meal-plan / pantry-update proposals), and
 acceptance re-validates and applies through deterministic services in one idempotent transaction.
-Server-rendered htmx, no SSE. Streaming and multi-tool loops are a post-v1 enhancement (they need
+Conversations persist per user (`ai_conversations` / `ai_messages`, with proposals shown inline
+in their resolved state), and each turn carries a bounded window of earlier turns (last 10
+messages, clipped, about 6,000 characters total) as `conversation_history` in the same JSON
+request; replies render through the allowlist Markdown renderer. Server-rendered htmx, no SSE. Streaming and multi-tool loops are a post-v1 enhancement (they need
 idempotency tests around every mid-stream tool call and provider transition; not worth the risk at
 family scale for a one-shot planning turn).
 

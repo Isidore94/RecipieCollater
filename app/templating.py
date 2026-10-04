@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import PACKAGE_DIR, get_settings
 from app.security import CSRF_HEADER
+from app.services.markdown_safe import render as render_markdown
 from app.services.users import User
 
 _TEMPLATES = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
@@ -42,6 +43,7 @@ def safe_url(value: str | None) -> str:
 
 
 _TEMPLATES.env.filters["safe_url"] = safe_url
+_TEMPLATES.env.filters["markdown"] = render_markdown
 
 # Primary navigation (docs/07-ui-ux.md §2). Phase-5 full set. Shopping keeps its own tab
 # (the household's most-used away-from-home surface) rather than folding under Plan, so the tab
