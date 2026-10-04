@@ -68,8 +68,9 @@ class ShoppingItem:
             return None
         per_package = Decimal(self.purchase.canonical)
         return int(
-            (Decimal(self.canonical_quantity) / per_package)
-            .to_integral_value(rounding=ROUND_CEILING)
+            (Decimal(self.canonical_quantity) / per_package).to_integral_value(
+                rounding=ROUND_CEILING
+            )
         )
 
     @property
@@ -152,12 +153,19 @@ def _to_item(row: sqlite3.Row) -> ShoppingItem:
             label=row["p_label"],
         )
     return ShoppingItem(
-        id=int(row["id"]), food_id=row["food_id"], display_text=row["display_text"],
-        quantity_text=row["quantity_text"], unit_id=row["unit_id"], unit_name=row["unit_name"],
+        id=int(row["id"]),
+        food_id=row["food_id"],
+        display_text=row["display_text"],
+        quantity_text=row["quantity_text"],
+        unit_id=row["unit_id"],
+        unit_name=row["unit_name"],
         unit_dimension=row["unit_dimension"],
-        canonical_quantity=row["canonical_quantity"], category=row["category"] or _OTHER_AISLE,
-        is_manual=bool(row["is_manual"]), checked=bool(row["checked"]),
-        needs_check=bool(row["needs_check"]), purchase=purchase,
+        canonical_quantity=row["canonical_quantity"],
+        category=row["category"] or _OTHER_AISLE,
+        is_manual=bool(row["is_manual"]),
+        checked=bool(row["checked"]),
+        needs_check=bool(row["needs_check"]),
+        purchase=purchase,
     )
 
 
@@ -303,9 +311,15 @@ def plan_recipe(
         if ing.scaling_mode == "to_taste":
             lines.append(
                 PlannedLine(
-                    key=f"i:{ing.id}", kind="to_taste", ingredient_id=ing.id,
-                    food_id=ing.food_id, display_text=name, original_text=ing.original_text,
-                    quantity_text=None, unit_id=None, canonical=None,
+                    key=f"i:{ing.id}",
+                    kind="to_taste",
+                    ingredient_id=ing.id,
+                    food_id=ing.food_id,
+                    display_text=name,
+                    original_text=ing.original_text,
+                    quantity_text=None,
+                    unit_id=None,
+                    canonical=None,
                 )
             )
             continue
@@ -323,26 +337,36 @@ def plan_recipe(
                     covered_reason = "in the pantry"
             lines.append(
                 PlannedLine(
-                    key=f"i:{ing.id}", kind="covered" if covered_reason else "check",
-                    ingredient_id=ing.id, food_id=ing.food_id, display_text=name,
-                    original_text=ing.original_text, quantity_text=None, unit_id=None,
-                    canonical=None, covered_reason=covered_reason,
+                    key=f"i:{ing.id}",
+                    kind="covered" if covered_reason else "check",
+                    ingredient_id=ing.id,
+                    food_id=ing.food_id,
+                    display_text=name,
+                    original_text=ing.original_text,
+                    quantity_text=None,
+                    unit_id=None,
+                    canonical=None,
+                    covered_reason=covered_reason,
                 )
             )
             continue
         assert ing.food_id is not None and ing.unit_to_canonical is not None
         needed_amount = _scaled_need(ing, factor)
         needed = quantity.to_canonical(needed_amount, ing.unit_to_canonical)
-        has_gb, gb_nonempty, exact_total = _pantry_profile(
-            conn, ing.food_id, ing.unit_dimension
-        )
+        has_gb, gb_nonempty, exact_total = _pantry_profile(conn, ing.food_id, ing.unit_dimension)
         if missing_only:
             if gb_nonempty:
                 lines.append(
                     PlannedLine(
-                        key=f"f:{ing.food_id}", kind="covered", ingredient_id=ing.id,
-                        food_id=ing.food_id, display_text=name, original_text=ing.original_text,
-                        quantity_text=None, unit_id=None, canonical=None,
+                        key=f"f:{ing.food_id}",
+                        kind="covered",
+                        ingredient_id=ing.id,
+                        food_id=ing.food_id,
+                        display_text=name,
+                        original_text=ing.original_text,
+                        quantity_text=None,
+                        unit_id=None,
+                        canonical=None,
                         covered_reason="in the pantry",
                     )
                 )
@@ -355,9 +379,15 @@ def plan_recipe(
             if needed <= 0:
                 lines.append(
                     PlannedLine(
-                        key=f"f:{ing.food_id}", kind="covered", ingredient_id=ing.id,
-                        food_id=ing.food_id, display_text=name, original_text=ing.original_text,
-                        quantity_text=None, unit_id=None, canonical=None,
+                        key=f"f:{ing.food_id}",
+                        kind="covered",
+                        ingredient_id=ing.id,
+                        food_id=ing.food_id,
+                        display_text=name,
+                        original_text=ing.original_text,
+                        quantity_text=None,
+                        unit_id=None,
+                        canonical=None,
                         covered_reason="enough in the pantry",
                     )
                 )
@@ -366,9 +396,15 @@ def plan_recipe(
             # Staple-lane restock: the household tracks this loosely; never list "1/4 cup".
             lines.append(
                 PlannedLine(
-                    key=f"f:{ing.food_id}", kind="staple", ingredient_id=ing.id,
-                    food_id=ing.food_id, display_text=name, original_text=ing.original_text,
-                    quantity_text=None, unit_id=None, canonical=None,
+                    key=f"f:{ing.food_id}",
+                    kind="staple",
+                    ingredient_id=ing.id,
+                    food_id=ing.food_id,
+                    display_text=name,
+                    original_text=ing.original_text,
+                    quantity_text=None,
+                    unit_id=None,
+                    canonical=None,
                 )
             )
             continue
@@ -377,9 +413,15 @@ def plan_recipe(
         )
         lines.append(
             PlannedLine(
-                key=f"f:{ing.food_id}", kind="measured", ingredient_id=ing.id,
-                food_id=ing.food_id, display_text=name, original_text=ing.original_text,
-                quantity_text=display_qty, unit_id=ing.unit_id, canonical=needed,
+                key=f"f:{ing.food_id}",
+                kind="measured",
+                ingredient_id=ing.id,
+                food_id=ing.food_id,
+                display_text=name,
+                original_text=ing.original_text,
+                quantity_text=display_qty,
+                unit_id=ing.unit_id,
+                canonical=needed,
             )
         )
     return lines
@@ -463,8 +505,13 @@ def _add_measured(
         )
         item_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
     _record_source(
-        conn, item_id, source_type=source_type, recipe_id=recipe_id,
-        quantity_text=quantity_text, unit_id=unit_id, label=label,
+        conn,
+        item_id,
+        source_type=source_type,
+        recipe_id=recipe_id,
+        quantity_text=quantity_text,
+        unit_id=unit_id,
+        label=label,
     )
     return item_id
 
@@ -502,7 +549,10 @@ def _add_quantityless(
                (list_id, food_id, display_text, category, is_manual, needs_check)
                VALUES (?, ?, ?, ?, 0, ?)""",
             (
-                list_id, food_id, display_text, _food_category(conn, food_id),
+                list_id,
+                food_id,
+                display_text,
+                _food_category(conn, food_id),
                 1 if needs_check else 0,
             ),
         )
@@ -518,9 +568,7 @@ def _unit_factor(conn: sqlite3.Connection, unit_id: int | None) -> int:
     return unit.to_canonical_microunits
 
 
-def add_manual(
-    conn: sqlite3.Connection, list_id: int, text: str, *, commit: bool = True
-) -> int:
+def add_manual(conn: sqlite3.Connection, list_id: int, text: str, *, commit: bool = True) -> int:
     """Add a free-text line the user typed. Manual lines are never merged or auto-removed."""
     clean = text.strip()
     if not clean:
@@ -560,14 +608,26 @@ def _write_line(
 ) -> int | None:
     if line.kind == "measured":
         return _add_measured(
-            conn, list_id, food_id=line.food_id, display_text=line.display_text,
-            quantity_text=line.quantity_text, unit_id=line.unit_id, canonical=line.canonical,
-            source_type="recipe", recipe_id=recipe_id, label=line.original_text,
+            conn,
+            list_id,
+            food_id=line.food_id,
+            display_text=line.display_text,
+            quantity_text=line.quantity_text,
+            unit_id=line.unit_id,
+            canonical=line.canonical,
+            source_type="recipe",
+            recipe_id=recipe_id,
+            label=line.original_text,
         )
     if line.kind in ("staple", "check"):
         return _add_quantityless(
-            conn, list_id, food_id=line.food_id, display_text=line.display_text,
-            needs_check=(line.kind == "check"), source_type="recipe", recipe_id=recipe_id,
+            conn,
+            list_id,
+            food_id=line.food_id,
+            display_text=line.display_text,
+            needs_check=(line.kind == "check"),
+            source_type="recipe",
+            recipe_id=recipe_id,
             label=line.original_text,
         )
     return None
@@ -612,8 +672,12 @@ def add_staples(conn: sqlite3.Connection, list_id: int, *, commit: bool = True) 
         cur = conn.execute(
             """INSERT INTO shopping_list_items (list_id, food_id, display_text, category, is_manual)
                VALUES (?, ?, ?, ?, 0)""",
-            (list_id, candidate.food_id, candidate.display_name,
-             _food_category(conn, candidate.food_id)),
+            (
+                list_id,
+                candidate.food_id,
+                candidate.display_name,
+                _food_category(conn, candidate.food_id),
+            ),
         )
         item_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
         _record_source(conn, item_id, source_type="staple", label=candidate.display_name)
@@ -693,15 +757,14 @@ def _purchase_note(conn: sqlite3.Connection, line: PlannedLine) -> str | None:
     ):
         return None
     packages = int(
-        (Decimal(line.canonical) / Decimal(purchase.canonical))
-        .to_integral_value(rounding=ROUND_CEILING)
+        (Decimal(line.canonical) / Decimal(purchase.canonical)).to_integral_value(
+            rounding=ROUND_CEILING
+        )
     )
     return f"{packages} {purchase.package_word(packages)}"
 
 
-def build_trip(
-    conn: sqlite3.Connection, picks: list[tuple[int, str | None]]
-) -> TripPreview:
+def build_trip(conn: sqlite3.Connection, picks: list[tuple[int, str | None]]) -> TripPreview:
     """Aggregate several recipes into one pantry-aware preview. Pure - never writes.
 
     Pantry stock is subtracted ONCE against the aggregate need per food (adding two recipes
@@ -763,9 +826,14 @@ def build_trip(
                 continue
             staple_foods_listed.add(food_id)
             staple = PlannedLine(
-                key=f"f:{food_id}", kind="staple", ingredient_id=line.ingredient_id,
-                food_id=food_id, display_text=line.display_text,
-                original_text=line.original_text, quantity_text=None, unit_id=None,
+                key=f"f:{food_id}",
+                kind="staple",
+                ingredient_id=line.ingredient_id,
+                food_id=food_id,
+                display_text=line.display_text,
+                original_text=line.original_text,
+                quantity_text=None,
+                unit_id=None,
                 canonical=None,
             )
             to_buy.append(_trip_line(conn, staple, titles))
@@ -774,10 +842,15 @@ def build_trip(
         # The key carries the dimension: one food measured by mass AND volume yields two
         # distinct lines whose preview checkboxes must not collide.
         adjusted = PlannedLine(
-            key=f"f:{food_id}:{dim or '-'}", kind="measured", ingredient_id=line.ingredient_id,
-            food_id=food_id, display_text=line.display_text, original_text=line.original_text,
+            key=f"f:{food_id}:{dim or '-'}",
+            kind="measured",
+            ingredient_id=line.ingredient_id,
+            food_id=food_id,
+            display_text=line.display_text,
+            original_text=line.original_text,
             quantity_text=quantity.format_quantity(quantity.from_canonical(needed, factor)),
-            unit_id=line.unit_id, canonical=needed,
+            unit_id=line.unit_id,
+            canonical=needed,
         )
         to_buy.append(_trip_line(conn, adjusted, titles))
 
@@ -792,19 +865,21 @@ def build_trip(
                 continue
         to_buy.append(_trip_line(conn, line, check_titles.get(line.key, [])))
 
-    return TripPreview(
-        picks=resolved_picks, to_buy=to_buy, covered=covered, to_taste=to_taste
-    )
+    return TripPreview(picks=resolved_picks, to_buy=to_buy, covered=covered, to_taste=to_taste)
 
 
-def _trip_line(
-    conn: sqlite3.Connection, line: PlannedLine, recipe_titles: list[str]
-) -> TripLine:
+def _trip_line(conn: sqlite3.Connection, line: PlannedLine, recipe_titles: list[str]) -> TripLine:
     unit = units.get_unit(conn, line.unit_id) if line.unit_id else None
     return TripLine(
-        key=line.key, kind=line.kind, food_id=line.food_id, display_text=line.display_text,
-        original_text=line.original_text, quantity_text=line.quantity_text,
-        unit_id=line.unit_id, unit_name=unit.name if unit else None, canonical=line.canonical,
+        key=line.key,
+        kind=line.kind,
+        food_id=line.food_id,
+        display_text=line.display_text,
+        original_text=line.original_text,
+        quantity_text=line.quantity_text,
+        unit_id=line.unit_id,
+        unit_name=unit.name if unit else None,
+        canonical=line.canonical,
         aisle=_food_category(conn, line.food_id),
         recipe_titles=tuple(recipe_titles),
         purchase_note=_purchase_note(conn, line),
@@ -836,16 +911,25 @@ def apply_trip(
             rid for rid, title in title_by_id.items() if title in line.recipe_titles
         ] or ([preview.picks[0][0]] if preview.picks else [])
         planned = PlannedLine(
-            key=line.key, kind=line.kind, ingredient_id=0, food_id=line.food_id,
-            display_text=line.display_text, original_text=line.original_text,
-            quantity_text=line.quantity_text, unit_id=line.unit_id, canonical=line.canonical,
+            key=line.key,
+            kind=line.kind,
+            ingredient_id=0,
+            food_id=line.food_id,
+            display_text=line.display_text,
+            original_text=line.original_text,
+            quantity_text=line.quantity_text,
+            unit_id=line.unit_id,
+            canonical=line.canonical,
         )
         item_id = _write_line(conn, list_id, planned, contributing[0] if contributing else 0)
         # Every contributing recipe shows in provenance, not just the first.
         if item_id is not None:
             for rid in contributing[1:]:
                 _record_source(
-                    conn, item_id, source_type="recipe", recipe_id=rid,
+                    conn,
+                    item_id,
+                    source_type="recipe",
+                    recipe_id=rid,
                     label=line.original_text,
                 )
         added += 1
@@ -918,11 +1002,15 @@ def restock_candidates(conn: sqlite3.Connection, list_id: int) -> list[RestockLi
                         action_text = f"+{quantity.format_quantity(amount)} {unit.name}"
         out.append(
             RestockLine(
-                item_id=item.id, label=item.label, pantry_item_id=target.id if target else None,
+                item_id=item.id,
+                label=item.label,
+                pantry_item_id=target.id if target else None,
                 pantry_item_name=target.display_name if target else None,
-                action_text=action_text, add_canonical=add_canonical,
+                action_text=action_text,
+                add_canonical=add_canonical,
                 can_create=(target is None and item.food_id is not None),
-                food_id=item.food_id, display_text=item.display_text,
+                food_id=item.food_id,
+                display_text=item.display_text,
             )
         )
     return out
@@ -985,10 +1073,13 @@ def apply_restock(
             new_id = pantry.add_item(
                 conn,
                 pantry.PantryItemInput(
-                    display_name=line.display_text, location_id=loc_id,
-                    quantity_mode=pantry.AUTO_MODE, gauge="full",
+                    display_name=line.display_text,
+                    location_id=loc_id,
+                    quantity_mode=pantry.AUTO_MODE,
+                    gauge="full",
                 ),
-                user_id=user_id, commit=False,
+                user_id=user_id,
+                commit=False,
             )
             if new_id:
                 summary.append(f"{line.display_text} → now tracked")
@@ -1111,8 +1202,7 @@ def to_json(conn: sqlite3.Connection, list_id: int) -> dict[str, object]:
             {
                 "aisle": aisle,
                 "items": [
-                    {"text": i.label, "checked": i.checked, "food_id": i.food_id}
-                    for i in items
+                    {"text": i.label, "checked": i.checked, "food_id": i.food_id} for i in items
                 ],
             }
             for aisle, items in grouped(conn, list_id)

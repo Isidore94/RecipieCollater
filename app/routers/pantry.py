@@ -86,9 +86,18 @@ def index(
     items = pantry.list_items(db, location_id=active, query=q)
     restock_count = len(pantry.shopping_candidates(db))
     return render(
-        request, "pantry/index.html", active_nav="pantry", user=user,
-        locations=locations, active_location=active, items=items, restock_count=restock_count,
-        query=q or "", notice=notice, error=error, undo=undo,
+        request,
+        "pantry/index.html",
+        active_nav="pantry",
+        user=user,
+        locations=locations,
+        active_location=active,
+        items=items,
+        restock_count=restock_count,
+        query=q or "",
+        notice=notice,
+        error=error,
+        undo=undo,
     )
 
 
@@ -104,8 +113,12 @@ def stock_take(
         return RedirectResponse("/pantry", status_code=303)
     items = pantry.list_items(db, location_id=location_id)
     return render(
-        request, "pantry/stocktake.html", active_nav="pantry", user=user,
-        location=location, items=items,
+        request,
+        "pantry/stocktake.html",
+        active_nav="pantry",
+        user=user,
+        location=location,
+        items=items,
     )
 
 
@@ -140,8 +153,7 @@ async def add_item(
         if location_id is None:
             return flash.redirect(
                 back,
-                error="Add a location first (a cupboard, the freezer\u2026), "
-                      "then add items to it.",
+                error="Add a location first (a cupboard, the freezer\u2026), then add items to it.",
             )
         data = pantry.PantryItemInput(
             display_name=_str(form, "display_name"),
@@ -201,7 +213,11 @@ async def adjust_item(
                 return Response("", status_code=200)
             back = _back(form)
             return render(
-                request, "pantry/_item.html", user=user, item=item, back=back,
+                request,
+                "pantry/_item.html",
+                user=user,
+                item=item,
+                back=back,
                 active_location=_location_from(back),
             )
         # Without JavaScript there is no swapped card to re-tap, so the redirect carries the undo.
@@ -258,8 +274,11 @@ async def set_staple(
         back = _back(form)
         try:
             pantry.set_staple(
-                db, item_id, is_staple=_checked(form, "is_staple"),
-                min_quantity_text=_str(form, "min_quantity_text") or None, user_id=user.id,
+                db,
+                item_id,
+                is_staple=_checked(form, "is_staple"),
+                min_quantity_text=_str(form, "min_quantity_text") or None,
+                user_id=user.id,
             )
         except pantry.PantryError as exc:
             return flash.redirect(back, error=str(exc))

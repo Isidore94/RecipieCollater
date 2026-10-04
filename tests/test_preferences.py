@@ -40,7 +40,8 @@ def test_hard_filter_matches_whole_words(migrated_db: sqlite3.Connection) -> Non
     peanut = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Satay", base_servings="4",
+            title="Satay",
+            base_servings="4",
             ingredients=[
                 recipes.IngredientInput(quantity_text="2", unit="tbsp", food="peanut butter")
             ],
@@ -49,7 +50,8 @@ def test_hard_filter_matches_whole_words(migrated_db: sqlite3.Connection) -> Non
     safe = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Rice", base_servings="4",
+            title="Rice",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="1", unit="cup", food="rice")],
         ),
     )
@@ -66,10 +68,11 @@ def test_hard_filter_matches_plurals(migrated_db: sqlite3.Connection) -> None:
     rid = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Satay", base_servings="4",
-            ingredients=[recipes.IngredientInput(
-                original_text="1/2 cup peanuts, chopped", food=None
-            )],
+            title="Satay",
+            base_servings="4",
+            ingredients=[
+                recipes.IngredientInput(original_text="1/2 cup peanuts, chopped", food=None)
+            ],
         ),
     )
     assert preferences.recipe_violates_hard(migrated_db, rid, ["peanut"]) == "peanut"
@@ -77,7 +80,8 @@ def test_hard_filter_matches_plurals(migrated_db: sqlite3.Connection) -> None:
     rid2 = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Stirfry", base_servings="4",
+            title="Stirfry",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(original_text="2 tbsp soy sauce", food=None)],
         ),
     )
@@ -86,7 +90,8 @@ def test_hard_filter_matches_plurals(migrated_db: sqlite3.Connection) -> None:
     rid3 = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Spice", base_servings="4",
+            title="Spice",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(original_text="1 tsp nutmeg", food=None)],
         ),
     )
@@ -96,7 +101,9 @@ def test_hard_filter_matches_plurals(migrated_db: sqlite3.Connection) -> None:
 def test_empty_preference_is_rejected_out_loud(admin_client: TestClient) -> None:
     """An add that failed used to reload the page unchanged, indistinguishable from success."""
     resp = admin_client.post(
-        "/preferences/add", data={"kind": "allergy", "value": "  "}, headers=SAME_ORIGIN,
+        "/preferences/add",
+        data={"kind": "allergy", "value": "  "},
+        headers=SAME_ORIGIN,
         follow_redirects=False,
     )
     assert resp.status_code == 303 and "error=" in resp.headers["location"]
@@ -105,7 +112,9 @@ def test_empty_preference_is_rejected_out_loud(admin_client: TestClient) -> None
 
 def test_adding_a_preference_confirms_it(admin_client: TestClient) -> None:
     resp = admin_client.post(
-        "/preferences/add", data={"kind": "allergy", "value": "peanut"}, headers=SAME_ORIGIN,
+        "/preferences/add",
+        data={"kind": "allergy", "value": "peanut"},
+        headers=SAME_ORIGIN,
         follow_redirects=False,
     )
     assert resp.status_code == 303 and "notice=" in resp.headers["location"]

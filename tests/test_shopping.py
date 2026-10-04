@@ -12,7 +12,8 @@ def _recipe(conn: sqlite3.Connection, qty: str, unit: str, food: str) -> int:
     return recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title=food.title(), base_servings="4",
+            title=food.title(),
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text=qty, unit=unit, food=food)],
         ),
     )
@@ -23,8 +24,12 @@ def _exact_pantry(conn: sqlite3.Connection, food: str, qty: str, unit: str) -> i
     return pantry.add_item(
         conn,
         pantry.PantryItemInput(
-            display_name=food.title(), location_id=loc, quantity_mode="exact",
-            food=food, quantity_text=qty, unit=unit,
+            display_name=food.title(),
+            location_id=loc,
+            quantity_mode="exact",
+            food=food,
+            quantity_text=qty,
+            unit=unit,
         ),
     )
 

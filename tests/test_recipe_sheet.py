@@ -91,7 +91,8 @@ def test_scaling_carries_through_to_cook_and_shopping(
     rid = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Party Loaf", base_servings="4",
+            title="Party Loaf",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="200", unit="grams", food="flour")],
         ),
     )

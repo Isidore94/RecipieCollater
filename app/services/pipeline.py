@@ -91,8 +91,10 @@ def apply_extraction(
         # Ingested foods arrive as 'pending': matching/shopping work immediately, but auto
         # deductions wait until the food is reviewed on /foods (docs/07 pending-food chips).
         recipe_id = recipes.create_recipe(
-            conn, to_recipe_input(conn, extracted, source_type=source_type, source_url=job.url),
-            created_by=job.submitted_by, food_status="pending",
+            conn,
+            to_recipe_input(conn, extracted, source_type=source_type, source_url=job.url),
+            created_by=job.submitted_by,
+            food_status="pending",
         )
 
     cur = conn.execute(
@@ -100,8 +102,17 @@ def apply_extraction(
            (recipe_id, job_id, extractor, provider, model, prompt_version, schema_version,
             confidence, payload)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (recipe_id, job.id, extractor, provider, model, prompt_version, SCHEMA_VERSION,
-         confidence, extracted.model_dump_json()),
+        (
+            recipe_id,
+            job.id,
+            extractor,
+            provider,
+            model,
+            prompt_version,
+            SCHEMA_VERSION,
+            confidence,
+            extracted.model_dump_json(),
+        ),
     )
     run_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
     video_id = ingest.youtube_video_id(job.normalized_url)
@@ -174,7 +185,10 @@ def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
         return
 
     ingest.set_status(
-        conn, job.id, "failed", error_category="no_recipe",
+        conn,
+        job.id,
+        "failed",
+        error_category="no_recipe",
         error_message="No recipe could be extracted from that page.",
     )
 
@@ -183,7 +197,10 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     """Ingest a YouTube video: description-first, captions as fallback, then LLM extraction."""
     if not get_settings().ai_enabled:
         ingest.set_status(
-            conn, job.id, "failed", error_category="youtube_needs_ai",
+            conn,
+            job.id,
+            "failed",
+            error_category="youtube_needs_ai",
             error_message="Add an Anthropic API key to import recipes from YouTube.",
         )
         return
@@ -203,13 +220,20 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     # recipe worth keeping - the video IS the steps (the sheet keeps the link; cook mode still
     # gives the ingredient checklist). docs/04 section 6 is amended accordingly.
     applied = _ai_extract_and_apply(
-        conn, job, data.prompt_text(),
-        extractor="youtube", source_type="youtube", operation="extract_youtube",
+        conn,
+        job,
+        data.prompt_text(),
+        extractor="youtube",
+        source_type="youtube",
+        operation="extract_youtube",
         require_steps=False,
     )
     if not applied:
         ingest.set_status(
-            conn, job.id, "failed", error_category="no_recipe",
+            conn,
+            job.id,
+            "failed",
+            error_category="no_recipe",
             error_message="Couldn't find a recipe in that video's description or captions.",
         )
         return
@@ -228,7 +252,10 @@ def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     """
     if not get_settings().ai_enabled:
         ingest.set_status(
-            conn, job.id, "failed", error_category="instagram_needs_ai",
+            conn,
+            job.id,
+            "failed",
+            error_category="instagram_needs_ai",
             error_message="Add an AI API key to import recipes from Instagram.",
         )
         return
@@ -244,7 +271,10 @@ def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
             data = instagram.fetch(shortcode)
         except instagram.InstagramError as exc:
             ingest.set_status(
-                conn, job.id, "failed", error_category="instagram_unavailable",
+                conn,
+                job.id,
+                "failed",
+                error_category="instagram_unavailable",
                 error_message=str(exc)[:400],
             )
             return
@@ -256,13 +286,20 @@ def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     # require_steps=False for the same reason as YouTube: a reel's method is usually spoken, so an
     # ingredient list plus the source link is still worth keeping.
     applied = _ai_extract_and_apply(
-        conn, job, content,
-        extractor="instagram", source_type="web", operation="extract_instagram",
+        conn,
+        job,
+        content,
+        extractor="instagram",
+        source_type="web",
+        operation="extract_instagram",
         require_steps=False,
     )
     if not applied:
         ingest.set_status(
-            conn, job.id, "failed", error_category="no_recipe",
+            conn,
+            job.id,
+            "failed",
+            error_category="no_recipe",
             error_message="Couldn't find a recipe in that Instagram post's caption.",
         )
         return
@@ -302,8 +339,13 @@ def _ai_extract_and_apply(
         return False
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=operation,
-            job_id=job.id, status="blocked", error="daily or monthly AI spend cap reached",
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=operation,
+            job_id=job.id,
+            status="blocked",
+            error="daily or monthly AI spend cap reached",
         )
         return False
     try:
@@ -311,24 +353,41 @@ def _ai_extract_and_apply(
     except ai.AIError as exc:
         # A parse/validation failure can still have been billed - log its real cost so it counts.
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=operation,
-            job_id=job.id, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
-            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=operation,
+            job_id=job.id,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros,
+            status="error",
+            error=str(exc)[:500],
         )
         return False
     ai_usage.log_usage(
-        conn, provider=result.provider, model=result.model, operation=operation,
-        job_id=job.id, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
-        cost_micros=result.cost_micros, status="ok",
+        conn,
+        provider=result.provider,
+        model=result.model,
+        operation=operation,
+        job_id=job.id,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros,
+        status="ok",
     )
-    usable = result.recipe.is_complete() or (
-        not require_steps and bool(result.recipe.ingredients)
-    )
+    usable = result.recipe.is_complete() or (not require_steps and bool(result.recipe.ingredients))
     if not usable:
         return False
     ingest.set_status(conn, job.id, "normalizing")
     apply_extraction(
-        conn, job, result.recipe, extractor=extractor,
-        provider=result.provider, model=result.model, confidence="medium", source_type=source_type,
+        conn,
+        job,
+        result.recipe,
+        extractor=extractor,
+        provider=result.provider,
+        model=result.model,
+        confidence="medium",
+        source_type=source_type,
     )
     return True

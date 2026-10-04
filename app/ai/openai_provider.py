@@ -77,7 +77,9 @@ class OpenAIExtractor:
                 },
             ]
         payload, input_tokens, output_tokens, billed = self._call_tool(
-            RECEIPT_SYSTEM, user_content, tool_name=_RECEIPT_TOOL,
+            RECEIPT_SYSTEM,
+            user_content,
+            tool_name=_RECEIPT_TOOL,
             description="Record the grocery items bought on this receipt or order.",
             schema=ExtractedReceipt.model_json_schema(),
         )
@@ -86,16 +88,24 @@ class OpenAIExtractor:
         except Exception as exc:
             raise AIError(
                 f"model output failed schema validation: {exc}",
-                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_micros=billed,
             ) from exc
         return AIReceipt(
-            receipt=parsed, provider=self.provider, model=self.model,
-            input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+            receipt=parsed,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_micros=billed,
         )
 
     def assist(self, content: str) -> AIAssist:
         payload, input_tokens, output_tokens, billed = self._call_tool(
-            ASSISTANT_SYSTEM, content[:_MAX_INPUT_CHARS], tool_name=_ASSIST_TOOL,
+            ASSISTANT_SYSTEM,
+            content[:_MAX_INPUT_CHARS],
+            tool_name=_ASSIST_TOOL,
             description="Reply to the household and optionally propose a plan or pantry update.",
             schema=AssistantResponse.model_json_schema(),
         )
@@ -104,11 +114,17 @@ class OpenAIExtractor:
         except Exception as exc:
             raise AIError(
                 f"model output failed schema validation: {exc}",
-                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_micros=billed,
             ) from exc
         return AIAssist(
-            response=parsed, provider=self.provider, model=self.model,
-            input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+            response=parsed,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_micros=billed,
         )
 
     def recipe_from_photo(self, image_jpeg: bytes) -> AIExtraction:
@@ -121,7 +137,9 @@ class OpenAIExtractor:
 
     def _run_recipe(self, system: str, content: str | list[dict[str, Any]]) -> AIExtraction:
         payload, input_tokens, output_tokens, billed = self._call_tool(
-            system, content, tool_name=_RECIPE_TOOL,
+            system,
+            content,
+            tool_name=_RECIPE_TOOL,
             description="Record the recipe found in the text or photo.",
             schema=ExtractedRecipe.model_json_schema(),
         )
@@ -130,11 +148,17 @@ class OpenAIExtractor:
         except Exception as exc:
             raise AIError(
                 f"model output failed schema validation: {exc}",
-                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_micros=billed,
             ) from exc
         return AIExtraction(
-            recipe=recipe, provider=self.provider, model=self.model,
-            input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+            recipe=recipe,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_micros=billed,
         )
 
     def _call_tool(
@@ -182,7 +206,9 @@ class OpenAIExtractor:
         if payload is None:
             raise AIError(
                 f"model did not return the {tool_name} function call",
-                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_micros=billed,
             )
         return payload, input_tokens, output_tokens, billed
 

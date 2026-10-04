@@ -7,6 +7,16 @@
   <a href="/chat/new" class="btn-secondary">New chat</a>
 </header>
 
+{% if conversations|length > 1 or (conversations and conversations[0].id != conversation_id) %}
+<nav class="chat-history no-print" aria-label="Older chats">
+  <span class="muted">Chats:</span>
+  {% for c in conversations %}
+  <a href="/chat?c={{ c.id }}"{% if c.id == conversation_id %} aria-current="page" class="active"{% endif %}>{{ c.title or 'Chat' }}
+    <span class="muted">{{ c.updated_at[:10] }}</span></a>
+  {% endfor %}
+</nav>
+{% endif %}
+
 {% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
 {% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 
@@ -24,7 +34,8 @@
 <div class="chat-thread">
   {% for m in messages %}
   <div class="chat-msg chat-{{ m.role }}">
-    <p class="chat-bubble">{{ m.content }}</p>
+    {% if m.role == 'assistant' %}<div class="chat-bubble chat-md">{{ m.content | markdown }}</div>
+    {% else %}<p class="chat-bubble">{{ m.content }}</p>{% endif %}
     {% for p in proposals.get(m.id, []) %}
     <div class="card proposal proposal-{{ p.status }}">
       <div class="proposal-head">

@@ -52,9 +52,7 @@ def home(
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
-    return render(
-        request, "home.html", active_nav="home", user=user, home=discovery.home(db)
-    )
+    return render(request, "home.html", active_nav="home", user=user, home=discovery.home(db))
 
 
 def _int_param(raw: str | None) -> int | None:
@@ -124,7 +122,11 @@ def _filter_chips(
 
     def url(**changed: Any) -> str:
         base: dict[str, Any] = {
-            "query": query, "tags": tags, "tier": tier, "maxmin": maxmin, "rating": rating,
+            "query": query,
+            "tags": tags,
+            "tier": tier,
+            "maxmin": maxmin,
+            "rating": rating,
         }
         base.update(changed)
         return library_url("/cookbook", **base)
@@ -145,9 +147,7 @@ def _filter_chips(
     # A tag that is filtered on but outside the top-N chips still needs a way off.
     known = {tc.name.lower() for tc in tag_counts}
     chips += [
-        Chip(tag, url(tags=_toggled(tags, tag)), True)
-        for tag in tags
-        if tag.lower() not in known
+        Chip(tag, url(tags=_toggled(tags, tag)), True) for tag in tags if tag.lower() not in known
     ]
     return chips
 
@@ -173,8 +173,12 @@ def _render_library(
     extra: dict[str, Any] | None = None,
 ) -> Response:
     filters: dict[str, Any] = {
-        "status": status, "query": query, "tags": tags, "tier": tier,
-        "max_minutes": _int_param(maxmin), "min_rating": _int_param(rating),
+        "status": status,
+        "query": query,
+        "tags": tags,
+        "tier": tier,
+        "max_minutes": _int_param(maxmin),
+        "min_rating": _int_param(rating),
     }
     total = recipe_service.count_recipes(db, **filters)
     page_size = recipe_service.PAGE_SIZE
@@ -202,23 +206,45 @@ def _render_library(
         filter_rating=rating or "",
         chips=_filter_chips(
             recipe_service.list_tags(db, status=status) if status == "cookbook" else [],
-            tags=accepted, tier=tier or "", maxmin=maxmin or "", rating=rating or "",
+            tags=accepted,
+            tier=tier or "",
+            maxmin=maxmin or "",
+            rating=rating or "",
             query=query or "",
-        ) if status == "cookbook" else [],
+        )
+        if status == "cookbook"
+        else [],
         total=total,
         page=page,
         pages=pages,
         showing_from=0 if total == 0 else (page - 1) * page_size + 1,
         showing_to=min(total, page * page_size),
         prev_url=library_url(
-            path, query=query or "", tags=accepted, tier=tier or "", maxmin=maxmin or "",
-            rating=rating or "", page=page - 1,
-        ) if page > 1 else "",
+            path,
+            query=query or "",
+            tags=accepted,
+            tier=tier or "",
+            maxmin=maxmin or "",
+            rating=rating or "",
+            page=page - 1,
+        )
+        if page > 1
+        else "",
         next_url=library_url(
-            path, query=query or "", tags=accepted, tier=tier or "", maxmin=maxmin or "",
-            rating=rating or "", page=page + 1,
-        ) if page < pages else "",
-        notice=notice, error=error, undo=undo, undo_kind=undo_kind,
+            path,
+            query=query or "",
+            tags=accepted,
+            tier=tier or "",
+            maxmin=maxmin or "",
+            rating=rating or "",
+            page=page + 1,
+        )
+        if page < pages
+        else "",
+        notice=notice,
+        error=error,
+        undo=undo,
+        undo_kind=undo_kind,
         status_code=status_code,
         **(extra or {}),
     )
@@ -258,8 +284,16 @@ def _inbox_response(
     # Delegates so the paging context is assembled in exactly one place: browse.html now needs
     # a page/total/prev/next set, and a second hand-built context is where one goes missing.
     return _render_library(
-        request, db, user, "inbox", "Inbox", query, page=page,
-        notice=notice, undo=undo, undo_kind=undo_kind,
+        request,
+        db,
+        user,
+        "inbox",
+        "Inbox",
+        query,
+        page=page,
+        notice=notice,
+        undo=undo,
+        undo_kind=undo_kind,
         status_code=status_code,
         extra={"ingest_error": error, **_jobs_context(db)},
     )
@@ -458,11 +492,19 @@ def _unpaged_context(count: int) -> dict[str, Any]:
     tests, not on the family's phone.
     """
     return {
-        "coverage": {}, "chips": [], "filter_tags": [],
-        "filter_tier": "", "filter_maxmin": "", "filter_rating": "",
-        "total": count, "page": 1, "pages": 1,
-        "showing_from": 1 if count else 0, "showing_to": count,
-        "prev_url": "", "next_url": "",
+        "coverage": {},
+        "chips": [],
+        "filter_tags": [],
+        "filter_tier": "",
+        "filter_maxmin": "",
+        "filter_rating": "",
+        "total": count,
+        "page": 1,
+        "pages": 1,
+        "showing_from": 1 if count else 0,
+        "showing_to": count,
+        "prev_url": "",
+        "next_url": "",
     }
 
 
@@ -488,21 +530,47 @@ def cookbook(
             db, status="cookbook", limit=recipe_service.PAGE_SIZE
         )
         return render(
-            request, "recipes/browse.html", active_nav="cookbook", user=user,
-            tab_title="Cookbook", status="cookbook", query="", stale_sort=True,
-            recipes=stale, **_unpaged_context(len(stale)),
+            request,
+            "recipes/browse.html",
+            active_nav="cookbook",
+            user=user,
+            tab_title="Cookbook",
+            status="cookbook",
+            query="",
+            stale_sort=True,
+            recipes=stale,
+            **_unpaged_context(len(stale)),
         )
     if sort == "useitup":
         use_it_up = matching.use_it_up(db)
         return render(
-            request, "recipes/browse.html", active_nav="cookbook", user=user,
-            tab_title="Cookbook", status="cookbook", query="", use_it_up=use_it_up,
-            recipes=[], **_unpaged_context(len(use_it_up)),
+            request,
+            "recipes/browse.html",
+            active_nav="cookbook",
+            user=user,
+            tab_title="Cookbook",
+            status="cookbook",
+            query="",
+            use_it_up=use_it_up,
+            recipes=[],
+            **_unpaged_context(len(use_it_up)),
         )
     return _render_library(
-        request, db, user, "cookbook", "Cookbook", q,
-        tags=tag or (), tier=tier, maxmin=maxmin, rating=rating, page=page,
-        notice=notice, error=error, undo=undo, undo_kind=undo_kind,
+        request,
+        db,
+        user,
+        "cookbook",
+        "Cookbook",
+        q,
+        tags=tag or (),
+        tier=tier,
+        maxmin=maxmin,
+        rating=rating,
+        page=page,
+        notice=notice,
+        error=error,
+        undo=undo,
+        undo_kind=undo_kind,
     )
 
 
@@ -517,15 +585,17 @@ def can_make(
     accepted = recipe_service.normalize_tag_filters(tag or ())
     tag_counts = recipe_service.list_tags(db, status="cookbook")
     return render(
-        request, "recipes/can_make.html", active_nav="cookbook", user=user,
-        groups=discovery.can_make(db, tags=accepted, query=q), query=q or "",
+        request,
+        "recipes/can_make.html",
+        active_nav="cookbook",
+        user=user,
+        groups=discovery.can_make(db, tags=accepted, query=q),
+        query=q or "",
         filter_tags=accepted,
         chips=[
             Chip(
                 tc.name,
-                library_url(
-                    "/can-make", query=q or "", tags=_toggled(accepted, tc.name)
-                ),
+                library_url("/can-make", query=q or "", tags=_toggled(accepted, tc.name)),
                 any(t.lower() == tc.name.lower() for t in accepted),
             )
             for tc in tag_counts
@@ -542,5 +612,3 @@ def archive(
     user: User = Depends(current_user),
 ) -> Response:
     return _render_library(request, db, user, "archived", "Archive", q, page=page)
-
-

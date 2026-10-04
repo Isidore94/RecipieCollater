@@ -58,17 +58,22 @@ def index(
     list_id = shopping.active_list(db)
     remaining, total = shopping.counts(db, list_id)
     return render(
-        request, "shopping/index.html", active_nav="shopping", user=user,
-        aisles=shopping.grouped(db, list_id), remaining=remaining, total=total,
+        request,
+        "shopping/index.html",
+        active_nav="shopping",
+        user=user,
+        aisles=shopping.grouped(db, list_id),
+        remaining=remaining,
+        total=total,
         reminders_text=shopping.to_reminders_text(db, list_id),
-        sources=shopping.sources_by_item(db, list_id), notice=notice, error=error,
+        sources=shopping.sources_by_item(db, list_id),
+        notice=notice,
+        error=error,
     )
 
 
 @router.get("/badge")
-def badge(
-    db: sqlite3.Connection = Depends(get_db), user: User = Depends(current_user)
-) -> Response:
+def badge(db: sqlite3.Connection = Depends(get_db), user: User = Depends(current_user)) -> Response:
     """htmx fragment: the unchecked-items count for the nav tab (empty when zero).
 
     The slot re-arms its own listener on every swap so an inline check-off elsewhere on the
@@ -144,7 +149,10 @@ def plan(
     user: User = Depends(current_user),
 ) -> Response:
     return render(
-        request, "shopping/plan.html", active_nav="shopping", user=user,
+        request,
+        "shopping/plan.html",
+        active_nav="shopping",
+        user=user,
         cookbook=recipes.list_recipes(db, status="cookbook"),
         inbox=recipes.list_recipes(db, status="inbox"),
     )
@@ -204,8 +212,12 @@ def restock(
             "Nothing on the list is tracked in the pantry, so there is nothing to put away."
         )
     return render(
-        request, "shopping/restock.html", active_nav="shopping", user=user,
-        candidates=candidates, locations=pantry.list_locations(db),
+        request,
+        "shopping/restock.html",
+        active_nav="shopping",
+        user=user,
+        candidates=candidates,
+        locations=pantry.list_locations(db),
     )
 
 
@@ -220,12 +232,8 @@ async def restock_apply(
         restock_ids = {
             int(v) for v in form.getlist("restock") if isinstance(v, str) and v.isdigit()
         }
-        create_ids = {
-            int(v) for v in form.getlist("create") if isinstance(v, str) and v.isdigit()
-        }
-        seen_ids = {
-            int(v) for v in form.getlist("seen") if isinstance(v, str) and v.isdigit()
-        }
+        create_ids = {int(v) for v in form.getlist("create") if isinstance(v, str) and v.isdigit()}
+        seen_ids = {int(v) for v in form.getlist("seen") if isinstance(v, str) and v.isdigit()}
         location_raw = _str(form, "create_location")
         location_id = int(location_raw) if location_raw.isdigit() else None
         create_locations: dict[int, int] = {}
@@ -234,9 +242,14 @@ async def restock_apply(
             if per_line.isdigit():
                 create_locations[item_id] = int(per_line)
     summary = shopping.apply_restock(
-        db, shopping.active_list(db), restock_item_ids=restock_ids,
-        create_item_ids=create_ids, create_location_id=location_id,
-        create_locations=create_locations, clear_item_ids=seen_ids or None, user_id=user.id,
+        db,
+        shopping.active_list(db),
+        restock_item_ids=restock_ids,
+        create_item_ids=create_ids,
+        create_location_id=location_id,
+        create_locations=create_locations,
+        clear_item_ids=seen_ids or None,
+        user_id=user.id,
     )
     notice = f"Pantry updated: {', '.join(summary)}" if summary else "List cleared"
     return _notice_redirect(notice)
@@ -258,8 +271,11 @@ async def set_purchase(
     async with request.form() as form:
         try:
             shopping.set_purchase_info(
-                db, food_id, quantity_text=_str(form, "quantity") or None,
-                unit=_str(form, "unit") or None, label=_str(form, "label") or None,
+                db,
+                food_id,
+                quantity_text=_str(form, "quantity") or None,
+                unit=_str(form, "unit") or None,
+                label=_str(form, "label") or None,
             )
         except shopping.ShoppingError as exc:
             return _notice_redirect(error=str(exc))
@@ -285,9 +301,14 @@ async def toggle(
             return HTMLResponse("")
         remaining, total = shopping.counts(db, list_id)
         response = render(
-            request, "shopping/_row_swap.html", user=user, item=item,
+            request,
+            "shopping/_row_swap.html",
+            user=user,
+            item=item,
             sources=shopping.sources_by_item(db, list_id),
-            remaining=remaining, total=total, oob=True,
+            remaining=remaining,
+            total=total,
+            oob=True,
         )
         response.headers["HX-Trigger"] = "rc:shopping-changed"
         return response

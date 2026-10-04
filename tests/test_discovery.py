@@ -24,10 +24,12 @@ def _recipe(
     rid = recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title=title, base_servings="4", tier=tier, tags=tags or [],
+            title=title,
+            base_servings="4",
+            tier=tier,
+            tags=tags or [],
             ingredients=[
-                recipes.IngredientInput(quantity_text="1", unit="each", food=f)
-                for f in foods_list
+                recipes.IngredientInput(quantity_text="1", unit="each", food=f) for f in foods_list
             ],
         ),
     )
@@ -94,9 +96,8 @@ def test_missing_ingredient_suggests_learned_and_family_subs(
     rid = _recipe(migrated_db, "Bake", ["buttermilk"], status="cookbook")
     _stock(migrated_db, "milk")
     buttermilk = next(
-        int(r["id"]) for r in migrated_db.execute(
-            "SELECT id FROM foods WHERE name = 'buttermilk'"
-        ).fetchall()
+        int(r["id"])
+        for r in migrated_db.execute("SELECT id FROM foods WHERE name = 'buttermilk'").fetchall()
     )
     foods_service.record_substitute(migrated_db, buttermilk, "milk")
     cov = matching.recipe_coverage(migrated_db, rid)
@@ -135,14 +136,17 @@ def test_foods_screen_routes(admin_client: TestClient, migrated_db: sqlite3.Conn
     seed_core_units(migrated_db)
     _recipe(migrated_db, "Bread", ["flour"], status="inbox")
     assert admin_client.get("/foods").status_code == 200
-    food_id = int(
-        migrated_db.execute("SELECT id FROM foods WHERE name = 'flour'").fetchone()["id"]
-    )
+    food_id = int(migrated_db.execute("SELECT id FROM foods WHERE name = 'flour'").fetchone()["id"])
     resp = admin_client.post(
         f"/foods/{food_id}/details",
-        data={"category": "Baking", "purchase_label": "bag", "purchase_quantity": "2",
-              "purchase_unit": "kg"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        data={
+            "category": "Baking",
+            "purchase_label": "bag",
+            "purchase_quantity": "2",
+            "purchase_unit": "kg",
+        },
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     row = migrated_db.execute(
@@ -156,16 +160,17 @@ def test_trip_and_restock_routes(admin_client: TestClient, migrated_db: sqlite3.
     rid = _recipe(migrated_db, "Omelette", ["eggs"], status="cookbook")
     assert admin_client.get("/shopping/plan").status_code == 200
     resp = admin_client.post(
-        "/shopping/plan/preview", data={"recipe": str(rid)},
+        "/shopping/plan/preview",
+        data={"recipe": str(rid)},
         headers=SAME_ORIGIN,
     )
     assert resp.status_code == 200 and "eggs" in resp.text
-    eggs_id = int(
-        migrated_db.execute("SELECT id FROM foods WHERE name = 'eggs'").fetchone()["id"]
-    )
+    eggs_id = int(migrated_db.execute("SELECT id FROM foods WHERE name = 'eggs'").fetchone()["id"])
     resp = admin_client.post(
-        "/shopping/plan/apply", data={"recipe": str(rid), "line": f"f:{eggs_id}"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        "/shopping/plan/apply",
+        data={"recipe": str(rid), "line": f"f:{eggs_id}"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     # check something off, then the restock review renders

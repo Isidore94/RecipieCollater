@@ -74,8 +74,13 @@ def test_within_budget_flips_when_daily_cap_reached(migrated_db: sqlite3.Connect
     settings = config.get_settings()  # default daily cap $1.00 = 1_000_000 micro-USD
     assert ai_usage.within_budget(migrated_db, settings) is True
     ai_usage.log_usage(
-        migrated_db, provider="anthropic", model="m", operation="extract_web",
-        job_id=None, cost_micros=1_000_000, status="ok",
+        migrated_db,
+        provider="anthropic",
+        model="m",
+        operation="extract_web",
+        job_id=None,
+        cost_micros=1_000_000,
+        status="ok",
     )
     assert ai_usage.within_budget(migrated_db, settings) is False
 

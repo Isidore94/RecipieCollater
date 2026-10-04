@@ -84,10 +84,15 @@ def test_step_ingredients_scope_to_the_step(migrated_db: sqlite3.Connection) -> 
 def test_record_cook_logs_promotes_and_feeds_times(migrated_db: sqlite3.Connection) -> None:
     rid = _recipe(migrated_db)  # status defaults to inbox
     log_id = cooking.record_cook(
-        migrated_db, rid,
+        migrated_db,
+        rid,
         cooking.CookCaptureInput(
-            rating=8, servings_made="4", active_minutes=25, elapsed_minutes=40,
-            notes="kids loved it", promote=True,
+            rating=8,
+            servings_made="4",
+            active_minutes=25,
+            elapsed_minutes=40,
+            notes="kids loved it",
+            promote=True,
         ),
         user_id=None,
     )
@@ -140,9 +145,13 @@ def test_record_cook_snapshots_round_to_package_scaled(migrated_db: sqlite3.Conn
             base_servings="4",
             ingredients=[
                 recipes.IngredientInput(
-                    original_text="300 g tomatoes", quantity_text="300", unit="grams",
-                    food="tomatoes", scaling_mode="round_to_package",
-                    package_quantity_text="400", package_unit="grams",
+                    original_text="300 g tomatoes",
+                    quantity_text="300",
+                    unit="grams",
+                    food="tomatoes",
+                    scaling_mode="round_to_package",
+                    package_quantity_text="400",
+                    package_unit="grams",
                 )
             ],
             steps=[recipes.StepInput(instruction="Simmer.")],

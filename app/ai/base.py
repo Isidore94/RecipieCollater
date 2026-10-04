@@ -33,8 +33,7 @@ EXTRACT_SYSTEM = (
     "what the cook says and does, paraphrased into clear ordered steps - that is extraction, "
     "not invention; ingredient amounts must still come from stated quantities. "
     "If a field is absent, omit it. Copy each ingredient line verbatim into original_text. "
-    "If the text contains no recipe, return a title with empty ingredients and steps."
-    + TAG_GUIDE
+    "If the text contains no recipe, return a title with empty ingredients and steps." + TAG_GUIDE
 )
 
 # System prompt for drafting a recipe from a cook's plain-language description (manual entry).
@@ -87,7 +86,10 @@ ASSISTANT_SYSTEM = (
     "as JSON: the household's hard constraints (allergies, exclusions - NEVER propose a recipe "
     "that violates these), soft preferences, a pantry summary, a set of CANDIDATE recipes (each "
     "with an id, title, tags, time, and pantry coverage), and the target week. "
-    "Answer in a warm, brief, practical voice. "
+    "conversation_history holds the latest earlier turns of this chat (oldest first); use it "
+    "to resolve follow-ups like 'make Tuesday vegetarian', but candidate_recipes and "
+    "pantry_on_hand are always the current truth. "
+    "Answer in a warm, brief, practical voice. Light Markdown (short lists, bold) is fine in message. "
     "When the user wants a plan, propose meal_plan.entries using ONLY candidate recipe ids "
     "(day_index 0=Monday..6=Sunday within the target week); you may add note entries "
     "(recipe_id null, note set) for leftovers or eating out. Respect stated counts, tiers, and "

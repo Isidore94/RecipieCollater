@@ -30,7 +30,10 @@ def dashboard(
     admin: User = Depends(require_admin),
 ) -> Response:
     return render(
-        request, "admin/dashboard.html", active_nav=None, user=admin,
+        request,
+        "admin/dashboard.html",
+        active_nav=None,
+        user=admin,
         stats=admin_stats.gather(db, get_settings()),
     )
 
@@ -168,7 +171,9 @@ def set_user_pin(
     # way to discover it. Confirming is the only check available.
     if pin_confirm and pin != pin_confirm:
         return _render_devices(
-            request, db, admin,
+            request,
+            db,
+            admin,
             error=f"{target.name}: the two PINs do not match. Nothing was changed.",
         )
     try:

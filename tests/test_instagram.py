@@ -38,8 +38,12 @@ class _FakeExtractor:
 
         self.seen.append(content)
         return AIExtraction(
-            recipe=self._recipe, provider=self.provider, model=self.model,
-            input_tokens=500, output_tokens=100, cost_micros=900,
+            recipe=self._recipe,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=500,
+            output_tokens=100,
+            cost_micros=900,
         )
 
 
@@ -189,7 +193,9 @@ def test_pipeline_ingests_public_reel_via_embed(
     config.reset_settings_cache()
     job, _ = ingest.enqueue_job(migrated_db, "https://www.instagram.com/reel/ABC123xyz/")
     data = instagram.InstagramData(
-        shortcode="ABC123xyz", caption=_CAPTION, author="chefspam",
+        shortcode="ABC123xyz",
+        caption=_CAPTION,
+        author="chefspam",
         thumbnail_url="https://cdn.test/thumb.jpg",
     )
     monkeypatch.setattr("app.services.instagram.fetch", lambda shortcode: data)

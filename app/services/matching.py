@@ -82,8 +82,7 @@ def _sub_suggestions(conn: sqlite3.Connection, food_id: int) -> list[SubSuggesti
     seen: set[str] = set()
     for option in foods.substitutes_for(conn, food_id):
         have = bool(
-            option.substitute_food_id is not None
-            and _pantry_has(conn, option.substitute_food_id)
+            option.substitute_food_id is not None and _pantry_has(conn, option.substitute_food_id)
         )
         key = option.substitute_text.lower()
         if key not in seen:
@@ -152,11 +151,7 @@ def batch_coverage(
     ).fetchall()
     counts: dict[int, tuple[int, int, list[MissingIngredient]]] = {}
     for r in rows:
-        if (
-            r["food_id"] is None
-            or r["quantity_text"] is None
-            or r["scaling_mode"] == "to_taste"
-        ):
+        if r["food_id"] is None or r["quantity_text"] is None or r["scaling_mode"] == "to_taste":
             continue
         have, total, missing = counts.get(int(r["recipe_id"]), (0, 0, []))
         total += 1

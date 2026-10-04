@@ -5,6 +5,25 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### The assistant remembers, and stops showing asterisks (2026-10-04)
+
+No schema change: migration 014 already had the tables. Two things the usability review
+(Tier 2.10) caught. Open `/chat` the next day and the conversation was effectively gone, and
+anything the model wrote with `**bold**` or a `-` list showed up as raw punctuation.
+
+- **History.** Conversations are per user now (the old "latest conversation" was global), the
+  page reloads the newest one with each proposal where it was made and whether it was accepted,
+  dismissed or still pending, and Accept/Dismiss return you to the same chat. "New chat" starts a
+  fresh thread, reusing an empty one instead of stacking blanks, and a small strip lists older
+  chats. Posting into someone else's conversation id falls back to your own.
+- **Context window.** Each turn still makes one structured request (no streaming, no tool loop;
+  adapters untouched, OpenAI `store: false` unchanged). Earlier turns ride along in the JSON as
+  `conversation_history`: last 10 messages, each clipped to 1,500 characters, total capped at
+  6,000, oldest dropped first.
+- **Markdown.** Replies render through `app/services/markdown_safe.py`, an escape-first allowlist
+  (paragraphs, lists, bold/italic/code, http(s) links with `rel="noopener noreferrer"`; headings
+  flatten to bold). No raw HTML survives and `javascript:` links lose the link. No new dependency.
+
 ### Tags that survive a big cookbook (2026-08-01)
 
 Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into

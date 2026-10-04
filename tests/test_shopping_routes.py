@@ -14,7 +14,9 @@ from tests.conftest import SAME_ORIGIN
 def test_shopping_page_and_manual_add(admin_client: TestClient) -> None:
     assert admin_client.get("/shopping").status_code == 200
     resp = admin_client.post(
-        "/shopping/add", data={"text": "paper towels"}, headers=SAME_ORIGIN,
+        "/shopping/add",
+        data={"text": "paper towels"},
+        headers=SAME_ORIGIN,
         follow_redirects=False,
     )
     assert resp.status_code == 303
@@ -29,14 +31,17 @@ def test_add_from_recipe_route(admin_client: TestClient, migrated_db: sqlite3.Co
     rid = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Bread", base_servings="4",
+            title="Bread",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="200", unit="grams", food="flour")],
         ),
     )
     detail = recipes.get_recipe(migrated_db, rid)
     assert detail is not None
     resp = admin_client.post(
-        f"/shopping/from-recipe/{detail.slug}", data={"servings": "4"}, headers=SAME_ORIGIN,
+        f"/shopping/from-recipe/{detail.slug}",
+        data={"servings": "4"},
+        headers=SAME_ORIGIN,
         follow_redirects=False,
     )
     assert resp.status_code == 303

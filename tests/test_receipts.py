@@ -135,8 +135,12 @@ class _FakeProvider:
     def receipt(self, content: str, *, image_jpeg: bytes | None = None) -> AIReceipt:
         self.prompts.append(content)
         return AIReceipt(
-            receipt=ExtractedReceipt(items=self.items), provider=self.provider,
-            model=self.model, input_tokens=10, output_tokens=5, cost_micros=1,
+            receipt=ExtractedReceipt(items=self.items),
+            provider=self.provider,
+            model=self.model,
+            input_tokens=10,
+            output_tokens=5,
+            cost_micros=1,
         )
 
     def extract(self, content: str, *, source_url: str) -> Any:  # pragma: no cover
@@ -159,11 +163,17 @@ def test_capture_matches_known_foods_and_flags_new(
         migrated_db,
         pantry.PantryItemInput(display_name="Black beans", location_id=loc, food="black beans"),
     )
-    provider = _FakeProvider(items=[
-        ExtractedReceiptItem(original_text="KS ORG BLK BNS 8CT", food="black beans",
-                             quantity_text="2", size_text="15 oz"),
-        ExtractedReceiptItem(original_text="XYZ MYSTERY SNACK", food="mystery snack"),
-    ])
+    provider = _FakeProvider(
+        items=[
+            ExtractedReceiptItem(
+                original_text="KS ORG BLK BNS 8CT",
+                food="black beans",
+                quantity_text="2",
+                size_text="15 oz",
+            ),
+            ExtractedReceiptItem(original_text="XYZ MYSTERY SNACK", food="mystery snack"),
+        ]
+    )
     _use_provider(monkeypatch, provider)
 
     result = receipts.capture(migrated_db, text="pasted order")
@@ -187,35 +197,46 @@ def test_apply_restocks_learns_and_checks_off(
     rice_item = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Rice", location_id=loc, quantity_mode="exact",
-            food="rice", quantity_text="100", unit="grams",
+            display_name="Rice",
+            location_id=loc,
+            quantity_mode="exact",
+            food="rice",
+            quantity_text="100",
+            unit="grams",
         ),
     )
     # a shopping line for rice that the purchase should check off
     rid = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Fried rice", base_servings="4",
+            title="Fried rice",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="900", unit="grams", food="rice")],
         ),
     )
     lst = shopping.active_list(migrated_db)
     shopping.add_from_recipe(migrated_db, lst, rid)
 
-    provider = _FakeProvider(items=[
-        ExtractedReceiptItem(original_text="JASMINE RICE", food="rice",
-                             quantity_text="1", size_text="2 kg"),
-        ExtractedReceiptItem(original_text="KS ORG CHKPEAS", food="chickpeas"),
-    ])
+    provider = _FakeProvider(
+        items=[
+            ExtractedReceiptItem(
+                original_text="JASMINE RICE", food="rice", quantity_text="1", size_text="2 kg"
+            ),
+            ExtractedReceiptItem(original_text="KS ORG CHKPEAS", food="chickpeas"),
+        ]
+    )
     _use_provider(monkeypatch, provider)
     captured = receipts.capture(migrated_db, text="order")
     assert captured.receipt_id is not None
 
     summary = receipts.apply(
-        migrated_db, captured.receipt_id,
-        included_line_ids={line.line_id for line in receipts.review(
-            migrated_db, captured.receipt_id).lines},
-        food_names={}, track_location_id=loc,
+        migrated_db,
+        captured.receipt_id,
+        included_line_ids={
+            line.line_id for line in receipts.review(migrated_db, captured.receipt_id).lines
+        },
+        food_names={},
+        track_location_id=loc,
     )
     assert any("Rice" in s for s in summary)
 
@@ -234,10 +255,16 @@ def test_apply_restocks_learns_and_checks_off(
     # rice got checked off the shopping list
     assert all(i.checked for i in shopping.list_items(migrated_db, lst) if i.food_id)
     # idempotent: a re-POST applies nothing
-    assert receipts.apply(
-        migrated_db, captured.receipt_id, included_line_ids={1}, food_names={},
-        track_location_id=loc,
-    ) == []
+    assert (
+        receipts.apply(
+            migrated_db,
+            captured.receipt_id,
+            included_line_ids={1},
+            food_names={},
+            track_location_id=loc,
+        )
+        == []
+    )
 
 
 def test_apply_per_line_location_overrides_receipt_default(
@@ -246,10 +273,12 @@ def test_apply_per_line_location_overrides_receipt_default(
     seed_core_units(migrated_db)
     pantry_loc = pantry.create_location(migrated_db, "Pantry")
     freezer = pantry.create_location(migrated_db, "Freezer", is_freezer=True)
-    provider = _FakeProvider(items=[
-        ExtractedReceiptItem(original_text="KS ORG CHKPEAS", food="chickpeas"),
-        ExtractedReceiptItem(original_text="GV PEAS FROZEN", food="frozen peas"),
-    ])
+    provider = _FakeProvider(
+        items=[
+            ExtractedReceiptItem(original_text="KS ORG CHKPEAS", food="chickpeas"),
+            ExtractedReceiptItem(original_text="GV PEAS FROZEN", food="frozen peas"),
+        ]
+    )
     _use_provider(monkeypatch, provider)
     captured = receipts.capture(migrated_db, text="order")
     assert captured.receipt_id is not None
@@ -258,14 +287,15 @@ def test_apply_per_line_location_overrides_receipt_default(
 
     # default is the pantry; the frozen-peas line is overridden to the freezer
     receipts.apply(
-        migrated_db, captured.receipt_id,
-        included_line_ids={li.line_id for li in lines}, food_names={},
-        track_location_id=pantry_loc, line_locations={peas_line: freezer},
+        migrated_db,
+        captured.receipt_id,
+        included_line_ids={li.line_id for li in lines},
+        food_names={},
+        track_location_id=pantry_loc,
+        line_locations={peas_line: freezer},
     )
 
-    chickpeas = pantry.items_for_food(
-        migrated_db, _food_id_by_name(migrated_db, "chickpeas")
-    )
+    chickpeas = pantry.items_for_food(migrated_db, _food_id_by_name(migrated_db, "chickpeas"))
     peas = pantry.items_for_food(migrated_db, _food_id_by_name(migrated_db, "frozen peas"))
     assert chickpeas and chickpeas[0].location_id == pantry_loc
     assert peas and peas[0].location_id == freezer
@@ -282,17 +312,22 @@ def test_learned_alias_matches_next_receipt_deterministically(
 ) -> None:
     seed_core_units(migrated_db)
     loc = pantry.create_location(migrated_db, "Pantry")
-    provider = _FakeProvider(items=[
-        ExtractedReceiptItem(original_text="KS ORG BLK BNS", food="organic black beans canned"),
-    ])
+    provider = _FakeProvider(
+        items=[
+            ExtractedReceiptItem(original_text="KS ORG BLK BNS", food="organic black beans canned"),
+        ]
+    )
     _use_provider(monkeypatch, provider)
     first = receipts.capture(migrated_db, text="trip 1")
     assert first.receipt_id is not None
     # the user corrects the model's over-specific name to the household word at apply time
     line_id = receipts.review(migrated_db, first.receipt_id).lines[0].line_id
     receipts.apply(
-        migrated_db, first.receipt_id, included_line_ids={line_id},
-        food_names={line_id: "black beans"}, track_location_id=loc,
+        migrated_db,
+        first.receipt_id,
+        included_line_ids={line_id},
+        food_names={line_id: "black beans"},
+        track_location_id=loc,
     )
     # trip 2: same store text, model now proposes something else entirely - the ALIAS wins
     provider.items = [
@@ -337,15 +372,19 @@ def test_receipt_routes_roundtrip(
 ) -> None:
     seed_core_units(migrated_db)
     pantry.create_location(migrated_db, "Pantry")
-    provider = _FakeProvider(items=[
-        ExtractedReceiptItem(original_text="BREAD WW", food="bread"),
-    ])
+    provider = _FakeProvider(
+        items=[
+            ExtractedReceiptItem(original_text="BREAD WW", food="bread"),
+        ]
+    )
     _use_provider(monkeypatch, provider)
 
     assert admin_client.get("/receipts/new").status_code == 200
     resp = admin_client.post(
-        "/receipts", data={"order_text": "1 Whole Wheat Bread"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        "/receipts",
+        data={"order_text": "1 Whole Wheat Bread"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     review_url = resp.headers["location"]
@@ -356,9 +395,9 @@ def test_receipt_routes_roundtrip(
     line_id = receipts.review(migrated_db, receipt_id).lines[0].line_id
     apply_resp = admin_client.post(
         f"/receipts/{receipt_id}/apply",
-        data={"line": str(line_id), f"food_{line_id}": "bread",
-              "track_location": "1"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        data={"line": str(line_id), f"food_{line_id}": "bread", "track_location": "1"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert apply_resp.status_code == 303 and "/pantry" in apply_resp.headers["location"]
     row = migrated_db.execute("SELECT status FROM receipts WHERE id = ?", (receipt_id,)).fetchone()

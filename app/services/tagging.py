@@ -51,8 +51,13 @@ def suggest_tags(conn: sqlite3.Connection, recipe_id: int) -> TagResult:
         return TagResult(recipe_id, detail.title, [], error="no AI provider configured")
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_OPERATION,
-            job_id=None, status="blocked", error="daily or monthly AI spend cap reached",
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_OPERATION,
+            job_id=None,
+            status="blocked",
+            error="daily or monthly AI spend cap reached",
         )
         return TagResult(recipe_id, detail.title, [], error="AI spend cap reached")
 
@@ -61,16 +66,29 @@ def suggest_tags(conn: sqlite3.Connection, recipe_id: int) -> TagResult:
         result = provider.extract(content, source_url=detail.source_url or "manual://recipe")
     except ai.AIError as exc:
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_OPERATION,
-            job_id=None, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
-            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_OPERATION,
+            job_id=None,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros,
+            status="error",
+            error=str(exc)[:500],
         )
         return TagResult(recipe_id, detail.title, [], error=str(exc))
 
     ai_usage.log_usage(
-        conn, provider=result.provider, model=result.model, operation=_OPERATION,
-        job_id=None, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
-        cost_micros=result.cost_micros, status="ok",
+        conn,
+        provider=result.provider,
+        model=result.model,
+        operation=_OPERATION,
+        job_id=None,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros,
+        status="ok",
     )
     return TagResult(recipe_id, detail.title, _normalize(list(result.recipe.tags)))
 

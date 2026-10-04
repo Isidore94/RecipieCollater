@@ -34,9 +34,7 @@ def new_form(
     error: str | None = None,
     user: User = Depends(current_user),
 ) -> Response:
-    return render(
-        request, "receipts/new.html", active_nav="pantry", user=user, error=error
-    )
+    return render(request, "receipts/new.html", active_nav="pantry", user=user, error=error)
 
 
 @router.post("")
@@ -76,8 +74,12 @@ def review(
     except receipts.ReceiptError:
         return RedirectResponse("/receipts/new", status_code=303)
     return render(
-        request, "receipts/review.html", active_nav="pantry", user=user,
-        review=data, locations=pantry.list_locations(db),
+        request,
+        "receipts/review.html",
+        active_nav="pantry",
+        user=user,
+        review=data,
+        locations=pantry.list_locations(db),
     )
 
 
@@ -90,9 +92,7 @@ async def apply(
     _: None = Depends(require_csrf),
 ) -> Response:
     async with request.form() as form:
-        included = {
-            int(v) for v in form.getlist("line") if isinstance(v, str) and v.isdigit()
-        }
+        included = {int(v) for v in form.getlist("line") if isinstance(v, str) and v.isdigit()}
         names: dict[int, str] = {}
         line_locations: dict[int, int] = {}
         for line_id in included:
@@ -104,8 +104,13 @@ async def apply(
         location_id = int(location_raw) if location_raw.isdigit() else None
     try:
         summary = receipts.apply(
-            db, receipt_id, included_line_ids=included, food_names=names,
-            track_location_id=location_id, line_locations=line_locations, user_id=user.id,
+            db,
+            receipt_id,
+            included_line_ids=included,
+            food_names=names,
+            track_location_id=location_id,
+            line_locations=line_locations,
+            user_id=user.id,
         )
     except receipts.ReceiptError:
         return RedirectResponse("/receipts/new", status_code=303)

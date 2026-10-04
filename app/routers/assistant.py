@@ -23,33 +23,53 @@ from app.templating import render
 router = APIRouter(prefix="/chat")
 
 
+def _chat_url(db: sqlite3.Connection, proposal_id: int, query: str = "") -> str:
+    """Back to the conversation a proposal lives in, not merely the latest one."""
+    cid = assistant.proposal_conversation(db, proposal_id)
+    params = ([f"c={cid}"] if cid else []) + ([query] if query else [])
+    return "/chat" + ("?" + "&".join(params) if params else "")
+
+
 def _str(form: FormData, key: str) -> str:
     raw = form.get(key)
     return raw.strip() if isinstance(raw, str) else ""
 
 
 def _render(
-    request: Request, db: sqlite3.Connection, user: User, conversation_id: int,
-    notice: str | None = None, error: str | None = None,
+    request: Request,
+    db: sqlite3.Connection,
+    user: User,
+    conversation_id: int,
+    notice: str | None = None,
+    error: str | None = None,
 ) -> Response:
     return render(
-        request, "chat/index.html", active_nav="chat", user=user,
+        request,
+        "chat/index.html",
+        active_nav="chat",
+        user=user,
         conversation_id=conversation_id,
         messages=assistant.list_messages(db, conversation_id),
         proposals=assistant.list_proposals(db, conversation_id),
-        notice=notice, error=error,
+        conversations=assistant.list_conversations(db, user.id),
+        notice=notice,
+        error=error,
     )
 
 
 @router.get("")
 def index(
     request: Request,
+    c: int | None = None,
     notice: str | None = None,
     error: str | None = None,
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
-    conversation_id = assistant.get_or_create_conversation(db, user_id=user.id)
+    if c is not None and assistant.conversation_visible(db, c, user.id):
+        conversation_id = c
+    else:
+        conversation_id = assistant.get_or_create_conversation(db, user_id=user.id)
     return _render(request, db, user, conversation_id, notice=notice, error=error)
 
 
@@ -62,16 +82,17 @@ async def message(
 ) -> Response:
     async with request.form() as form:
         conversation_raw = _str(form, "conversation_id")
-        conversation_id = (
-            int(conversation_raw) if conversation_raw.isdigit()
-            else assistant.get_or_create_conversation(db, user_id=user.id)
-        )
+        conversation_id = int(conversation_raw) if conversation_raw.isdigit() else 0
+        if not assistant.conversation_visible(db, conversation_id, user.id):
+            conversation_id = assistant.get_or_create_conversation(db, user_id=user.id)
         result = assistant.ask(db, conversation_id, _str(form, "message"), user_id=user.id)
     # ask() surfaces setup problems (no AI key, empty message, spend cap) via .error rather
     # than persisting an assistant turn - show it instead of redirecting to a silent page.
     if result.error:
-        return RedirectResponse(f"/chat?error={quote(result.error)}", status_code=303)
-    return RedirectResponse("/chat", status_code=303)
+        return RedirectResponse(
+            f"/chat?c={conversation_id}&error={quote(result.error)}", status_code=303
+        )
+    return RedirectResponse(f"/chat?c={conversation_id}", status_code=303)
 
 
 @router.get("/new")
@@ -79,8 +100,8 @@ def new_chat(
     db: sqlite3.Connection = Depends(get_db),
     user: User = Depends(current_user),
 ) -> Response:
-    assistant.start_conversation(db, user_id=user.id)
-    return RedirectResponse("/chat", status_code=303)
+    conversation_id = assistant.new_chat(db, user_id=user.id)
+    return RedirectResponse(f"/chat?c={conversation_id}", status_code=303)
 
 
 @router.post("/proposal/{proposal_id}/accept")
@@ -95,9 +116,11 @@ async def accept(
         summary = assistant.accept_proposal(db, proposal_id, user_id=user.id)
     except assistant.AssistantError as exc:
         # Silently redirecting left the proposal pending with no sign anything had happened.
-        return RedirectResponse(f"/chat?error={quote(str(exc))}", status_code=303)
+        return RedirectResponse(
+            _chat_url(db, proposal_id, f"error={quote(str(exc))}"), status_code=303
+        )
     notice = "Applied: " + ", ".join(summary) if summary else "Applied"
-    return RedirectResponse(f"/chat?notice={quote(notice)}", status_code=303)
+    return RedirectResponse(_chat_url(db, proposal_id, f"notice={quote(notice)}"), status_code=303)
 
 
 @router.post("/proposal/{proposal_id}/dismiss")
@@ -109,4 +132,4 @@ async def dismiss(
     _: None = Depends(require_csrf),
 ) -> Response:
     assistant.dismiss_proposal(db, proposal_id)
-    return RedirectResponse("/chat", status_code=303)
+    return RedirectResponse(_chat_url(db, proposal_id), status_code=303)

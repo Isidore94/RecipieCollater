@@ -252,10 +252,27 @@ wakeLock branch could throw without falling through to the video.
 Both undos are single-shot, like the pantry and cook-batch ones: a replayed request is refused
 rather than applied twice.
 
+## Then fixed (fifth pass) — the assistant remembers, and reads like prose
+
+**Tier 2.10 — FIXED.** Two complaints, one screen.
+1. **No history.** The tables already existed (migration 014), so no migration: conversations are
+   now per user (the old global "latest conversation" meant one person's chat appeared on another's
+   phone), `/chat` reloads the newest one with every proposal inline in its accepted / dismissed /
+   pending state, "New chat" starts a fresh thread (and reuses an empty one rather than piling up
+   blanks), and a strip of older chats links back into any of them via `/chat?c=ID`. The model now
+   sees a bounded window of prior turns (last 10 messages, each clipped, whole window capped at
+   about 6,000 characters, oldest dropped first) as `conversation_history` inside the existing
+   single JSON request, so "make Tuesday vegetarian" works. Still one structured request per
+   turn: no streaming, no tool loop, adapters untouched.
+2. **Literal markdown.** Replies now go through an allowlist renderer
+   (`app/services/markdown_safe.py`): it escapes everything first, then emits only paragraphs,
+   line breaks, lists, bold/italic/code and http(s) links with `rel="noopener noreferrer"`.
+   Headings flatten to bold paragraphs; `<script>`, raw HTML and `javascript:` links come out as
+   inert text. Nothing model-written is ever marked `|safe`.
+
 ## Still open
 - **Trip planner does not scale** (Tier 2.9) — every recipe as a checkbox, no search.
 - **Receipts can still be stranded** (Tier 2.7) — no receipts index to find a pending one.
-- **Assistant has no conversation history** (Tier 2.10), and replies render markdown literally.
 - **No global search or "+" affordance**, and no motion anywhere (Tier 3).
 - From the docs-vs-code gap analysis: big-event mode, re-extract comparison, the embedded
   per-step video player, and structured after-cook quantities remain unbuilt.

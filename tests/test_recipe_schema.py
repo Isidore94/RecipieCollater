@@ -44,14 +44,15 @@ def test_recipe_round_trip_and_cascade(migrated_db: sqlite3.Connection) -> None:
     )
     migrated_db.commit()
 
-    title = migrated_db.execute(
-        "SELECT title FROM recipes WHERE id = ?", (recipe_id,)
-    ).fetchone()["title"]
+    title = migrated_db.execute("SELECT title FROM recipes WHERE id = ?", (recipe_id,)).fetchone()[
+        "title"
+    ]
     assert title == "Pasta"
 
     # Deleting the recipe cascades to its steps, ingredients, links, and tag links.
     migrated_db.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
     migrated_db.commit()
+
     def count(sql: str) -> int:
         return int(migrated_db.execute(sql, (recipe_id,)).fetchone()[0])
 

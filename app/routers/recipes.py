@@ -140,8 +140,12 @@ def _blank(value: object) -> object:
 def _ing_rows_from_views(views: tuple[recipes.IngredientView, ...]) -> list[dict[str, str]]:
     return [
         {
-            "section": v.section or "", "qty": v.quantity_text or "", "unit": v.unit_name or "",
-            "food": v.food_name or "", "note": v.note or "", "scaling": v.scaling_mode,
+            "section": v.section or "",
+            "qty": v.quantity_text or "",
+            "unit": v.unit_name or "",
+            "food": v.food_name or "",
+            "note": v.note or "",
+            "scaling": v.scaling_mode,
         }
         for v in views
     ]
@@ -150,8 +154,12 @@ def _ing_rows_from_views(views: tuple[recipes.IngredientView, ...]) -> list[dict
 def _ing_rows_from_inputs(inputs: list[recipes.IngredientInput]) -> list[dict[str, str]]:
     return [
         {
-            "section": i.section or "", "qty": i.quantity_text or "", "unit": i.unit or "",
-            "food": i.food or "", "note": i.note or "", "scaling": i.scaling_mode,
+            "section": i.section or "",
+            "qty": i.quantity_text or "",
+            "unit": i.unit or "",
+            "food": i.food or "",
+            "note": i.note or "",
+            "scaling": i.scaling_mode,
         }
         for i in inputs
     ]
@@ -173,10 +181,17 @@ def _model(
     tags_text: str = "",
 ) -> dict[str, Any]:
     model: dict[str, Any] = {
-        "title": title, "tldr": tldr, "description": description, "tier": tier,
-        "base_servings": base_servings, "servings_text": servings_text,
-        "source_url": source_url, "source_name": source_name,
-        "ingredients": ingredients or [], "steps_text": steps_text, "tags_text": tags_text,
+        "title": title,
+        "tldr": tldr,
+        "description": description,
+        "tier": tier,
+        "base_servings": base_servings,
+        "servings_text": servings_text,
+        "source_url": source_url,
+        "source_name": source_name,
+        "ingredients": ingredients or [],
+        "steps_text": steps_text,
+        "tags_text": tags_text,
     }
     model.update(times or {"prep": "", "cook": "", "total": "", "active": "", "elapsed": ""})
     return model
@@ -184,13 +199,19 @@ def _model(
 
 def _model_from_detail(detail: recipes.RecipeDetail) -> dict[str, Any]:
     return _model(
-        title=detail.title, tldr=detail.tldr or "", description=detail.description or "",
-        tier=detail.tier or "", base_servings=detail.base_servings,
-        servings_text=detail.servings_text or "", source_url=detail.source_url or "",
+        title=detail.title,
+        tldr=detail.tldr or "",
+        description=detail.description or "",
+        tier=detail.tier or "",
+        base_servings=detail.base_servings,
+        servings_text=detail.servings_text or "",
+        source_url=detail.source_url or "",
         source_name=detail.source_name or "",
         times={
-            "prep": _blank(detail.prep_minutes), "cook": _blank(detail.cook_minutes),
-            "total": _blank(detail.total_minutes), "active": _blank(detail.active_minutes),
+            "prep": _blank(detail.prep_minutes),
+            "cook": _blank(detail.cook_minutes),
+            "total": _blank(detail.total_minutes),
+            "active": _blank(detail.active_minutes),
             "elapsed": _blank(detail.elapsed_minutes),
         },
         ingredients=_ing_rows_from_views(detail.ingredients),
@@ -201,13 +222,19 @@ def _model_from_detail(detail: recipes.RecipeDetail) -> dict[str, Any]:
 
 def _model_from_input(data: recipes.RecipeInput) -> dict[str, Any]:
     return _model(
-        title=data.title, tldr=data.tldr or "", description=data.description or "",
-        tier=data.tier or "", base_servings=data.base_servings,
-        servings_text=data.servings_text or "", source_url=data.source_url or "",
+        title=data.title,
+        tldr=data.tldr or "",
+        description=data.description or "",
+        tier=data.tier or "",
+        base_servings=data.base_servings,
+        servings_text=data.servings_text or "",
+        source_url=data.source_url or "",
         source_name=data.source_name or "",
         times={
-            "prep": _blank(data.prep_minutes), "cook": _blank(data.cook_minutes),
-            "total": _blank(data.total_minutes), "active": _blank(data.active_minutes),
+            "prep": _blank(data.prep_minutes),
+            "cook": _blank(data.cook_minutes),
+            "total": _blank(data.total_minutes),
+            "active": _blank(data.active_minutes),
             "elapsed": _blank(data.elapsed_minutes),
         },
         ingredients=_ing_rows_from_inputs(data.ingredients),
@@ -229,8 +256,12 @@ def _model_from_extracted(extracted: ExtractedRecipe) -> dict[str, Any]:
         source_name=extracted.source_name,
         ingredients=[
             recipes.IngredientInput(
-                original_text=i.original_text, section=i.section, quantity_text=i.quantity_text,
-                unit=i.unit, food=(i.food or i.original_text or None), note=i.note,
+                original_text=i.original_text,
+                section=i.section,
+                quantity_text=i.quantity_text,
+                unit=i.unit,
+                food=(i.food or i.original_text or None),
+                note=i.note,
             )
             for i in extracted.ingredients
         ],
@@ -258,10 +289,21 @@ def _render_form(
     status_code: int = 200,
 ) -> Response:
     return render(
-        request, "recipes/form.html", user=user, action=action, form=model, heading=heading,
-        blank_rows=_BLANK_ROWS, error=error, notice=notice, show_draft=show_draft,
-        draft_description=draft_description, cancel_href=cancel_href, status_code=status_code,
-        tag_vocabulary=tag_vocabulary.VOCABULARY, tag_cuisines=tag_vocabulary.EXAMPLE_CUISINES,
+        request,
+        "recipes/form.html",
+        user=user,
+        action=action,
+        form=model,
+        heading=heading,
+        blank_rows=_BLANK_ROWS,
+        error=error,
+        notice=notice,
+        show_draft=show_draft,
+        draft_description=draft_description,
+        cancel_href=cancel_href,
+        status_code=status_code,
+        tag_vocabulary=tag_vocabulary.VOCABULARY,
+        tag_cuisines=tag_vocabulary.EXAMPLE_CUISINES,
     )
 
 
@@ -288,13 +330,25 @@ async def draft(
     result = ai_draft.draft_from_description(db, description)
     if result.recipe is None:
         return _render_form(
-            request, user, action="/recipes/new", model=_model(), heading="New recipe",
-            error=result.error, show_draft=True, draft_description=description, status_code=400,
+            request,
+            user,
+            action="/recipes/new",
+            model=_model(),
+            heading="New recipe",
+            error=result.error,
+            show_draft=True,
+            draft_description=description,
+            status_code=400,
         )
     return _render_form(
-        request, user, action="/recipes/new", model=_model_from_extracted(result.recipe),
-        heading="New recipe", notice="Drafted with AI - review the details below, then Save.",
-        show_draft=True, draft_description=description,
+        request,
+        user,
+        action="/recipes/new",
+        model=_model_from_extracted(result.recipe),
+        heading="New recipe",
+        notice="Drafted with AI - review the details below, then Save.",
+        show_draft=True,
+        draft_description=description,
     )
 
 
@@ -311,18 +365,34 @@ async def photo_draft(
         image = await upload.read() if isinstance(upload, UploadFile) and upload.filename else None
     if not image:
         return _render_form(
-            request, user, action="/recipes/new", model=_model(), heading="New recipe",
-            error="Choose a photo of the recipe first.", show_draft=True, status_code=400,
+            request,
+            user,
+            action="/recipes/new",
+            model=_model(),
+            heading="New recipe",
+            error="Choose a photo of the recipe first.",
+            show_draft=True,
+            status_code=400,
         )
     result = ai_draft.draft_from_photo(db, image)
     if result.recipe is None:
         return _render_form(
-            request, user, action="/recipes/new", model=_model(), heading="New recipe",
-            error=result.error, show_draft=True, status_code=400,
+            request,
+            user,
+            action="/recipes/new",
+            model=_model(),
+            heading="New recipe",
+            error=result.error,
+            show_draft=True,
+            status_code=400,
         )
     return _render_form(
-        request, user, action="/recipes/new", model=_model_from_extracted(result.recipe),
-        heading="New recipe", notice="Read from your photo - review the details below, then Save.",
+        request,
+        user,
+        action="/recipes/new",
+        model=_model_from_extracted(result.recipe),
+        heading="New recipe",
+        notice="Read from your photo - review the details below, then Save.",
         show_draft=True,
     )
 
@@ -340,8 +410,13 @@ async def create(
             recipe_id = recipes.create_recipe(db, data, created_by=user.id)
         except ValueError as exc:
             return _render_form(
-                request, user, action="/recipes/new", model=_model_from_input(data),
-                heading="New recipe", error=str(exc), status_code=400,
+                request,
+                user,
+                action="/recipes/new",
+                model=_model_from_input(data),
+                heading="New recipe",
+                error=str(exc),
+                status_code=400,
             )
         image_path = await _save_image(recipe_id, _image_upload(form))
         if image_path:
@@ -383,12 +458,18 @@ def view(
         return flash.redirect("/inbox", error="That recipe no longer exists.")
     target = _safe_servings(servings, detail.base_servings)
     return render(
-        request, "recipes/view.html", user=user, recipe=detail,
-        scaled=recipes.scale_ingredients(detail, target), servings=target,
-        base_servings=detail.base_servings, presets=_presets(detail.base_servings),
+        request,
+        "recipes/view.html",
+        user=user,
+        recipe=detail,
+        scaled=recipes.scale_ingredients(detail, target),
+        servings=target,
+        base_servings=detail.base_servings,
+        presets=_presets(detail.base_servings),
         cook_log=cooking.list_cook_log(db, detail.id),
         coverage=matching.recipe_coverage(db, detail.id),
-        notice=notice, error=error,
+        notice=notice,
+        error=error,
     )
 
 
@@ -405,9 +486,15 @@ def ingredients_fragment(
         return Response(status_code=404)
     target = _safe_servings(servings, detail.base_servings)
     return render(
-        request, "recipes/_scale_swap.html", user=user, recipe=detail,
-        scaled=recipes.scale_ingredients(detail, target), servings=target,
-        base_servings=detail.base_servings, presets=_presets(detail.base_servings), oob=True,
+        request,
+        "recipes/_scale_swap.html",
+        user=user,
+        recipe=detail,
+        scaled=recipes.scale_ingredients(detail, target),
+        servings=target,
+        base_servings=detail.base_servings,
+        presets=_presets(detail.base_servings),
+        oob=True,
     )
 
 
@@ -461,8 +548,12 @@ def edit_form(
     if detail is None:
         return RedirectResponse("/inbox", status_code=303)
     return _render_form(
-        request, user, action=f"/recipes/{slug}/edit", model=_model_from_detail(detail),
-        heading=f"Edit: {detail.title}", cancel_href=f"/recipes/{slug}",
+        request,
+        user,
+        action=f"/recipes/{slug}/edit",
+        model=_model_from_detail(detail),
+        heading=f"Edit: {detail.title}",
+        cancel_href=f"/recipes/{slug}",
     )
 
 
@@ -483,9 +574,14 @@ async def update(
             recipes.update_recipe(db, detail.id, data, saved_by=user.id)
         except ValueError as exc:
             return _render_form(
-                request, user, action=f"/recipes/{slug}/edit", model=_model_from_input(data),
-                heading=f"Edit: {detail.title}", error=str(exc),
-                cancel_href=f"/recipes/{slug}", status_code=400,
+                request,
+                user,
+                action=f"/recipes/{slug}/edit",
+                model=_model_from_input(data),
+                heading=f"Edit: {detail.title}",
+                error=str(exc),
+                cancel_href=f"/recipes/{slug}",
+                status_code=400,
             )
         image_path = await _save_image(detail.id, _image_upload(form))
         if image_path:
@@ -595,6 +691,4 @@ async def restore(
         restored = recipes.restore_recipe(db, archive_id, saved_by=user.id)
     except recipes.RecipeError as exc:
         return flash.redirect("/cookbook", error=str(exc))
-    return flash.redirect(
-        f"/recipes/{restored.slug}", notice=f"{restored.title} is back."
-    )
+    return flash.redirect(f"/recipes/{restored.slug}", notice=f"{restored.title} is back.")

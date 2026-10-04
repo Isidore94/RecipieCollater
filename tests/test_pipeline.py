@@ -39,8 +39,12 @@ class _FakeExtractor:
 
     def extract(self, content: str, *, source_url: str) -> AIExtraction:
         return AIExtraction(
-            recipe=self._recipe, provider=self.provider, model=self.model,
-            input_tokens=800, output_tokens=200, cost_micros=1234,
+            recipe=self._recipe,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=800,
+            output_tokens=200,
+            cost_micros=1234,
         )
 
 
@@ -162,8 +166,13 @@ def test_pipeline_ai_blocked_by_budget(
     job, _ = ingest.enqueue_job(migrated_db, "https://example.test/noschema2", html=plain)
     # Exhaust the daily cap ($1.00 default = 1_000_000 micro-USD) before the job runs.
     ai_usage.log_usage(
-        migrated_db, provider="anthropic", model="m", operation="extract_web",
-        job_id=None, cost_micros=5_000_000, status="ok",
+        migrated_db,
+        provider="anthropic",
+        model="m",
+        operation="extract_web",
+        job_id=None,
+        cost_micros=5_000_000,
+        status="ok",
     )
 
     def _provider(_settings: Any) -> _FakeExtractor:
@@ -214,8 +223,13 @@ def test_pipeline_youtube_extracts_via_ai(
     config.reset_settings_cache()
     job, _ = ingest.enqueue_job(migrated_db, "https://www.youtube.com/watch?v=abc123")
     data = youtube.YoutubeData(
-        video_id="abc123", title="One-Pot Chicken", description="2 cups rice...",
-        uploader="Chef", thumbnail_url=None, duration_seconds=615, captions=None,
+        video_id="abc123",
+        title="One-Pot Chicken",
+        description="2 cups rice...",
+        uploader="Chef",
+        thumbnail_url=None,
+        duration_seconds=615,
+        captions=None,
     )
     monkeypatch.setattr("app.services.youtube.fetch", lambda url: data)
     monkeypatch.setattr("app.ai.get_provider", lambda settings: _FakeExtractor(_AI_RECIPE))
@@ -271,9 +285,13 @@ def test_youtube_saves_ingredients_only_recipe(
     config.reset_settings_cache()
     job, _ = ingest.enqueue_job(migrated_db, "https://www.youtube.com/watch?v=chili123")
     data = youtube.YoutubeData(
-        video_id="chili123", title="This Chili Might Change Your Life!",
+        video_id="chili123",
+        title="This Chili Might Change Your Life!",
         description="Chili Recipe:\n3 pounds ground beef\n2 ancho chilis",
-        uploader="ThatDude", thumbnail_url=None, duration_seconds=600, captions=None,
+        uploader="ThatDude",
+        thumbnail_url=None,
+        duration_seconds=600,
+        captions=None,
     )
     monkeypatch.setattr("app.services.youtube.fetch", lambda url: data)
     no_steps = ExtractedRecipe(

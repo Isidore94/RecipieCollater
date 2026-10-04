@@ -47,8 +47,12 @@ def tonight_picks(
     ).fetchall()
     return [
         TonightPick(
-            slug=r["slug"], title=r["title"], rating=r["rating"], image_path=r["image_path"],
-            last_cooked=r["last_cooked"], cook_count=int(r["cook_count"]),
+            slug=r["slug"],
+            title=r["title"],
+            rating=r["rating"],
+            image_path=r["image_path"],
+            last_cooked=r["last_cooked"],
+            cook_count=int(r["cook_count"]),
         )
         for r in rows
     ]

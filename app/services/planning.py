@@ -144,9 +144,7 @@ def move_entry(
 ) -> None:
     """Reassign an entry to another day (tap-to-move / drag-drop target)."""
     iso = _parse_date(plan_date).isoformat()
-    row = conn.execute(
-        "SELECT slot FROM meal_plan_entries WHERE id = ?", (entry_id,)
-    ).fetchone()
+    row = conn.execute("SELECT slot FROM meal_plan_entries WHERE id = ?", (entry_id,)).fetchone()
     if row is None:
         raise PlanningError("unknown entry")
     conn.execute(
@@ -179,10 +177,15 @@ _ENTRY_SELECT = """
 
 def _to_entry(row: sqlite3.Row) -> PlanEntry:
     return PlanEntry(
-        id=int(row["id"]), plan_date=row["plan_date"], slot=row["slot"],
-        entry_type=row["entry_type"], recipe_id=row["recipe_id"],
-        recipe_slug=row["recipe_slug"], recipe_title=row["recipe_title"],
-        note_text=row["note_text"], servings_text=row["servings_text"],
+        id=int(row["id"]),
+        plan_date=row["plan_date"],
+        slot=row["slot"],
+        entry_type=row["entry_type"],
+        recipe_id=row["recipe_id"],
+        recipe_slug=row["recipe_slug"],
+        recipe_title=row["recipe_title"],
+        note_text=row["note_text"],
+        servings_text=row["servings_text"],
     )
 
 
@@ -205,7 +208,9 @@ def week_board(conn: sqlite3.Connection, start: date) -> list[DayColumn]:
         by_day.setdefault(entry.plan_date, []).append(entry)
     return [
         DayColumn(
-            plan_date=d.isoformat(), weekday=_WEEKDAYS[i], is_today=(d.isoformat() == today),
+            plan_date=d.isoformat(),
+            weekday=_WEEKDAYS[i],
+            is_today=(d.isoformat() == today),
             entries=by_day.get(d.isoformat(), []),
         )
         for i, d in enumerate(days)
@@ -272,8 +277,15 @@ def save_week_as_menu(
                (menu_id, day_index, slot, sort_order, entry_type, recipe_id, note_text,
                 servings_text)
                VALUES (?, ?, ?, 0, ?, ?, ?, ?)""",
-            (menu_id, day_index, entry.slot, entry.entry_type, entry.recipe_id,
-             entry.note_text, entry.servings_text),
+            (
+                menu_id,
+                day_index,
+                entry.slot,
+                entry.entry_type,
+                entry.recipe_id,
+                entry.note_text,
+                entry.servings_text,
+            ),
         )
     if commit:
         conn.commit()
@@ -312,13 +324,22 @@ def apply_menu_to_week(
             if row["recipe_id"] is None or recipes.get_recipe(conn, row["recipe_id"]) is None:
                 continue
             add_recipe_entry(
-                conn, target, int(row["recipe_id"]), slot=row["slot"],
-                servings_text=row["servings_text"], user_id=user_id, commit=False,
+                conn,
+                target,
+                int(row["recipe_id"]),
+                slot=row["slot"],
+                servings_text=row["servings_text"],
+                user_id=user_id,
+                commit=False,
             )
         else:
             add_note_entry(
-                conn, target, row["note_text"] or "note", slot=row["slot"],
-                user_id=user_id, commit=False,
+                conn,
+                target,
+                row["note_text"] or "note",
+                slot=row["slot"],
+                user_id=user_id,
+                commit=False,
             )
         added += 1
     if commit:
@@ -338,9 +359,7 @@ def delete_menu(conn: sqlite3.Connection, menu_id: int, *, commit: bool = True) 
 
 
 def _ical_escape(text: str) -> str:
-    return (
-        text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
-    )
+    return text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 
 def week_ical(conn: sqlite3.Connection, start: date, *, app_base_url: str = "") -> str:

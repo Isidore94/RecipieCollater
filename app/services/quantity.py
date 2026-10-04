@@ -22,9 +22,7 @@ CANONICAL_MICRO_UNIT: dict[str, str] = {
 _FRACTION_DENOMINATORS: tuple[int, ...] = (2, 3, 4, 8)
 _FRACTION_TOLERANCE = Fraction(1, 100)
 
-VALID_SCALING_MODES: frozenset[str] = frozenset(
-    {"linear", "fixed", "to_taste", "round_to_package"}
-)
+VALID_SCALING_MODES: frozenset[str] = frozenset({"linear", "fixed", "to_taste", "round_to_package"})
 
 
 class QuantityError(ValueError):

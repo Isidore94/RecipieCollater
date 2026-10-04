@@ -31,8 +31,11 @@ def _gauge_item(conn: sqlite3.Connection, food: str, gauge: str = "full") -> int
     return pantry.add_item(
         conn,
         pantry.PantryItemInput(
-            display_name=food.title(), location_id=loc, quantity_mode="gauge",
-            food=food, gauge=gauge,
+            display_name=food.title(),
+            location_id=loc,
+            quantity_mode="gauge",
+            food=food,
+            gauge=gauge,
         ),
     )
 
@@ -42,8 +45,12 @@ def _exact_item(conn: sqlite3.Connection, food: str, qty: str, unit: str) -> int
     return pantry.add_item(
         conn,
         pantry.PantryItemInput(
-            display_name=food.title(), location_id=loc, quantity_mode="exact",
-            food=food, quantity_text=qty, unit=unit,
+            display_name=food.title(),
+            location_id=loc,
+            quantity_mode="exact",
+            food=food,
+            quantity_text=qty,
+            unit=unit,
         ),
     )
 
@@ -54,8 +61,9 @@ def _exact_item(conn: sqlite3.Connection, food: str, qty: str, unit: str) -> int
 def test_measured_line_ceilings_to_purchase_packages(migrated_db: sqlite3.Connection) -> None:
     seed_core_units(migrated_db)
     rid = _recipe(migrated_db, [_ing("1500", "grams", "flour")])
-    foods.set_purchase(migrated_db, _food_id(migrated_db, "flour"), quantity_text="1",
-                       unit="kg", label="bag")
+    foods.set_purchase(
+        migrated_db, _food_id(migrated_db, "flour"), quantity_text="1", unit="kg", label="bag"
+    )
     lst = shopping.active_list(migrated_db)
     shopping.add_from_recipe(migrated_db, lst, rid)
     item = shopping.list_items(migrated_db, lst)[0]
@@ -67,8 +75,9 @@ def test_measured_line_ceilings_to_purchase_packages(migrated_db: sqlite3.Connec
 def test_purchase_dimension_mismatch_falls_back_plain(migrated_db: sqlite3.Connection) -> None:
     seed_core_units(migrated_db)
     rid = _recipe(migrated_db, [_ing("2", "cups", "flour")])  # volume
-    foods.set_purchase(migrated_db, _food_id(migrated_db, "flour"), quantity_text="1",
-                       unit="kg", label="bag")  # mass - cannot bridge without density
+    foods.set_purchase(
+        migrated_db, _food_id(migrated_db, "flour"), quantity_text="1", unit="kg", label="bag"
+    )  # mass - cannot bridge without density
     lst = shopping.active_list(migrated_db)
     shopping.add_from_recipe(migrated_db, lst, rid)
     item = shopping.list_items(migrated_db, lst)[0]
@@ -112,8 +121,9 @@ def test_staple_line_renders_purchase_words(migrated_db: sqlite3.Connection) -> 
     seed_core_units(migrated_db)
     rid = _recipe(migrated_db, [_ing("1/4", "cup", "flour")])
     _gauge_item(migrated_db, "flour", gauge="out")
-    foods.set_purchase(migrated_db, _food_id(migrated_db, "flour"), quantity_text="2",
-                       unit="kg", label="bag")
+    foods.set_purchase(
+        migrated_db, _food_id(migrated_db, "flour"), quantity_text="2", unit="kg", label="bag"
+    )
     lst = shopping.active_list(migrated_db)
     shopping.add_from_recipe(migrated_db, lst, rid)
     assert "1 bag" in shopping.list_items(migrated_db, lst)[0].label
@@ -152,8 +162,11 @@ def test_to_taste_reported_not_listed(migrated_db: sqlite3.Connection) -> None:
     seed_core_units(migrated_db)
     rid = _recipe(
         migrated_db,
-        [recipes.IngredientInput(original_text="salt to taste", food="salt",
-                                 scaling_mode="to_taste")],
+        [
+            recipes.IngredientInput(
+                original_text="salt to taste", food="salt", scaling_mode="to_taste"
+            )
+        ],
     )
     lines = shopping.plan_recipe(migrated_db, rid)
     assert [line.kind for line in lines] == ["to_taste"]
@@ -223,8 +236,11 @@ def test_restock_gauge_and_exact_and_clear(migrated_db: sqlite3.Connection) -> N
     assert by_name["rice"].action_text is not None and by_name["rice"].action_text.startswith("+")
 
     shopping.apply_restock(
-        migrated_db, lst, restock_item_ids={c.item_id for c in candidates},
-        create_item_ids=set(), create_location_id=None,
+        migrated_db,
+        lst,
+        restock_item_ids={c.item_id for c in candidates},
+        create_item_ids=set(),
+        create_location_id=None,
     )
     flour = pantry.get_item(migrated_db, flour_item)
     assert flour is not None and flour.gauge == "full"
@@ -245,8 +261,11 @@ def test_restock_can_create_new_pantry_item(migrated_db: sqlite3.Connection) -> 
     candidates = shopping.restock_candidates(migrated_db, lst)
     assert candidates[0].can_create is True
     shopping.apply_restock(
-        migrated_db, lst, restock_item_ids=set(),
-        create_item_ids={candidates[0].item_id}, create_location_id=loc,
+        migrated_db,
+        lst,
+        restock_item_ids=set(),
+        create_item_ids={candidates[0].item_id},
+        create_location_id=loc,
     )
     created = pantry.items_for_food(migrated_db, _food_id(migrated_db, "milk"))
     assert len(created) == 1 and created[0].quantity_mode == "gauge" and created[0].gauge == "full"
@@ -266,8 +285,11 @@ def test_restock_per_line_location_overrides_default(migrated_db: sqlite3.Connec
     by_food = {c.food_id: c.item_id for c in candidates}
     peas_item = by_food[_food_id(migrated_db, "peas")]
     shopping.apply_restock(
-        migrated_db, lst, restock_item_ids=set(),
-        create_item_ids={c.item_id for c in candidates}, create_location_id=fridge,
+        migrated_db,
+        lst,
+        restock_item_ids=set(),
+        create_item_ids={c.item_id for c in candidates},
+        create_location_id=fridge,
         create_locations={peas_item: freezer},
     )
     milk = pantry.items_for_food(migrated_db, _food_id(migrated_db, "milk"))
@@ -333,8 +355,12 @@ def test_restock_clear_scoped_to_presented_lines(migrated_db: sqlite3.Connection
     shopping.toggle(migrated_db, seen)
     shopping.toggle(migrated_db, late)  # checked AFTER the review form rendered
     shopping.apply_restock(
-        migrated_db, lst, restock_item_ids=set(), create_item_ids=set(),
-        create_location_id=None, clear_item_ids={seen},
+        migrated_db,
+        lst,
+        restock_item_ids=set(),
+        create_item_ids=set(),
+        create_location_id=None,
+        clear_item_ids={seen},
     )
     remaining = shopping.list_items(migrated_db, lst)
     assert [i.display_text for i in remaining] == ["eggs"]  # the unseen line survived

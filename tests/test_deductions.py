@@ -15,7 +15,6 @@ def _item(conn: sqlite3.Connection, item_id: int) -> pantry.PantryItem:
     return item
 
 
-
 def _ing(qty: str, unit: str, food: str) -> recipes.IngredientInput:
     return recipes.IngredientInput(quantity_text=qty, unit=unit, food=food)
 
@@ -30,8 +29,12 @@ def _exact_item(conn: sqlite3.Connection, loc: int, food: str, qty: str, unit: s
     return pantry.add_item(
         conn,
         pantry.PantryItemInput(
-            display_name=food.title(), location_id=loc, quantity_mode="exact",
-            food=food, quantity_text=qty, unit=unit,
+            display_name=food.title(),
+            location_id=loc,
+            quantity_mode="exact",
+            food=food,
+            quantity_text=qty,
+            unit=unit,
         ),
     )
 
@@ -79,8 +82,12 @@ def test_skips_fixed_to_taste_and_package(migrated_db: sqlite3.Connection) -> No
                 quantity_text="1", unit="tsp", food="salt", scaling_mode="fixed"
             ),
             recipes.IngredientInput(
-                quantity_text="300", unit="grams", food="flour", scaling_mode="round_to_package",
-                package_quantity_text="1", package_unit="kg",
+                quantity_text="300",
+                unit="grams",
+                food="flour",
+                scaling_mode="round_to_package",
+                package_quantity_text="1",
+                package_unit="kg",
             ),
         ],
     )

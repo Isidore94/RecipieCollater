@@ -160,14 +160,19 @@ def test_restore_brings_the_recipe_back_whole(migrated_db: sqlite3.Connection) -
     recipe_id = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Banana Bread", base_servings="4", tldr="Mash, mix, bake.",
-            cook_minutes=60, source_name="Grandma",
+            title="Banana Bread",
+            base_servings="4",
+            tldr="Mash, mix, bake.",
+            cook_minutes=60,
+            source_name="Grandma",
             ingredients=[
                 recipes.IngredientInput(quantity_text="3", food="ripe bananas"),
                 recipes.IngredientInput(quantity_text="250", unit="g", food="flour"),
             ],
-            steps=[recipes.StepInput(instruction="Mash the bananas"),
-                   recipes.StepInput(instruction="Bake for an hour")],
+            steps=[
+                recipes.StepInput(instruction="Mash the bananas"),
+                recipes.StepInput(instruction="Bake for an hour"),
+            ],
             tags=["baking", "easy"],
         ),
     )

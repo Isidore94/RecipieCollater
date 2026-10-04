@@ -16,7 +16,8 @@ def _recipe(conn: sqlite3.Connection, foods: list[str]) -> int:
     return recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title="Dish", base_servings="4",
+            title="Dish",
+            base_servings="4",
             ingredients=[
                 recipes.IngredientInput(quantity_text="1", unit="each", food=f) for f in foods
             ],
@@ -35,8 +36,11 @@ def _have(conn: sqlite3.Connection, food: str, *, expires: str | None = None) ->
     return pantry.add_item(
         conn,
         pantry.PantryItemInput(
-            display_name=food.title(), location_id=loc, quantity_mode="binary",
-            food=food, expires_on=expires,
+            display_name=food.title(),
+            location_id=loc,
+            quantity_mode="binary",
+            food=food,
+            expires_on=expires,
         ),
     )
 
@@ -58,7 +62,8 @@ def test_coverage_excludes_to_taste_and_unquantified(migrated_db: sqlite3.Connec
     rid = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Soup", base_servings="4",
+            title="Soup",
+            base_servings="4",
             ingredients=[
                 recipes.IngredientInput(quantity_text="2", unit="each", food="eggs"),
                 recipes.IngredientInput(

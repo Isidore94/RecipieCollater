@@ -18,10 +18,26 @@ from app.services.units import seed_core_units
 @pytest.mark.parametrize(
     "name",
     [
-        "avocado", "avocados", "2 avocados", "eggs", "lemon", "red onions", "bell peppers",
-        "potatoes", "sweet potatoes", "tomatoes", "cherry tomatoes", "tinned tomatoes",
-        "tin of chopped tomatoes", "jar of pesto", "chicken breasts", "sausages",
-        "loaf of bread", "bananas", "peaches", "courgettes",
+        "avocado",
+        "avocados",
+        "2 avocados",
+        "eggs",
+        "lemon",
+        "red onions",
+        "bell peppers",
+        "potatoes",
+        "sweet potatoes",
+        "tomatoes",
+        "cherry tomatoes",
+        "tinned tomatoes",
+        "tin of chopped tomatoes",
+        "jar of pesto",
+        "chicken breasts",
+        "sausages",
+        "loaf of bread",
+        "bananas",
+        "peaches",
+        "courgettes",
     ],
 )
 def test_countable_things_are_counted(name: str) -> None:
@@ -31,8 +47,19 @@ def test_countable_things_are_counted(name: str) -> None:
 @pytest.mark.parametrize(
     "name",
     [
-        "flour", "plain flour", "rice", "pasta", "olive oil", "sugar", "milk", "coconut milk",
-        "cheddar cheese", "minced beef", "greek yoghurt", "porridge oats", "maple syrup",
+        "flour",
+        "plain flour",
+        "rice",
+        "pasta",
+        "olive oil",
+        "sugar",
+        "milk",
+        "coconut milk",
+        "cheddar cheese",
+        "minced beef",
+        "greek yoghurt",
+        "porridge oats",
+        "maple syrup",
     ],
 )
 def test_bulk_staples_use_the_gauge(name: str) -> None:
@@ -42,8 +69,16 @@ def test_bulk_staples_use_the_gauge(name: str) -> None:
 @pytest.mark.parametrize(
     "name",
     [
-        "cumin", "ground cumin", "black pepper", "chilli powder", "soy sauce", "baking powder",
-        "vanilla extract", "dijon mustard", "balsamic vinegar", "ketchup",
+        "cumin",
+        "ground cumin",
+        "black pepper",
+        "chilli powder",
+        "soy sauce",
+        "baking powder",
+        "vanilla extract",
+        "dijon mustard",
+        "balsamic vinegar",
+        "ketchup",
     ],
 )
 def test_condiments_are_have_or_out(name: str) -> None:
@@ -76,9 +111,7 @@ def test_aisle_is_used_when_the_name_says_nothing() -> None:
 
 def test_a_recorded_choice_beats_the_inference(migrated_db: sqlite3.Connection) -> None:
     """A household that counts its rice must not be overruled every time."""
-    food_id = int(
-        migrated_db.execute("INSERT INTO foods (name) VALUES ('rice')").lastrowid or 0
-    )
+    food_id = int(migrated_db.execute("INSERT INTO foods (name) VALUES ('rice')").lastrowid or 0)
     assert quantity_mode.suggest(migrated_db, "rice") == quantity_mode.GAUGE
 
     quantity_mode.remember(migrated_db, food_id, quantity_mode.EXACT)
@@ -117,8 +150,13 @@ def test_an_explicit_choice_is_remembered_for_next_time(
     loc = pantry.create_location(migrated_db, "Cupboard")
     pantry.add_item(
         migrated_db,
-        pantry.PantryItemInput(display_name="Rice", location_id=loc, quantity_mode="exact",
-                               quantity_text="2", unit="each"),
+        pantry.PantryItemInput(
+            display_name="Rice",
+            location_id=loc,
+            quantity_mode="exact",
+            quantity_text="2",
+            unit="each",
+        ),
     )
     # The same food added again on 'auto' now follows the household's own answer.
     assert quantity_mode.suggest(migrated_db, "Rice") == quantity_mode.EXACT
@@ -150,8 +188,13 @@ def test_switching_a_count_to_a_gauge_carries_the_level_over(
     loc = pantry.create_location(migrated_db, "Cupboard")
     item_id = pantry.add_item(
         migrated_db,
-        pantry.PantryItemInput(display_name="Tins of beans", location_id=loc,
-                               quantity_mode="exact", quantity_text="0", unit="each"),
+        pantry.PantryItemInput(
+            display_name="Tins of beans",
+            location_id=loc,
+            quantity_mode="exact",
+            quantity_text="0",
+            unit="each",
+        ),
     )
     pantry.set_quantity_mode(migrated_db, item_id, "gauge")
     item = pantry.get_item(migrated_db, item_id)
