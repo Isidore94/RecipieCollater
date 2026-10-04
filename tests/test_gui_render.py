@@ -18,7 +18,10 @@ def _setup_world(conn: sqlite3.Connection) -> str:
     rid = recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title="Family Chili", base_servings="4", tier="family", tags=["dinner", "beef"],
+            title="Family Chili",
+            base_servings="4",
+            tier="family",
+            tags=["dinner", "beef"],
             ingredients=[
                 recipes.IngredientInput(quantity_text="500", unit="grams", food="ground beef"),
                 recipes.IngredientInput(quantity_text="200", unit="grams", food="sour cream"),
@@ -36,7 +39,8 @@ def _setup_world(conn: sqlite3.Connection) -> str:
     detail = recipes.get_recipe(conn, rid)
     assert detail is not None
     cooking.record_cook(
-        conn, rid,
+        conn,
+        rid,
         cooking.CookCaptureInput(
             rating=9,
             deviations={
@@ -97,7 +101,8 @@ def test_purchase_prompt_roundtrip(
     resp = admin_client.post(
         f"/shopping/foods/{food_id}/purchase",
         data={"label": "tub", "quantity": "250", "unit": "g"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     info = foods.get_purchase(migrated_db, food_id)
@@ -113,11 +118,10 @@ def test_food_name_cannot_break_out_of_merge_confirm(
     recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Evil", base_servings="4",
+            title="Evil",
+            base_servings="4",
             ingredients=[
-                recipes.IngredientInput(
-                    quantity_text="1", unit="each", food="x'); alert(1);//"
-                )
+                recipes.IngredientInput(quantity_text="1", unit="each", food="x'); alert(1);//")
             ],
         ),
     )
@@ -127,15 +131,15 @@ def test_food_name_cannot_break_out_of_merge_confirm(
     assert "confirm('Merge x" not in page.text  # the name never enters the JS string
 
 
-def test_inline_rename_roundtrip(
-    admin_client: TestClient, migrated_db: sqlite3.Connection
-) -> None:
+def test_inline_rename_roundtrip(admin_client: TestClient, migrated_db: sqlite3.Connection) -> None:
     slug = _setup_world(migrated_db)
     page = admin_client.get(f"/recipes/{slug}")
     assert f"/recipes/{slug}/rename" in page.text
     resp = admin_client.post(
-        f"/recipes/{slug}/rename", data={"title": "Tuesday Chili"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        f"/recipes/{slug}/rename",
+        data={"title": "Tuesday Chili"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     assert "Tuesday Chili" in admin_client.get(f"/recipes/{slug}").text

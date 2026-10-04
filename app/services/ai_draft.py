@@ -36,8 +36,13 @@ def draft_from_photo(conn: sqlite3.Connection, image: bytes) -> DraftResult:
         return DraftResult(None, "Reading a recipe photo needs an API key on the server.")
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_PHOTO_OPERATION,
-            job_id=None, status="blocked", error="daily or monthly AI spend cap reached",
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_PHOTO_OPERATION,
+            job_id=None,
+            status="blocked",
+            error="daily or monthly AI spend cap reached",
         )
         return DraftResult(None, "Today's AI spend limit has been reached - try again later.")
     try:
@@ -48,15 +53,28 @@ def draft_from_photo(conn: sqlite3.Connection, image: bytes) -> DraftResult:
         result = provider.recipe_from_photo(image_jpeg)
     except ai.AIError as exc:
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_PHOTO_OPERATION,
-            job_id=None, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
-            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_PHOTO_OPERATION,
+            job_id=None,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros,
+            status="error",
+            error=str(exc)[:500],
         )
         return DraftResult(None, "Couldn't read that photo - try a clearer, straight-on shot.")
     ai_usage.log_usage(
-        conn, provider=result.provider, model=result.model, operation=_PHOTO_OPERATION,
-        job_id=None, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
-        cost_micros=result.cost_micros, status="ok",
+        conn,
+        provider=result.provider,
+        model=result.model,
+        operation=_PHOTO_OPERATION,
+        job_id=None,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros,
+        status="ok",
     )
     if not result.recipe.ingredients:
         return DraftResult(None, "No recipe found in that photo.")
@@ -76,8 +94,13 @@ def draft_from_description(conn: sqlite3.Connection, description: str) -> DraftR
 
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_OPERATION,
-            job_id=None, status="blocked", error="daily or monthly AI spend cap reached",
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_OPERATION,
+            job_id=None,
+            status="blocked",
+            error="daily or monthly AI spend cap reached",
         )
         return DraftResult(None, "Today's AI spend limit has been reached - try again later.")
 
@@ -85,15 +108,28 @@ def draft_from_description(conn: sqlite3.Connection, description: str) -> DraftR
         result = provider.draft(text)
     except ai.AIError as exc:
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_OPERATION,
-            job_id=None, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
-            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_OPERATION,
+            job_id=None,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros,
+            status="error",
+            error=str(exc)[:500],
         )
         return DraftResult(None, "The AI couldn't draft that - add a bit more detail and retry.")
 
     ai_usage.log_usage(
-        conn, provider=result.provider, model=result.model, operation=_OPERATION,
-        job_id=None, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
-        cost_micros=result.cost_micros, status="ok",
+        conn,
+        provider=result.provider,
+        model=result.model,
+        operation=_OPERATION,
+        job_id=None,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros,
+        status="ok",
     )
     return DraftResult(result.recipe, None)

@@ -55,9 +55,16 @@ def index(
 ) -> Response:
     food_list = foods.list_foods(db, query=q)
     return render(
-        request, "foods/index.html", active_nav="pantry", user=user,
-        foods=food_list, query=q or "", notice=notice, error=error,
-        undo=undo, undo_kind=undo_kind,
+        request,
+        "foods/index.html",
+        active_nav="pantry",
+        user=user,
+        foods=food_list,
+        query=q or "",
+        notice=notice,
+        error=error,
+        undo=undo,
+        undo_kind=undo_kind,
         pending_count=sum(1 for f in food_list if f.status == "pending"),
     )
 
@@ -97,7 +104,8 @@ async def merge(
         return flash.redirect(
             _back_url(form),
             notice=f"Merged {merged.source_name} into {merged.target_name}.",
-            undo=merged.merge_id, undo_kind="merge",
+            undo=merged.merge_id,
+            undo_kind="merge",
         )
 
 
@@ -147,7 +155,9 @@ async def set_details(
         try:
             foods.set_category(db, food_id, _str(form, "category") or None)
             foods.set_purchase(
-                db, food_id, quantity_text=_str(form, "purchase_quantity") or None,
+                db,
+                food_id,
+                quantity_text=_str(form, "purchase_quantity") or None,
                 unit=_str(form, "purchase_unit") or None,
                 label=_str(form, "purchase_label") or None,
             )

@@ -335,9 +335,15 @@ def test_dashboard_restore_test_alerting(data_dir: Path) -> None:
 
         def _write(age_days: int, ok: bool) -> None:
             result = backup.RestoreTestResult(
-                tested_at=to_iso(now() - timedelta(days=age_days)), backup_id="b", ok=ok,
-                error=None if ok else "boom", recipe_count=0, manifest_recipe_count=0,
-                image_count=0, manifest_image_count=0, sampled_files=0,
+                tested_at=to_iso(now() - timedelta(days=age_days)),
+                backup_id="b",
+                ok=ok,
+                error=None if ok else "boom",
+                recipe_count=0,
+                manifest_recipe_count=0,
+                image_count=0,
+                manifest_image_count=0,
+                sampled_files=0,
             )
             settings.restore_test_path.write_text(json.dumps(asdict(result)))
 

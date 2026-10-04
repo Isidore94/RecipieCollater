@@ -10,7 +10,8 @@ from app.services.units import seed_core_units
 
 def _input(qty: str = "200") -> recipes.RecipeInput:
     return recipes.RecipeInput(
-        title="Bread", base_servings="4",
+        title="Bread",
+        base_servings="4",
         ingredients=[
             recipes.IngredientInput(quantity_text=qty, unit="grams", food="flour"),
             recipes.IngredientInput(quantity_text="1", unit="each", food="egg"),
@@ -73,7 +74,8 @@ def test_food_status_pending_vs_confirmed(migrated_db: sqlite3.Connection) -> No
     recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Imported", base_servings="4",
+            title="Imported",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="yuzu")],
         ),
         food_status="pending",
@@ -84,10 +86,9 @@ def test_food_status_pending_vs_confirmed(migrated_db: sqlite3.Connection) -> No
     recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Imported 2", base_servings="4",
-            ingredients=[
-                recipes.IngredientInput(quantity_text="1", unit="each", food="flour")
-            ],
+            title="Imported 2",
+            base_servings="4",
+            ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="flour")],
         ),
         food_status="pending",
     )
@@ -140,9 +141,7 @@ def test_set_title_renames_without_touching_slug(migrated_db: sqlite3.Connection
     with pytest.raises(recipes.RecipeError):
         recipes.set_title(migrated_db, rid, "   ")
     # the new title is searchable (FTS triggers fire on UPDATE)
-    assert any(
-        r.id == rid for r in recipes.list_recipes(migrated_db, query="weeknight bread")
-    )
+    assert any(r.id == rid for r in recipes.list_recipes(migrated_db, query="weeknight bread"))
 
 
 def test_edit_preserves_step_video_metadata(migrated_db: sqlite3.Connection) -> None:
@@ -152,7 +151,8 @@ def test_edit_preserves_step_video_metadata(migrated_db: sqlite3.Connection) -> 
     rid = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Video dish", base_servings="4",
+            title="Video dish",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="egg")],
             steps=[
                 recipes.StepInput(instruction="Sear the beef.", minutes=5, video_seconds=90),
@@ -162,9 +162,11 @@ def test_edit_preserves_step_video_metadata(migrated_db: sqlite3.Connection) -> 
     )
     # A form-shaped edit: same step text, but no metadata (the textarea only carries lines).
     recipes.update_recipe(
-        migrated_db, rid,
+        migrated_db,
+        rid,
         recipes.RecipeInput(
-            title="Video dish (renamed)", base_servings="4",
+            title="Video dish (renamed)",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="egg")],
             steps=[
                 recipes.StepInput(instruction="Sear the beef."),

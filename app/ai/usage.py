@@ -57,7 +57,16 @@ def log_usage(
            (provider, model, operation, job_id, input_tokens, output_tokens, cost_micros,
             status, error)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (provider, model, operation, job_id, input_tokens, output_tokens, cost_micros, status,
-         error),
+        (
+            provider,
+            model,
+            operation,
+            job_id,
+            input_tokens,
+            output_tokens,
+            cost_micros,
+            status,
+            error,
+        ),
     )
     conn.commit()

@@ -22,8 +22,11 @@ class _FakeProvider:
     def extract(self, content: str, *, source_url: str) -> AIExtraction:
         return AIExtraction(
             recipe=ExtractedRecipe(title="x", tags=list(self.tags)),
-            provider=self.provider, model=self.model,
-            input_tokens=10, output_tokens=5, cost_micros=1,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=10,
+            output_tokens=5,
+            cost_micros=1,
         )
 
     def draft(self, description: str) -> AIExtraction:  # pragma: no cover - unused here
@@ -34,10 +37,10 @@ def _recipe(conn: sqlite3.Connection, title: str, tags: list[str] | None = None)
     return recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title=title, base_servings="4", tags=tags or [],
-            ingredients=[
-                recipes.IngredientInput(quantity_text="1", unit="each", food="chicken")
-            ],
+            title=title,
+            base_servings="4",
+            tags=tags or [],
+            ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="chicken")],
         ),
     )
 

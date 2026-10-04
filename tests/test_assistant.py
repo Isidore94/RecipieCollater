@@ -40,8 +40,12 @@ class _FakeProvider:
         self.seen.append(content)
         resp = self.response or AssistantResponse(message="ok")
         return AIAssist(
-            response=resp, provider=self.provider, model=self.model,
-            input_tokens=100, output_tokens=50, cost_micros=10,
+            response=resp,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=100,
+            output_tokens=50,
+            cost_micros=10,
         )
 
     def extract(self, content: str, *, source_url: str) -> Any:  # pragma: no cover
@@ -65,7 +69,8 @@ def _cookbook_recipe(conn: sqlite3.Connection, title: str, food: str = "flour") 
     rid = recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title=title, base_servings="4",
+            title=title,
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="1", unit="cup", food=food)],
         ),
     )
@@ -90,14 +95,18 @@ def test_ask_persists_message_and_meal_plan_proposal(
 ) -> None:
     seed_core_units(migrated_db)
     rid = _cookbook_recipe(migrated_db, "Bowl")
-    provider = _FakeProvider(response=AssistantResponse(
-        message="Here's a plan.",
-        meal_plan=ProposedPlan(entries=[
-            ProposedPlanEntry(day_index=0, slot="dinner", recipe_id=rid, servings_text="4"),
-            ProposedPlanEntry(day_index=1, slot="dinner", recipe_id=999999),  # hallucinated
-            ProposedPlanEntry(day_index=4, note="leftovers"),
-        ]),
-    ))
+    provider = _FakeProvider(
+        response=AssistantResponse(
+            message="Here's a plan.",
+            meal_plan=ProposedPlan(
+                entries=[
+                    ProposedPlanEntry(day_index=0, slot="dinner", recipe_id=rid, servings_text="4"),
+                    ProposedPlanEntry(day_index=1, slot="dinner", recipe_id=999999),  # hallucinated
+                    ProposedPlanEntry(day_index=4, note="leftovers"),
+                ]
+            ),
+        )
+    )
     _use(monkeypatch, provider)
     conv = assistant.start_conversation(migrated_db)
     result = assistant.ask(migrated_db, conv, "plan next week", week_start=_MON)
@@ -117,10 +126,12 @@ def test_accept_meal_plan_is_idempotent(
 ) -> None:
     seed_core_units(migrated_db)
     rid = _cookbook_recipe(migrated_db, "Bowl")
-    provider = _FakeProvider(response=AssistantResponse(
-        message="Plan.",
-        meal_plan=ProposedPlan(entries=[ProposedPlanEntry(day_index=2, recipe_id=rid)]),
-    ))
+    provider = _FakeProvider(
+        response=AssistantResponse(
+            message="Plan.",
+            meal_plan=ProposedPlan(entries=[ProposedPlanEntry(day_index=2, recipe_id=rid)]),
+        )
+    )
     _use(monkeypatch, provider)
     conv = assistant.start_conversation(migrated_db)
     result = assistant.ask(migrated_db, conv, "plan", week_start=_MON)
@@ -142,16 +153,25 @@ def test_accept_pantry_update_marks_and_tracks(
     loc = pantry.create_location(migrated_db, "Pantry")
     existing = pantry.add_item(
         migrated_db,
-        pantry.PantryItemInput(display_name="Tomatoes", location_id=loc, food="tomatoes",
-                               quantity_mode="gauge", gauge="out"),
+        pantry.PantryItemInput(
+            display_name="Tomatoes",
+            location_id=loc,
+            food="tomatoes",
+            quantity_mode="gauge",
+            gauge="out",
+        ),
     )
-    provider = _FakeProvider(response=AssistantResponse(
-        message="Got it.",
-        pantry_update=ProposedPantryUpdate(changes=[
-            ProposedPantryChange(food="tomatoes", action="have"),
-            ProposedPantryChange(food="chicken thighs", action="have", location="Pantry"),
-        ]),
-    ))
+    provider = _FakeProvider(
+        response=AssistantResponse(
+            message="Got it.",
+            pantry_update=ProposedPantryUpdate(
+                changes=[
+                    ProposedPantryChange(food="tomatoes", action="have"),
+                    ProposedPantryChange(food="chicken thighs", action="have", location="Pantry"),
+                ]
+            ),
+        )
+    )
     _use(monkeypatch, provider)
     conv = assistant.start_conversation(migrated_db)
     result = assistant.ask(migrated_db, conv, "we got groceries", week_start=_MON)
@@ -174,10 +194,12 @@ def test_dismiss_blocks_accept(
 ) -> None:
     seed_core_units(migrated_db)
     rid = _cookbook_recipe(migrated_db, "Bowl")
-    provider = _FakeProvider(response=AssistantResponse(
-        message="Plan.",
-        meal_plan=ProposedPlan(entries=[ProposedPlanEntry(day_index=0, recipe_id=rid)]),
-    ))
+    provider = _FakeProvider(
+        response=AssistantResponse(
+            message="Plan.",
+            meal_plan=ProposedPlan(entries=[ProposedPlanEntry(day_index=0, recipe_id=rid)]),
+        )
+    )
     _use(monkeypatch, provider)
     conv = assistant.start_conversation(migrated_db)
     pid = assistant.ask(migrated_db, conv, "plan", week_start=_MON).proposal_ids[0]
@@ -199,15 +221,19 @@ def test_chat_routes(
 ) -> None:
     seed_core_units(migrated_db)
     rid = _cookbook_recipe(migrated_db, "Bowl")
-    provider = _FakeProvider(response=AssistantResponse(
-        message="A plan for you.",
-        meal_plan=ProposedPlan(entries=[ProposedPlanEntry(day_index=0, recipe_id=rid)]),
-    ))
+    provider = _FakeProvider(
+        response=AssistantResponse(
+            message="A plan for you.",
+            meal_plan=ProposedPlan(entries=[ProposedPlanEntry(day_index=0, recipe_id=rid)]),
+        )
+    )
     _use(monkeypatch, provider)
     assert admin_client.get("/chat").status_code == 200
     post = admin_client.post(
-        "/chat/message", data={"message": "plan my week"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        "/chat/message",
+        data={"message": "plan my week"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert post.status_code == 303
     page = admin_client.get("/chat")
@@ -220,12 +246,16 @@ def test_out_for_untracked_food_is_noop(
     """Review fix: 'out' for a food we don't track must NOT create it as on-hand."""
     seed_core_units(migrated_db)
     pantry.create_location(migrated_db, "Pantry")
-    provider = _FakeProvider(response=AssistantResponse(
-        message="ok",
-        pantry_update=ProposedPantryUpdate(changes=[
-            ProposedPantryChange(food="olive oil", action="out"),
-        ]),
-    ))
+    provider = _FakeProvider(
+        response=AssistantResponse(
+            message="ok",
+            pantry_update=ProposedPantryUpdate(
+                changes=[
+                    ProposedPantryChange(food="olive oil", action="out"),
+                ]
+            ),
+        )
+    )
     _use(monkeypatch, provider)
     conv = assistant.start_conversation(migrated_db)
     pid = assistant.ask(migrated_db, conv, "finished the oil", week_start=_MON).proposal_ids[0]
@@ -242,13 +272,18 @@ def test_add_untracked_food_with_quantity_tracks_exact(
     """Review fix: 'add 2 cans' for a new food tracks it exactly, not silently 'full'."""
     seed_core_units(migrated_db)
     pantry.create_location(migrated_db, "Pantry")
-    provider = _FakeProvider(response=AssistantResponse(
-        message="ok",
-        pantry_update=ProposedPantryUpdate(changes=[
-            ProposedPantryChange(food="canned tomatoes", action="add",
-                                 quantity_text="2", unit="each"),
-        ]),
-    ))
+    provider = _FakeProvider(
+        response=AssistantResponse(
+            message="ok",
+            pantry_update=ProposedPantryUpdate(
+                changes=[
+                    ProposedPantryChange(
+                        food="canned tomatoes", action="add", quantity_text="2", unit="each"
+                    ),
+                ]
+            ),
+        )
+    )
     _use(monkeypatch, provider)
     conv = assistant.start_conversation(migrated_db)
     pid = assistant.ask(migrated_db, conv, "got 2 cans", week_start=_MON).proposal_ids[0]
@@ -269,7 +304,10 @@ def test_chat_message_route_surfaces_error(
     """
     monkeypatch.setattr("app.ai.get_provider", lambda settings: None)
     resp = admin_client.post(
-        "/chat/message", data={"message": "plan"}, headers=SAME_ORIGIN, follow_redirects=False,
+        "/chat/message",
+        data={"message": "plan"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303 and "error=" in resp.headers["location"]
 

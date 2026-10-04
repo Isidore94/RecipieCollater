@@ -66,7 +66,9 @@ def to_recipe_input(
         ],
         steps=[
             recipes.StepInput(
-                instruction=step.instruction, section=step.section, minutes=step.minutes,
+                instruction=step.instruction,
+                section=step.section,
+                minutes=step.minutes,
                 video_seconds=step.video_seconds,
             )
             for step in extracted.steps
@@ -95,8 +97,14 @@ def apply_extraction(
     """
     if job.reextract_recipe_id is not None:
         return record_draft(
-            conn, job, extracted, extractor=extractor, provider=provider, model=model,
-            prompt_version=prompt_version, confidence=confidence,
+            conn,
+            job,
+            extracted,
+            extractor=extractor,
+            provider=provider,
+            model=model,
+            prompt_version=prompt_version,
+            confidence=confidence,
         )
     existing = conn.execute("SELECT id FROM recipes WHERE source_url = ?", (job.url,)).fetchone()
     if existing is not None:
@@ -105,8 +113,10 @@ def apply_extraction(
         # Ingested foods arrive as 'pending': matching/shopping work immediately, but auto
         # deductions wait until the food is reviewed on /foods (docs/07 pending-food chips).
         recipe_id = recipes.create_recipe(
-            conn, to_recipe_input(conn, extracted, source_type=source_type, source_url=job.url),
-            created_by=job.submitted_by, food_status="pending",
+            conn,
+            to_recipe_input(conn, extracted, source_type=source_type, source_url=job.url),
+            created_by=job.submitted_by,
+            food_status="pending",
         )
 
     cur = conn.execute(
@@ -114,8 +124,17 @@ def apply_extraction(
            (recipe_id, job_id, extractor, provider, model, prompt_version, schema_version,
             confidence, payload)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (recipe_id, job.id, extractor, provider, model, prompt_version, SCHEMA_VERSION,
-         confidence, extracted.model_dump_json()),
+        (
+            recipe_id,
+            job.id,
+            extractor,
+            provider,
+            model,
+            prompt_version,
+            SCHEMA_VERSION,
+            confidence,
+            extracted.model_dump_json(),
+        ),
     )
     run_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
     video_id = ingest.youtube_video_id(job.normalized_url)
@@ -160,8 +179,17 @@ def record_draft(
            (recipe_id, job_id, extractor, provider, model, prompt_version, schema_version,
             confidence, payload, state)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')""",
-        (recipe_id, job.id, extractor, provider, model, prompt_version, SCHEMA_VERSION,
-         confidence, extracted.model_dump_json()),
+        (
+            recipe_id,
+            job.id,
+            extractor,
+            provider,
+            model,
+            prompt_version,
+            SCHEMA_VERSION,
+            confidence,
+            extracted.model_dump_json(),
+        ),
     )
     conn.commit()
     ingest.set_status(conn, job.id, "done")
@@ -199,14 +227,18 @@ def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     """Process one ingest job to completion, recording failure categories for the inbox."""
     if job.reextract_recipe_id is not None:
         # An explicit re-read: never creates a recipe, ends in a draft run (see record_draft).
-        if conn.execute(
-            "SELECT 1 FROM extraction_runs WHERE job_id = ?", (job.id,)
-        ).fetchone() is not None:  # crash-safe replay: the draft already exists
+        if (
+            conn.execute("SELECT 1 FROM extraction_runs WHERE job_id = ?", (job.id,)).fetchone()
+            is not None
+        ):  # crash-safe replay: the draft already exists
             ingest.set_status(conn, job.id, "done")
             return
         if recipes.get_recipe(conn, job.reextract_recipe_id) is None:
             ingest.set_status(
-                conn, job.id, "failed", error_category="recipe_missing",
+                conn,
+                job.id,
+                "failed",
+                error_category="recipe_missing",
                 error_message="That recipe no longer exists.",
             )
             return
@@ -241,7 +273,10 @@ def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
         return
 
     ingest.set_status(
-        conn, job.id, "failed", error_category="no_recipe",
+        conn,
+        job.id,
+        "failed",
+        error_category="no_recipe",
         error_message="No recipe could be extracted from that page.",
     )
 
@@ -264,7 +299,10 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     """Ingest a YouTube video: description-first, captions as fallback, then LLM extraction."""
     if not get_settings().ai_enabled:
         ingest.set_status(
-            conn, job.id, "failed", error_category="youtube_needs_ai",
+            conn,
+            job.id,
+            "failed",
+            error_category="youtube_needs_ai",
             error_message="Add an Anthropic API key to import recipes from YouTube.",
         )
         return
@@ -292,14 +330,23 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     # are spoken ("half a cup") and error-prone: record 'thin' confidence so the UI nudges a review.
     confidence = "thin" if data.source_basis == "captions" else "medium"
     applied = _ai_extract_and_apply(
-        conn, job, data.prompt_text(),
-        extractor="youtube", source_type="youtube", operation="extract_youtube",
-        require_steps=False, confidence=confidence,
-        chapters=data.chapters, duration_seconds=data.duration_seconds,
+        conn,
+        job,
+        data.prompt_text(),
+        extractor="youtube",
+        source_type="youtube",
+        operation="extract_youtube",
+        require_steps=False,
+        confidence=confidence,
+        chapters=data.chapters,
+        duration_seconds=data.duration_seconds,
     )
     if not applied:
         ingest.set_status(
-            conn, job.id, "failed", error_category="no_recipe",
+            conn,
+            job.id,
+            "failed",
+            error_category="no_recipe",
             error_message="Couldn't find a recipe in that video's description or captions.",
         )
         return
@@ -330,7 +377,10 @@ def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     """
     if not get_settings().ai_enabled:
         ingest.set_status(
-            conn, job.id, "failed", error_category="instagram_needs_ai",
+            conn,
+            job.id,
+            "failed",
+            error_category="instagram_needs_ai",
             error_message="Add an AI API key to import recipes from Instagram.",
         )
         return
@@ -351,7 +401,10 @@ def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
             data = instagram.fetch(shortcode)
         except instagram.InstagramError as exc:
             ingest.set_status(
-                conn, job.id, "failed", error_category="instagram_unavailable",
+                conn,
+                job.id,
+                "failed",
+                error_category="instagram_unavailable",
                 error_message=str(exc)[:400],
             )
             return
@@ -363,13 +416,20 @@ def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     # require_steps=False for the same reason as YouTube: a reel's method is usually spoken, so an
     # ingredient list plus the source link is still worth keeping.
     applied = _ai_extract_and_apply(
-        conn, job, content,
-        extractor="instagram", source_type="web", operation="extract_instagram",
+        conn,
+        job,
+        content,
+        extractor="instagram",
+        source_type="web",
+        operation="extract_instagram",
         require_steps=False,
     )
     if not applied:
         ingest.set_status(
-            conn, job.id, "failed", error_category="no_recipe",
+            conn,
+            job.id,
+            "failed",
+            error_category="no_recipe",
             error_message="Couldn't find a recipe in that Instagram post's caption.",
         )
         return
@@ -412,8 +472,13 @@ def _ai_extract_and_apply(
         return False
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=operation,
-            job_id=job.id, status="blocked", error="daily or monthly AI spend cap reached",
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=operation,
+            job_id=job.id,
+            status="blocked",
+            error="daily or monthly AI spend cap reached",
         )
         return False
     try:
@@ -421,35 +486,57 @@ def _ai_extract_and_apply(
     except ai.AIError as exc:
         # A parse/validation failure can still have been billed - log its real cost so it counts.
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=operation,
-            job_id=job.id, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
-            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=operation,
+            job_id=job.id,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros,
+            status="error",
+            error=str(exc)[:500],
         )
         return False
     ai_usage.log_usage(
-        conn, provider=result.provider, model=result.model, operation=operation,
-        job_id=job.id, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
-        cost_micros=result.cost_micros, status="ok",
+        conn,
+        provider=result.provider,
+        model=result.model,
+        operation=operation,
+        job_id=job.id,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros,
+        status="ok",
     )
-    usable = result.recipe.is_complete() or (
-        not require_steps and bool(result.recipe.ingredients)
-    )
+    usable = result.recipe.is_complete() or (not require_steps and bool(result.recipe.ingredients))
     if not usable:
         return False
     recipe = result.recipe
     if recipe.steps:  # model timestamps if sane, else chapter-derived, else None
         seconds = youtube.assign_step_seconds(
             [step.instruction for step in recipe.steps],
-            [step.video_seconds for step in recipe.steps], chapters, duration_seconds,
+            [step.video_seconds for step in recipe.steps],
+            chapters,
+            duration_seconds,
         )
-        recipe = recipe.model_copy(update={"steps": [
-            step.model_copy(update={"video_seconds": sec})
-            for step, sec in zip(recipe.steps, seconds, strict=True)
-        ]})
+        recipe = recipe.model_copy(
+            update={
+                "steps": [
+                    step.model_copy(update={"video_seconds": sec})
+                    for step, sec in zip(recipe.steps, seconds, strict=True)
+                ]
+            }
+        )
     ingest.set_status(conn, job.id, "normalizing")
     apply_extraction(
-        conn, job, recipe, extractor=extractor,
-        provider=result.provider, model=result.model, confidence=confidence,
+        conn,
+        job,
+        recipe,
+        extractor=extractor,
+        provider=result.provider,
+        model=result.model,
+        confidence=confidence,
         source_type=source_type,
     )
     return True

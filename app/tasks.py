@@ -73,9 +73,7 @@ def process_ingest_job(job_id: int, blocked_attempt: int = 0) -> None:
             plan = ingest.plan_blocked_retry(blocked_attempt, datetime.now(UTC))
             if plan is not None:
                 ingest.mark_waiting_retry(conn, job_id, plan)
-                process_ingest_job.schedule(
-                    args=(job_id, plan.attempt), delay=plan.delay_seconds
-                )
+                process_ingest_job.schedule(args=(job_id, plan.attempt), delay=plan.delay_seconds)
                 log.info("ingest_blocked_retry_scheduled", job_id=job_id, attempt=plan.attempt)
                 return
         log.info("ingest_job_processed", job_id=job_id, status=final.status if final else "gone")
@@ -83,7 +81,10 @@ def process_ingest_job(job_id: int, blocked_attempt: int = 0) -> None:
         log.exception("ingest_job_error", job_id=job_id)
         with contextlib.suppress(Exception):
             ingest.set_status(
-                conn, job_id, "failed", error_category="worker_error",
+                conn,
+                job_id,
+                "failed",
+                error_category="worker_error",
                 error_message="An unexpected error occurred while processing this link.",
             )
         raise

@@ -175,8 +175,11 @@ class YoutubeData:
                 ],
                 "comments_used": [
                     {
-                        "text": c.text, "author": c.author, "pinned": c.pinned,
-                        "by_uploader": c.by_uploader, "like_count": c.like_count,
+                        "text": c.text,
+                        "author": c.author,
+                        "pinned": c.pinned,
+                        "by_uploader": c.by_uploader,
+                        "like_count": c.like_count,
                     }
                     for c in self.comments
                 ],
@@ -190,10 +193,13 @@ class YoutubeData:
         fetch again to bring the captions back."""
         raw = json.loads(text)
         return cls(
-            video_id=str(raw["video_id"]), title=str(raw.get("title") or ""),
-            description=str(raw.get("description") or ""), uploader=raw.get("uploader"),
+            video_id=str(raw["video_id"]),
+            title=str(raw.get("title") or ""),
+            description=str(raw.get("description") or ""),
+            uploader=raw.get("uploader"),
             thumbnail_url=raw.get("thumbnail_url"),
-            duration_seconds=_as_int(raw.get("duration_seconds")), captions=None,
+            duration_seconds=_as_int(raw.get("duration_seconds")),
+            captions=None,
         )
 
 
@@ -379,8 +385,10 @@ def assign_step_seconds(
     given: list[int | None] = []
     for index in range(count):
         value = model_seconds[index] if index < len(model_seconds) else None
-        ok = value is not None and value >= 0 and (
-            duration_seconds is None or value <= duration_seconds
+        ok = (
+            value is not None
+            and value >= 0
+            and (duration_seconds is None or value <= duration_seconds)
         )
         given.append(value if ok else None)
     if any(v is not None for v in given) or not chapters or count == 0:
@@ -477,7 +485,10 @@ def _best_effort_comments(url: str) -> list[Any]:
         from yt_dlp import YoutubeDL  # lazy: heavy, network (CONVENTIONS 4)
 
         options = {
-            "quiet": True, "no_warnings": True, "skip_download": True, "getcomments": True,
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "getcomments": True,
             "extractor_args": {"youtube": {"max_comments": _COMMENT_FETCH_LIMIT}},
         }
         with YoutubeDL(options) as ydl:

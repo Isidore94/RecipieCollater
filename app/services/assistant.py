@@ -81,9 +81,7 @@ def latest_conversation(conn: sqlite3.Connection) -> int | None:
     return int(row["id"]) if row else None
 
 
-def get_or_create_conversation(
-    conn: sqlite3.Connection, *, user_id: int | None = None
-) -> int:
+def get_or_create_conversation(conn: sqlite3.Connection, *, user_id: int | None = None) -> int:
     existing = latest_conversation(conn)
     return existing if existing is not None else start_conversation(conn, user_id=user_id)
 
@@ -110,8 +108,11 @@ def list_proposals(conn: sqlite3.Connection, conversation_id: int) -> dict[int, 
     out: dict[int, list[Proposal]] = {}
     for r in rows:
         prop = Proposal(
-            id=int(r["id"]), kind=r["kind"], status=r["status"],
-            payload=json.loads(r["payload"]), created_at=r["created_at"],
+            id=int(r["id"]),
+            kind=r["kind"],
+            status=r["status"],
+            payload=json.loads(r["payload"]),
+            created_at=r["created_at"],
         )
         out.setdefault(int(r["message_id"] or 0), []).append(prop)
     return out
@@ -141,20 +142,22 @@ def build_context(
         cov = coverage.get(summary.id)
         detail_tags = recipes.get_recipe(conn, summary.id)
         tags = list(detail_tags.tags) if detail_tags else []
-        scored.append((
-            cov.have if cov else 0,
-            summary.rating or 0,
-            summary.id,
-            {
-                "id": summary.id,
-                "title": summary.title,
-                "tags": tags,
-                "tier": summary.tier,
-                "minutes": summary.total_minutes,
-                "have": cov.have if cov else 0,
-                "need": (cov.total - cov.have) if cov else 0,
-            },
-        ))
+        scored.append(
+            (
+                cov.have if cov else 0,
+                summary.rating or 0,
+                summary.id,
+                {
+                    "id": summary.id,
+                    "title": summary.title,
+                    "tags": tags,
+                    "tier": summary.tier,
+                    "minutes": summary.total_minutes,
+                    "have": cov.have if cov else 0,
+                    "need": (cov.total - cov.have) if cov else 0,
+                },
+            )
+        )
     scored.sort(key=lambda s: (-s[0], -s[1]))
     top = scored[:_MAX_CANDIDATES]
     candidates = [c for _, _, _, c in top]
@@ -230,12 +233,21 @@ def ask(
 
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_OPERATION,
-            job_id=None, status="blocked", error="daily or monthly AI spend cap reached",
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_OPERATION,
+            job_id=None,
+            status="blocked",
+            error="daily or monthly AI spend cap reached",
         )
         return _record_assistant_message(
-            conn, conversation_id, "Today's AI spend limit has been reached - try again later.",
-            start, [], None,
+            conn,
+            conversation_id,
+            "Today's AI spend limit has been reached - try again later.",
+            start,
+            [],
+            None,
         )
 
     content, candidate_ids = build_context(conn, text, week_start=start)
@@ -243,22 +255,43 @@ def ask(
         result = provider.assist(content)
     except ai.AIError as exc:
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_OPERATION,
-            job_id=None, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
-            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_OPERATION,
+            job_id=None,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros,
+            status="error",
+            error=str(exc)[:500],
         )
         return _record_assistant_message(
-            conn, conversation_id, "Sorry - I couldn't put that together just now. Try rephrasing?",
-            start, [], None,
+            conn,
+            conversation_id,
+            "Sorry - I couldn't put that together just now. Try rephrasing?",
+            start,
+            [],
+            None,
         )
     ai_usage.log_usage(
-        conn, provider=result.provider, model=result.model, operation=_OPERATION,
-        job_id=None, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
-        cost_micros=result.cost_micros, status="ok",
+        conn,
+        provider=result.provider,
+        model=result.model,
+        operation=_OPERATION,
+        job_id=None,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros,
+        status="ok",
     )
     return _record_assistant_message(
-        conn, conversation_id, result.response.message or "Done.", start,
-        candidate_ids, result.response,
+        conn,
+        conversation_id,
+        result.response.message or "Done.",
+        start,
+        candidate_ids,
+        result.response,
     )
 
 
@@ -310,19 +343,26 @@ def _persist_proposals(
             if entry.recipe_id is not None:
                 detail = recipes.get_recipe(conn, entry.recipe_id)
                 title = detail.title if detail else None
-            entries.append({
-                "day_index": max(0, min(6, entry.day_index)),
-                "slot": (entry.slot or "dinner").strip() or "dinner",
-                "recipe_id": entry.recipe_id,
-                "title": title,
-                "note": (entry.note or "").strip() or None,
-                "servings_text": (entry.servings_text or "").strip() or None,
-            })
+            entries.append(
+                {
+                    "day_index": max(0, min(6, entry.day_index)),
+                    "slot": (entry.slot or "dinner").strip() or "dinner",
+                    "recipe_id": entry.recipe_id,
+                    "title": title,
+                    "note": (entry.note or "").strip() or None,
+                    "servings_text": (entry.servings_text or "").strip() or None,
+                }
+            )
         if entries:
-            ids.append(_insert_proposal(
-                conn, conversation_id, message_id, "meal_plan",
-                {"week_start": week_start.isoformat(), "entries": entries},
-            ))
+            ids.append(
+                _insert_proposal(
+                    conn,
+                    conversation_id,
+                    message_id,
+                    "meal_plan",
+                    {"week_start": week_start.isoformat(), "entries": entries},
+                )
+            )
     if response.pantry_update and response.pantry_update.changes:
         changes = [
             {
@@ -336,9 +376,15 @@ def _persist_proposals(
             if c.food.strip()
         ]
         if changes:
-            ids.append(_insert_proposal(
-                conn, conversation_id, message_id, "pantry_update", {"changes": changes},
-            ))
+            ids.append(
+                _insert_proposal(
+                    conn,
+                    conversation_id,
+                    message_id,
+                    "pantry_update",
+                    {"changes": changes},
+                )
+            )
     return ids
 
 
@@ -370,8 +416,11 @@ def get_proposal(conn: sqlite3.Connection, proposal_id: int) -> Proposal | None:
     if row is None:
         return None
     return Proposal(
-        id=int(row["id"]), kind=row["kind"], status=row["status"],
-        payload=json.loads(row["payload"]), created_at=row["created_at"],
+        id=int(row["id"]),
+        kind=row["kind"],
+        status=row["status"],
+        payload=json.loads(row["payload"]),
+        created_at=row["created_at"],
     )
 
 
@@ -424,8 +473,13 @@ def _apply_meal_plan(
             if recipes.get_recipe(conn, int(recipe_id)) is None:
                 continue
             planning.add_recipe_entry(
-                conn, target, int(recipe_id), slot=slot,
-                servings_text=entry.get("servings_text"), user_id=user_id, commit=False,
+                conn,
+                target,
+                int(recipe_id),
+                slot=slot,
+                servings_text=entry.get("servings_text"),
+                user_id=user_id,
+                commit=False,
             )
             detail = recipes.get_recipe(conn, int(recipe_id))
             summary.append(f"{slot.title()} {target[5:]}: {detail.title if detail else 'recipe'}")
@@ -458,20 +512,23 @@ def _apply_pantry_update(
 
         if action == "out":
             if target is not None:
-                pantry.remove_item(conn, target.id, reason="manual_remove", user_id=user_id,
-                                   commit=False)
+                pantry.remove_item(
+                    conn, target.id, reason="manual_remove", user_id=user_id, commit=False
+                )
                 summary.append(f"{target.display_name} → out")
             # An 'out' for a food we don't track is a no-op: never CREATE it as on-hand
             # (that recorded the opposite of what the user said - review finding).
             continue
         if target is not None:
             if target.quantity_mode == "gauge":
-                pantry.set_gauge(conn, target.id, "full", reason="restock", user_id=user_id,
-                                 commit=False)
+                pantry.set_gauge(
+                    conn, target.id, "full", reason="restock", user_id=user_id, commit=False
+                )
                 summary.append(f"{target.display_name} → full")
             elif target.quantity_mode == "binary":
-                pantry.set_have(conn, target.id, True, reason="restock", user_id=user_id,
-                                commit=False)
+                pantry.set_have(
+                    conn, target.id, True, reason="restock", user_id=user_id, commit=False
+                )
                 summary.append(f"{target.display_name} → have")
             else:
                 added = _add_exact(conn, target, change, user_id)
@@ -501,12 +558,19 @@ def _new_tracked_item(
             qty = ""
         if qty:
             return pantry.PantryItemInput(
-                display_name=food_name, location_id=location_id, quantity_mode="exact",
-                food=food_name, quantity_text=qty, unit=unit,
+                display_name=food_name,
+                location_id=location_id,
+                quantity_mode="exact",
+                food=food_name,
+                quantity_text=qty,
+                unit=unit,
             )
     return pantry.PantryItemInput(
-        display_name=food_name, location_id=location_id, quantity_mode=pantry.AUTO_MODE,
-        gauge="full", food=food_name,
+        display_name=food_name,
+        location_id=location_id,
+        quantity_mode=pantry.AUTO_MODE,
+        gauge="full",
+        food=food_name,
     )
 
 
@@ -555,9 +619,7 @@ def _location_by_name(conn: sqlite3.Connection, name: object) -> int | None:
     text = str(name or "").strip()
     if not text:
         return None
-    row = conn.execute(
-        "SELECT id FROM locations WHERE name = ? COLLATE NOCASE", (text,)
-    ).fetchone()
+    row = conn.execute("SELECT id FROM locations WHERE name = ? COLLATE NOCASE", (text,)).fetchone()
     return int(row["id"]) if row else None
 
 

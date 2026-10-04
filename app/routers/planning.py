@@ -74,8 +74,12 @@ def board(
     week = _week_start(start)
     remaining, _total = shopping.counts(db, shopping.active_list(db))
     return render(
-        request, "plan/board.html", active_nav="plan", user=user,
-        week_start=week.isoformat(), week_label=_week_label(week),
+        request,
+        "plan/board.html",
+        active_nav="plan",
+        user=user,
+        week_start=week.isoformat(),
+        week_label=_week_label(week),
         prev_week=(week - timedelta(days=7)).isoformat(),
         next_week=(week + timedelta(days=7)).isoformat(),
         this_week=planning.week_start().isoformat(),
@@ -83,7 +87,8 @@ def board(
         cookbook=recipes.list_recipes(db, status="cookbook"),
         menus=planning.list_menus(db),
         shopping_remaining=remaining,
-        notice=notice, error=error,
+        notice=notice,
+        error=error,
     )
 
 
@@ -103,8 +108,12 @@ async def add_entry(
         try:
             if recipe_raw.isdigit():
                 planning.add_recipe_entry(
-                    db, plan_date, int(recipe_raw), slot=slot,
-                    servings_text=_str(form, "servings") or None, user_id=user.id,
+                    db,
+                    plan_date,
+                    int(recipe_raw),
+                    slot=slot,
+                    servings_text=_str(form, "servings") or None,
+                    user_id=user.id,
                 )
             elif note:
                 planning.add_note_entry(db, plan_date, note, slot=slot, user_id=user.id)
@@ -217,6 +226,7 @@ def export_ical(
     week = _week_start(start)
     body = planning.week_ical(db, week, app_base_url=get_settings().app_base_url)
     return PlainTextResponse(
-        body, media_type="text/calendar; charset=utf-8",
+        body,
+        media_type="text/calendar; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="mealplan-{week.isoformat()}.ics"'},
     )

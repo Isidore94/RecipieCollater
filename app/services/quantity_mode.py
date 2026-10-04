@@ -33,51 +33,241 @@ BINARY = "binary"
 
 # Produce and packaged goods bought as discrete units. The plural is not listed separately;
 # matching strips a trailing "s"/"es" first.
-_COUNT_TERMS: frozenset[str] = frozenset({
-    # Produce sold by the piece
-    "avocado", "apple", "banana", "lemon", "lime", "orange", "grapefruit", "pear", "peach",
-    "plum", "nectarine", "mango", "kiwi", "pineapple", "melon", "coconut", "pomegranate",
-    "onion", "shallot", "garlic bulb", "potato", "sweet potato", "carrot", "parsnip", "turnip",
-    "beetroot", "cucumber", "courgette", "zucchini", "aubergine", "eggplant", "pepper",
-    "bell pepper", "chilli", "chili", "tomato", "corn", "corn on the cob", "cabbage",
-    "cauliflower", "broccoli", "lettuce", "leek", "celery", "fennel", "artichoke", "squash",
-    "pumpkin", "swede",
-    # Everyday countables
-    "egg", "lemon wedge", "bread", "loaf", "baguette", "bagel", "bun", "roll", "tortilla",
-    "wrap", "pitta", "pita", "naan", "muffin", "croissant", "crumpet",
-    # Packaged units
-    "tin", "can", "jar", "packet", "pack", "bottle", "carton", "box", "tub", "pot", "sachet",
-    "block", "bar", "tray", "punnet", "bag",
-    # Proteins that arrive as pieces
-    "chicken breast", "chicken thigh", "chicken leg", "drumstick", "steak", "chop", "sausage",
-    "burger", "patty", "fillet", "cutlet", "rasher",
-})
+_COUNT_TERMS: frozenset[str] = frozenset(
+    {
+        # Produce sold by the piece
+        "avocado",
+        "apple",
+        "banana",
+        "lemon",
+        "lime",
+        "orange",
+        "grapefruit",
+        "pear",
+        "peach",
+        "plum",
+        "nectarine",
+        "mango",
+        "kiwi",
+        "pineapple",
+        "melon",
+        "coconut",
+        "pomegranate",
+        "onion",
+        "shallot",
+        "garlic bulb",
+        "potato",
+        "sweet potato",
+        "carrot",
+        "parsnip",
+        "turnip",
+        "beetroot",
+        "cucumber",
+        "courgette",
+        "zucchini",
+        "aubergine",
+        "eggplant",
+        "pepper",
+        "bell pepper",
+        "chilli",
+        "chili",
+        "tomato",
+        "corn",
+        "corn on the cob",
+        "cabbage",
+        "cauliflower",
+        "broccoli",
+        "lettuce",
+        "leek",
+        "celery",
+        "fennel",
+        "artichoke",
+        "squash",
+        "pumpkin",
+        "swede",
+        # Everyday countables
+        "egg",
+        "lemon wedge",
+        "bread",
+        "loaf",
+        "baguette",
+        "bagel",
+        "bun",
+        "roll",
+        "tortilla",
+        "wrap",
+        "pitta",
+        "pita",
+        "naan",
+        "muffin",
+        "croissant",
+        "crumpet",
+        # Packaged units
+        "tin",
+        "can",
+        "jar",
+        "packet",
+        "pack",
+        "bottle",
+        "carton",
+        "box",
+        "tub",
+        "pot",
+        "sachet",
+        "block",
+        "bar",
+        "tray",
+        "punnet",
+        "bag",
+        # Proteins that arrive as pieces
+        "chicken breast",
+        "chicken thigh",
+        "chicken leg",
+        "drumstick",
+        "steak",
+        "chop",
+        "sausage",
+        "burger",
+        "patty",
+        "fillet",
+        "cutlet",
+        "rasher",
+    }
+)
 
 # Loose or bulk staples: measured by weight or volume, topped up rather than counted.
-_GAUGE_TERMS: frozenset[str] = frozenset({
-    "flour", "sugar", "rice", "pasta", "spaghetti", "noodle", "couscous", "quinoa", "bulgur",
-    "lentil", "oat", "oatmeal", "porridge", "cereal", "muesli", "granola", "breadcrumb",
-    "cornflour", "cornstarch", "semolina", "polenta",
-    "oil", "olive oil", "vegetable oil", "sunflower oil", "butter", "margarine", "lard", "ghee",
-    "milk", "cream", "yoghurt", "yogurt", "buttermilk", "coconut milk", "stock", "broth",
-    "juice", "water", "wine", "beer",
-    "salt", "cheese", "honey", "syrup", "maple syrup", "jam", "marmalade", "peanut butter",
-    "chocolate", "cocoa", "coffee", "tea", "nut", "almond", "walnut", "cashew", "pecan",
-    "raisin", "sultana", "date", "dried fruit", "seed", "spinach", "kale", "salad", "herb",
-    "mince", "minced beef", "ground beef", "bacon", "ham",
-})
+_GAUGE_TERMS: frozenset[str] = frozenset(
+    {
+        "flour",
+        "sugar",
+        "rice",
+        "pasta",
+        "spaghetti",
+        "noodle",
+        "couscous",
+        "quinoa",
+        "bulgur",
+        "lentil",
+        "oat",
+        "oatmeal",
+        "porridge",
+        "cereal",
+        "muesli",
+        "granola",
+        "breadcrumb",
+        "cornflour",
+        "cornstarch",
+        "semolina",
+        "polenta",
+        "oil",
+        "olive oil",
+        "vegetable oil",
+        "sunflower oil",
+        "butter",
+        "margarine",
+        "lard",
+        "ghee",
+        "milk",
+        "cream",
+        "yoghurt",
+        "yogurt",
+        "buttermilk",
+        "coconut milk",
+        "stock",
+        "broth",
+        "juice",
+        "water",
+        "wine",
+        "beer",
+        "salt",
+        "cheese",
+        "honey",
+        "syrup",
+        "maple syrup",
+        "jam",
+        "marmalade",
+        "peanut butter",
+        "chocolate",
+        "cocoa",
+        "coffee",
+        "tea",
+        "nut",
+        "almond",
+        "walnut",
+        "cashew",
+        "pecan",
+        "raisin",
+        "sultana",
+        "date",
+        "dried fruit",
+        "seed",
+        "spinach",
+        "kale",
+        "salad",
+        "herb",
+        "mince",
+        "minced beef",
+        "ground beef",
+        "bacon",
+        "ham",
+    }
+)
 
 # Things whose amount never drives a decision: you either have them or you have run out.
-_BINARY_TERMS: frozenset[str] = frozenset({
-    "pepper", "black pepper", "cumin", "coriander", "paprika", "turmeric", "cinnamon", "nutmeg",
-    "ginger", "oregano", "thyme", "rosemary", "basil", "bay leaf", "chilli powder",
-    "chili powder", "curry powder", "garam masala", "cayenne", "clove", "cardamom", "saffron",
-    "vanilla", "vanilla extract", "spice", "seasoning", "stock cube", "bouillon",
-    "baking powder", "baking soda", "bicarbonate of soda", "yeast", "gelatine", "gelatin",
-    "vinegar", "balsamic", "soy sauce", "fish sauce", "worcestershire", "mustard", "ketchup",
-    "mayonnaise", "mayo", "hot sauce", "tabasco", "sriracha", "tomato puree", "tomato paste",
-    "food colouring", "food coloring",
-})
+_BINARY_TERMS: frozenset[str] = frozenset(
+    {
+        "pepper",
+        "black pepper",
+        "cumin",
+        "coriander",
+        "paprika",
+        "turmeric",
+        "cinnamon",
+        "nutmeg",
+        "ginger",
+        "oregano",
+        "thyme",
+        "rosemary",
+        "basil",
+        "bay leaf",
+        "chilli powder",
+        "chili powder",
+        "curry powder",
+        "garam masala",
+        "cayenne",
+        "clove",
+        "cardamom",
+        "saffron",
+        "vanilla",
+        "vanilla extract",
+        "spice",
+        "seasoning",
+        "stock cube",
+        "bouillon",
+        "baking powder",
+        "baking soda",
+        "bicarbonate of soda",
+        "yeast",
+        "gelatine",
+        "gelatin",
+        "vinegar",
+        "balsamic",
+        "soy sauce",
+        "fish sauce",
+        "worcestershire",
+        "mustard",
+        "ketchup",
+        "mayonnaise",
+        "mayo",
+        "hot sauce",
+        "tabasco",
+        "sriracha",
+        "tomato puree",
+        "tomato paste",
+        "food colouring",
+        "food coloring",
+    }
+)
 
 # The shopping aisle is a weaker signal than the name, used only when no term matches.
 _CATEGORY_DEFAULTS: dict[str, str] = {
@@ -111,13 +301,13 @@ _LEADING_QUANTITY = re.compile(r"^\s*[\d./]+\s*[a-z]{0,4}\s+(?:of\s+)?", re.IGNO
 
 def _singular(word: str) -> str:
     if word.endswith("ies") and len(word) > 4:
-        return word[:-3] + "y"          # berries -> berry
+        return word[:-3] + "y"  # berries -> berry
     if word.endswith("oes") and len(word) > 4:
-        return word[:-2]                # potatoes -> potato, tomatoes -> tomato
+        return word[:-2]  # potatoes -> potato, tomatoes -> tomato
     if word.endswith("es") and len(word) > 3 and word[-3] in "sxzh":
-        return word[:-2]                # peaches -> peach, dishes -> dish
+        return word[:-2]  # peaches -> peach, dishes -> dish
     if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
-        return word[:-1]                # apples -> apple, but not "glass"
+        return word[:-1]  # apples -> apple, but not "glass"
     return word
 
 
@@ -193,9 +383,7 @@ def suggest(conn: sqlite3.Connection, name: str, *, food_id: int | None = None) 
     return infer(name, category=row["category"] if row is not None else None)
 
 
-def remember(
-    conn: sqlite3.Connection, food_id: int, mode: str, *, commit: bool = True
-) -> None:
+def remember(conn: sqlite3.Connection, food_id: int, mode: str, *, commit: bool = True) -> None:
     """Record that this food is tracked this way, so nothing has to guess again."""
     if mode not in (EXACT, GAUGE, BINARY):
         raise ValueError(f"unknown quantity mode: {mode!r}")

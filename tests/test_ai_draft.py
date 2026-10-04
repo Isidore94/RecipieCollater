@@ -16,8 +16,10 @@ _DRAFT = ExtractedRecipe(
     title="Grandma's Chili",
     ingredients=[
         ExtractedIngredient(
-            original_text="1 lb ground beef", quantity_text="1",
-            unit="lb", food="ground beef",
+            original_text="1 lb ground beef",
+            quantity_text="1",
+            unit="lb",
+            food="ground beef",
         ),
     ],
     steps=[
@@ -39,8 +41,12 @@ class _FakeProvider:
 
     def draft(self, description: str) -> AIExtraction:
         return AIExtraction(
-            recipe=self._recipe, provider=self.provider, model=self.model,
-            input_tokens=300, output_tokens=120, cost_micros=456,
+            recipe=self._recipe,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=300,
+            output_tokens=120,
+            cost_micros=456,
         )
 
 

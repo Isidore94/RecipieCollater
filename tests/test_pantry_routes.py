@@ -22,7 +22,6 @@ def _item(conn: sqlite3.Connection, item_id: int) -> pantry.PantryItem:
     return item
 
 
-
 def _add(conn: sqlite3.Connection, name: str, loc: int, mode: str = "gauge", **kw: object) -> int:
     return pantry.add_item(
         conn,
@@ -33,8 +32,10 @@ def _add(conn: sqlite3.Connection, name: str, loc: int, mode: str = "gauge", **k
 def test_pantry_page_and_add_location(admin_client: TestClient) -> None:
     assert admin_client.get("/pantry").status_code == 200
     resp = admin_client.post(
-        "/pantry/locations", data={"name": "Downstairs Freezer", "is_freezer": "on"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        "/pantry/locations",
+        data={"name": "Downstairs Freezer", "is_freezer": "on"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     assert "Downstairs Freezer" in admin_client.get("/pantry").text
@@ -45,7 +46,8 @@ def test_add_item_via_form(admin_client: TestClient, migrated_db: sqlite3.Connec
     resp = admin_client.post(
         "/pantry/items",
         data={"display_name": "Flour", "location_id": str(loc), "quantity_mode": "gauge"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     items = pantry.list_items(migrated_db)
@@ -58,7 +60,8 @@ def test_adjust_gauge_and_cycle(admin_client: TestClient, migrated_db: sqlite3.C
     item = _add(migrated_db, "Rice", loc)
     admin_client.post(
         f"/pantry/items/{item}/adjust",
-        data={"action": "gauge", "gauge": "out"}, headers=SAME_ORIGIN,
+        data={"action": "gauge", "gauge": "out"},
+        headers=SAME_ORIGIN,
     )
     assert _item(migrated_db, item).gauge == "out"
     admin_client.post(f"/pantry/items/{item}/adjust", data={"action": "cycle"}, headers=SAME_ORIGIN)
@@ -71,8 +74,11 @@ def test_step_exact_item(admin_client: TestClient, migrated_db: sqlite3.Connecti
     item = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Cans", location_id=loc, quantity_mode="exact",
-            quantity_text="3", unit="each",
+            display_name="Cans",
+            location_id=loc,
+            quantity_mode="exact",
+            quantity_text="3",
+            unit="each",
         ),
     )
     admin_client.post(
@@ -120,7 +126,9 @@ def test_pantry_requires_login(client: TestClient) -> None:
 def test_add_item_without_a_location_says_so(admin_client: TestClient) -> None:
     """It used to redirect silently, so the button looked broken on a fresh pantry."""
     resp = admin_client.post(
-        "/pantry/items", data={"display_name": "Olive oil"}, headers=SAME_ORIGIN,
+        "/pantry/items",
+        data={"display_name": "Olive oil"},
+        headers=SAME_ORIGIN,
         follow_redirects=False,
     )
     assert resp.status_code == 303 and "error=" in resp.headers["location"]
@@ -130,7 +138,9 @@ def test_add_item_without_a_location_says_so(admin_client: TestClient) -> None:
 
 def test_adding_a_location_confirms_it(admin_client: TestClient) -> None:
     resp = admin_client.post(
-        "/pantry/locations", data={"name": "Kitchen cupboard"}, headers=SAME_ORIGIN,
+        "/pantry/locations",
+        data={"name": "Kitchen cupboard"},
+        headers=SAME_ORIGIN,
         follow_redirects=False,
     )
     assert resp.status_code == 303 and "notice=" in resp.headers["location"]

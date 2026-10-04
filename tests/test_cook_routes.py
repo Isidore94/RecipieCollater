@@ -41,8 +41,12 @@ def test_after_cook_records_promotes_and_logs(admin_client: TestClient) -> None:
     resp = admin_client.post(
         "/recipes/stew/after-cook",
         data={
-            "rating": "9", "active_minutes": "20", "elapsed_minutes": "35",
-            "servings_made": "4", "notes": "great stew", "promote": "on",
+            "rating": "9",
+            "active_minutes": "20",
+            "elapsed_minutes": "35",
+            "servings_made": "4",
+            "notes": "great stew",
+            "promote": "on",
         },
         headers=SAME_ORIGIN,
         follow_redirects=False,

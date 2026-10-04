@@ -31,7 +31,9 @@ def _recipe(conn: sqlite3.Connection, title: str) -> int:
     return recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title=title, base_servings="4", tags=["dinner"],
+            title=title,
+            base_servings="4",
+            tags=["dinner"],
             ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="egg")],
             steps=[recipes.StepInput(instruction="Cook it.")],
         ),
@@ -46,9 +48,17 @@ def test_dashboard_gather(migrated_db: sqlite3.Connection) -> None:
     rid = _recipe(migrated_db, "Eggs")
     recipes.set_status(migrated_db, rid, "cookbook")
     from app.ai import usage as ai_usage
+
     ai_usage.log_usage(
-        migrated_db, provider="openai", model="gpt-4o-mini", operation="assist",
-        job_id=None, input_tokens=100, output_tokens=50, cost_micros=1234, status="ok",
+        migrated_db,
+        provider="openai",
+        model="gpt-4o-mini",
+        operation="assist",
+        job_id=None,
+        input_tokens=100,
+        output_tokens=50,
+        cost_micros=1234,
+        status="ok",
     )
     stats = admin_stats.gather(migrated_db, get_settings())
     assert stats.recipe_count == 1 and stats.cookbook_count == 1
@@ -66,9 +76,7 @@ def test_dashboard_route(admin_client: TestClient, migrated_db: sqlite3.Connecti
 # ---- cookbook export -------------------------------------------------------------------
 
 
-def test_export_writes_json_and_markdown(
-    migrated_db: sqlite3.Connection, tmp_path: Path
-) -> None:
+def test_export_writes_json_and_markdown(migrated_db: sqlite3.Connection, tmp_path: Path) -> None:
     seed_core_units(migrated_db)
     _recipe(migrated_db, "Cozy Soup")
     count = cookbook_export.export_all(migrated_db, tmp_path / "cb")
@@ -106,8 +114,12 @@ class _PhotoProvider:
             steps=[ExtractedStep(instruction="Brown the beef.")],
         )
         return AIExtraction(
-            recipe=recipe, provider=self.provider, model=self.model,
-            input_tokens=200, output_tokens=100, cost_micros=50,
+            recipe=recipe,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=200,
+            output_tokens=100,
+            cost_micros=50,
         )
 
     def extract(self, content: str, *, source_url: str) -> Any:  # pragma: no cover

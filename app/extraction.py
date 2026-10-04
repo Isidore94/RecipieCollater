@@ -61,7 +61,7 @@ class ProposedPlanEntry(BaseModel):
     day_index: int = Field(ge=0, le=6)  # 0=Mon .. 6=Sun, relative to the target week
     slot: str = "dinner"
     recipe_id: int | None = None  # must be one of the candidate ids the context supplied
-    note: str | None = None       # a note entry ('leftovers', 'takeout') when recipe_id is null
+    note: str | None = None  # a note entry ('leftovers', 'takeout') when recipe_id is null
     servings_text: str | None = None
 
 

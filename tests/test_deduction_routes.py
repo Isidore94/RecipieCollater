@@ -18,14 +18,14 @@ def _item(conn: sqlite3.Connection, item_id: int) -> pantry.PantryItem:
     return item
 
 
-
 def _seed(conn: sqlite3.Connection) -> tuple[str, int, int]:
     """A recipe using 200 g flour + a pantry with 1000 g flour. Returns slug, ingredient, item."""
     seed_core_units(conn)
     rid = recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title="Bread", base_servings="4",
+            title="Bread",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="200", unit="grams", food="flour")],
         ),
     )
@@ -35,8 +35,12 @@ def _seed(conn: sqlite3.Connection) -> tuple[str, int, int]:
     item = pantry.add_item(
         conn,
         pantry.PantryItemInput(
-            display_name="Flour", location_id=loc, quantity_mode="exact",
-            food="flour", quantity_text="1000", unit="grams",
+            display_name="Flour",
+            location_id=loc,
+            quantity_mode="exact",
+            food="flour",
+            quantity_text="1000",
+            unit="grams",
         ),
     )
     return detail.slug, detail.ingredients[0].id, item
@@ -51,8 +55,10 @@ def test_after_cook_redirects_to_review(
 ) -> None:
     slug, _ing, _item = _seed(migrated_db)
     resp = admin_client.post(
-        f"/recipes/{slug}/after-cook", data={"servings_made": "4"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        f"/recipes/{slug}/after-cook",
+        data={"servings_made": "4"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     assert f"/recipes/{slug}/deductions" in resp.headers["location"]
@@ -81,7 +87,8 @@ def test_apply_deducts_and_undo_restores(
     apply = admin_client.post(
         f"/recipes/{slug}/deductions",
         data={"cook_log_id": str(cook_id), "servings": "4", "line": str(ing_id)},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert apply.status_code == 303 and "applied=" in apply.headers["location"]
     assert _item(migrated_db, item).quantity_text == "800"
@@ -90,16 +97,16 @@ def test_apply_deducts_and_undo_restores(
         "SELECT batch_id FROM pantry_adjustments WHERE reason = 'cook' LIMIT 1"
     ).fetchone()["batch_id"]
     undo = admin_client.post(
-        f"/recipes/{slug}/deductions/undo", data={"batch_id": batch},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        f"/recipes/{slug}/deductions/undo",
+        data={"batch_id": batch},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert undo.status_code == 303
     assert _item(migrated_db, item).quantity_text == "1000"  # restored
 
 
-def test_auto_apply_when_trusted(
-    admin_client: TestClient, migrated_db: sqlite3.Connection
-) -> None:
+def test_auto_apply_when_trusted(admin_client: TestClient, migrated_db: sqlite3.Connection) -> None:
     slug, ing_id, item = _seed(migrated_db)
     # First cook -> review; apply with trust + auto.
     admin_client.post(
@@ -108,8 +115,11 @@ def test_auto_apply_when_trusted(
     admin_client.post(
         f"/recipes/{slug}/deductions",
         data={
-            "cook_log_id": str(_last_cook_id(migrated_db)), "servings": "4",
-            "line": str(ing_id), "trust": "on", "auto": "on",
+            "cook_log_id": str(_last_cook_id(migrated_db)),
+            "servings": "4",
+            "line": str(ing_id),
+            "trust": "on",
+            "auto": "on",
         },
         headers=SAME_ORIGIN,
     )
@@ -117,8 +127,10 @@ def test_auto_apply_when_trusted(
 
     # Second cook -> auto-applies straight to the summary, no review step.
     resp = admin_client.post(
-        f"/recipes/{slug}/after-cook", data={"servings_made": "4"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        f"/recipes/{slug}/after-cook",
+        data={"servings_made": "4"},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert "applied=" in resp.headers["location"]
     assert _item(migrated_db, item).quantity_text == "600"  # deducted again automatically
@@ -147,7 +159,8 @@ def test_bad_cook_log_id_does_not_500(
     resp = admin_client.post(
         f"/recipes/{slug}/deductions",
         data={"cook_log_id": "99999", "servings": "4", "line": str(ing_id)},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     assert _item(migrated_db, item).quantity_text == "1000"  # nothing deducted

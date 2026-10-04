@@ -28,7 +28,10 @@ def _acquire_single_instance() -> bool:
     """Named Windows mutex so two supervisors can't fight over the port and queue."""
     if os.name != "nt":
         return True
-    kernel32 = ctypes.windll.kernel32
+    windll = getattr(ctypes, "windll", None)  # only exists on Windows; mypy runs on Linux
+    if windll is None:
+        return True
+    kernel32 = windll.kernel32
     kernel32.CreateMutexW(None, False, "Local\\RecipeCollaterDesktopApp")
     return bool(kernel32.GetLastError() != 183)  # ERROR_ALREADY_EXISTS
 

@@ -73,9 +73,7 @@ class DeductionProposal:
         """Auto-apply only when the recipe is trusted and every deductible line stays eligible."""
         lines = self.deductible_lines
         return (
-            self.deduction_mode == "auto"
-            and bool(lines)
-            and all(line.eligible for line in lines)
+            self.deduction_mode == "auto" and bool(lines) and all(line.eligible for line in lines)
         )
 
 
@@ -146,23 +144,33 @@ def propose(
     deviations = _cook_deviations(conn, cook_log_id)
     lines = [_propose_line(conn, r, factor, deviations.get(int(r["id"]))) for r in rows]
     return DeductionProposal(
-        recipe_id=recipe_id, cook_log_id=cook_log_id, deduction_mode=recipe["deduction_mode"],
-        servings=servings, lines=lines,
+        recipe_id=recipe_id,
+        cook_log_id=cook_log_id,
+        deduction_mode=recipe["deduction_mode"],
+        servings=servings,
+        lines=lines,
     )
 
 
 def _skip(row: sqlite3.Row, reason: str) -> ProposedLine:
     return ProposedLine(
-        ingredient_id=int(row["id"]), label=row["original_text"], food_id=row["food_id"],
-        food_name=row["food_name"], food_confirmed=(row["food_status"] == "confirmed"),
-        pantry_item_id=None, pantry_item_name=None, kind="skip", used_text=None,
-        used_canonical=None, reason=reason, trusted=False, eligible=False,
+        ingredient_id=int(row["id"]),
+        label=row["original_text"],
+        food_id=row["food_id"],
+        food_name=row["food_name"],
+        food_confirmed=(row["food_status"] == "confirmed"),
+        pantry_item_id=None,
+        pantry_item_name=None,
+        kind="skip",
+        used_text=None,
+        used_canonical=None,
+        reason=reason,
+        trusted=False,
+        eligible=False,
     )
 
 
-def _cook_deviations(
-    conn: sqlite3.Connection, cook_log_id: int | None
-) -> dict[int, sqlite3.Row]:
+def _cook_deviations(conn: sqlite3.Connection, cook_log_id: int | None) -> dict[int, sqlite3.Row]:
     """This cook's recorded deviations by ingredient_id - what ACTUALLY happened wins over
     the recipe's plan (an omitted line must not deduct; an adjusted amount deducts as used)."""
     if cook_log_id is None:
@@ -206,7 +214,10 @@ def _propose_line(
 
     confirmed = row["food_status"] == "confirmed"
     signature = trust_signature(
-        row["food_id"], row["unit_id"], row["quantity_text"], row["scaling_mode"],
+        row["food_id"],
+        row["unit_id"],
+        row["quantity_text"],
+        row["scaling_mode"],
         row["pantry_item_hint"],
     )
     trusted = bool(row["deduction_trusted_at"]) and row["deduction_trust_signature"] == signature
@@ -229,11 +240,19 @@ def _propose_line(
         shown = quantity.convert(scaled, int(row["unit_factor"]), item_factor)
         unit_label = item_unit.abbreviation or item_unit.name
         return ProposedLine(
-            ingredient_id=int(row["id"]), label=row["original_text"], food_id=row["food_id"],
-            food_name=row["food_name"], food_confirmed=confirmed, pantry_item_id=item.id,
-            pantry_item_name=item.display_name, kind="exact",
+            ingredient_id=int(row["id"]),
+            label=row["original_text"],
+            food_id=row["food_id"],
+            food_name=row["food_name"],
+            food_confirmed=confirmed,
+            pantry_item_id=item.id,
+            pantry_item_name=item.display_name,
+            kind="exact",
             used_text=f"-{quantity.format_quantity(shown)} {unit_label}",
-            used_canonical=used_canonical, reason=None, trusted=trusted, eligible=eligible,
+            used_canonical=used_canonical,
+            reason=None,
+            trusted=trusted,
+            eligible=eligible,
         )
 
     # gauge / binary: never silently arithmetic'd; only auto-step when the item opted in.
@@ -241,11 +260,19 @@ def _propose_line(
     step_target = _step_down(item.gauge) if kind == "gauge" else "out"
     eligible = confirmed and trusted and item.step_down_on_cook
     return ProposedLine(
-        ingredient_id=int(row["id"]), label=row["original_text"], food_id=row["food_id"],
-        food_name=row["food_name"], food_confirmed=confirmed, pantry_item_id=item.id,
-        pantry_item_name=item.display_name, kind=kind, used_text=step_target,
-        used_canonical=None, reason=None if item.step_down_on_cook else "used some?",
-        trusted=trusted, eligible=eligible,
+        ingredient_id=int(row["id"]),
+        label=row["original_text"],
+        food_id=row["food_id"],
+        food_name=row["food_name"],
+        food_confirmed=confirmed,
+        pantry_item_id=item.id,
+        pantry_item_name=item.display_name,
+        kind=kind,
+        used_text=step_target,
+        used_canonical=None,
+        reason=None if item.step_down_on_cook else "used some?",
+        trusted=trusted,
+        eligible=eligible,
     )
 
 
@@ -286,8 +313,13 @@ def apply(
             continue
         if line.kind == "exact" and line.used_canonical is not None:
             pantry.deduct_canonical(
-                conn, line.pantry_item_id, line.used_canonical, cook_log_id=cook_log_id,
-                batch_id=batch_id, user_id=user_id, commit=False,
+                conn,
+                line.pantry_item_id,
+                line.used_canonical,
+                cook_log_id=cook_log_id,
+                batch_id=batch_id,
+                user_id=user_id,
+                commit=False,
             )
         elif line.kind in ("gauge", "binary"):
             if line.pantry_item_id in stepped:
@@ -295,14 +327,25 @@ def apply(
             stepped.add(line.pantry_item_id)
             if line.kind == "gauge":
                 pantry.set_gauge(
-                    conn, line.pantry_item_id,
-                    _step_down(_current_gauge(conn, line.pantry_item_id)), reason="cook",
-                    cook_log_id=cook_log_id, batch_id=batch_id, user_id=user_id, commit=False,
+                    conn,
+                    line.pantry_item_id,
+                    _step_down(_current_gauge(conn, line.pantry_item_id)),
+                    reason="cook",
+                    cook_log_id=cook_log_id,
+                    batch_id=batch_id,
+                    user_id=user_id,
+                    commit=False,
                 )
             else:
                 pantry.set_have(
-                    conn, line.pantry_item_id, False, reason="cook", cook_log_id=cook_log_id,
-                    batch_id=batch_id, user_id=user_id, commit=False,
+                    conn,
+                    line.pantry_item_id,
+                    False,
+                    reason="cook",
+                    cook_log_id=cook_log_id,
+                    batch_id=batch_id,
+                    user_id=user_id,
+                    commit=False,
                 )
         else:
             continue
@@ -330,7 +373,10 @@ def _mark_trusted(conn: sqlite3.Connection, ingredient_id: int, stamp: str) -> N
     if row is None:
         return
     signature = trust_signature(
-        row["food_id"], row["unit_id"], row["quantity_text"], row["scaling_mode"],
+        row["food_id"],
+        row["unit_id"],
+        row["quantity_text"],
+        row["scaling_mode"],
         row["pantry_item_hint"],
     )
     conn.execute(
@@ -388,7 +434,11 @@ def undo(conn: sqlite3.Connection, batch_id: str, *, user_id: int | None = None)
         if item.quantity_mode == "exact" and adj["canonical_delta"] is not None:
             # adj['canonical_delta'] was negative (a deduction); re-adding it restores the amount.
             pantry.deduct_canonical(
-                conn, item_id, adj["canonical_delta"], reason="correction", user_id=user_id,
+                conn,
+                item_id,
+                adj["canonical_delta"],
+                reason="correction",
+                user_id=user_id,
                 commit=False,
             )
         elif item.quantity_mode == "gauge" and adj["from_gauge"] is not None:
@@ -403,7 +453,11 @@ def undo(conn: sqlite3.Connection, batch_id: str, *, user_id: int | None = None)
                 continue
             restored_gauges.add(item_id)
             pantry.set_have(
-                conn, item_id, bool(adj["from_have"]), reason="correction", user_id=user_id,
+                conn,
+                item_id,
+                bool(adj["from_have"]),
+                reason="correction",
+                user_id=user_id,
                 commit=False,
             )
         else:
@@ -449,9 +503,7 @@ def cook_recipe_id(conn: sqlite3.Connection, cook_log_id: int) -> int | None:
 
 def cook_servings(conn: sqlite3.Connection, cook_log_id: int) -> str | None:
     """The servings a cook was recorded at, so a review never re-proposes at base servings."""
-    row = conn.execute(
-        "SELECT servings_made FROM cook_log WHERE id = ?", (cook_log_id,)
-    ).fetchone()
+    row = conn.execute("SELECT servings_made FROM cook_log WHERE id = ?", (cook_log_id,)).fetchone()
     return row["servings_made"] if row else None
 
 

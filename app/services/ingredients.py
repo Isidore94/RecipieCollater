@@ -21,11 +21,21 @@ from app.services import quantity, recipes, units
 
 # Unicode vulgar fractions -> ASCII, so quantity.parse_quantity (which speaks "1/2", "1 1/2") copes.
 _UNICODE_FRACTIONS = {
-    "¼": "1/4", "½": "1/2", "¾": "3/4",
-    "⅓": "1/3", "⅔": "2/3",
-    "⅕": "1/5", "⅖": "2/5", "⅗": "3/5", "⅘": "4/5",
-    "⅙": "1/6", "⅚": "5/6",
-    "⅛": "1/8", "⅜": "3/8", "⅝": "5/8", "⅞": "7/8",
+    "¼": "1/4",
+    "½": "1/2",
+    "¾": "3/4",
+    "⅓": "1/3",
+    "⅔": "2/3",
+    "⅕": "1/5",
+    "⅖": "2/5",
+    "⅗": "3/5",
+    "⅘": "4/5",
+    "⅙": "1/6",
+    "⅚": "5/6",
+    "⅛": "1/8",
+    "⅜": "3/8",
+    "⅝": "5/8",
+    "⅞": "7/8",
 }
 
 # A leading amount: a mixed number, a fraction, or a decimal/integer (ranges are left unstructured).
@@ -97,8 +107,12 @@ def normalize_ingredient(
         and _amount_ok(item.quantity_text)
     ):
         return recipes.IngredientInput(
-            original_text=text, section=item.section, quantity_text=item.quantity_text,
-            unit=item.unit.lower(), food=(item.food or None), note=(item.note or None),
+            original_text=text,
+            section=item.section,
+            quantity_text=item.quantity_text,
+            unit=item.unit.lower(),
+            food=(item.food or None),
+            note=(item.note or None),
         )
 
     qty, remainder = parse_quantity_prefix(text)
@@ -108,14 +122,20 @@ def normalize_ingredient(
             unit_text, rest = matched
             food, note = split_food_note(rest)
             return recipes.IngredientInput(
-                original_text=text, section=item.section, quantity_text=qty,
-                unit=unit_text, food=food, note=note,
+                original_text=text,
+                section=item.section,
+                quantity_text=qty,
+                unit=unit_text,
+                food=food,
+                note=note,
             )
 
     # Unstructured: keep the line exactly as written (still usable, just not auto-scaled).
     return recipes.IngredientInput(
-        original_text=text, section=item.section,
-        food=(item.food or None), note=(item.note or None),
+        original_text=text,
+        section=item.section,
+        food=(item.food or None),
+        note=(item.note or None),
     )
 
 

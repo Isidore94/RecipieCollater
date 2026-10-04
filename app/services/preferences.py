@@ -57,9 +57,7 @@ class Preferences:
         }
 
 
-def add_preference(
-    conn: sqlite3.Connection, kind: str, value: str, *, commit: bool = True
-) -> None:
+def add_preference(conn: sqlite3.Connection, kind: str, value: str, *, commit: bool = True) -> None:
     if kind not in _ALL_KINDS:
         raise PreferenceError(f"unknown preference kind: {kind!r}")
     clean = " ".join(value.split())
@@ -119,9 +117,13 @@ def load(conn: sqlite3.Connection) -> Preferences:
         for r in conn.execute("SELECT key, value FROM planning_settings").fetchall()
     }
     return Preferences(
-        allergy=buckets["allergy"], exclude=buckets["exclude"], dislike=buckets["dislike"],
-        diet=buckets["diet"], equipment=buckets["equipment"],
-        cuisine_love=buckets["cuisine_love"], scalars=scalars,
+        allergy=buckets["allergy"],
+        exclude=buckets["exclude"],
+        dislike=buckets["dislike"],
+        diet=buckets["diet"],
+        equipment=buckets["equipment"],
+        cuisine_love=buckets["cuisine_love"],
+        scalars=scalars,
     )
 
 
@@ -156,9 +158,7 @@ def recipe_violates_hard(
            WHERE ri.recipe_id = ?""",
         (recipe_id,),
     ).fetchall()
-    haystacks = [
-        f"{(r['food_name'] or '')} {(r['original_text'] or '')}".lower() for r in rows
-    ]
+    haystacks = [f"{(r['food_name'] or '')} {(r['original_text'] or '')}".lower() for r in rows]
     stem_sets = [{_stem(w) for w in _WORD_RE.findall(h)} for h in haystacks]
     for term in hard_terms:
         key = term.lower().strip()

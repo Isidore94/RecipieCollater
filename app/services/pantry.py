@@ -74,7 +74,9 @@ def list_locations(conn: sqlite3.Connection) -> list[Location]:
     rows = conn.execute("SELECT * FROM locations ORDER BY sort_order, name").fetchall()
     return [
         Location(
-            id=int(r["id"]), name=r["name"], is_freezer=bool(r["is_freezer"]),
+            id=int(r["id"]),
+            name=r["name"],
+            is_freezer=bool(r["is_freezer"]),
             sort_order=int(r["sort_order"]),
         )
         for r in rows
@@ -91,11 +93,11 @@ class PantryItemInput:
     display_name: str
     location_id: int
     quantity_mode: str = "gauge"
-    food: str | None = None            # autocomplete text; resolved/created to a food_id
-    quantity_text: str | None = None   # exact mode
-    unit: str | None = None            # exact mode unit (free text -> unit_id)
-    gauge: str | None = None           # gauge mode initial (defaults to 'full')
-    have: bool | None = None           # binary mode initial (defaults to True)
+    food: str | None = None  # autocomplete text; resolved/created to a food_id
+    quantity_text: str | None = None  # exact mode
+    unit: str | None = None  # exact mode unit (free text -> unit_id)
+    gauge: str | None = None  # gauge mode initial (defaults to 'full')
+    have: bool | None = None  # binary mode initial (defaults to True)
     is_staple: bool = False
     min_quantity_text: str | None = None
     expires_on: str | None = None
@@ -234,16 +236,36 @@ def add_item(
             expires_on, step_down_on_cook, updated_at, updated_by)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            food_id, name, data.location_id, mode, quantity_text, unit_id,
-            canonical_quantity, gauge, have, 1 if data.is_staple else 0, min_text, canonical_min,
-            data.expires_on or None, 1 if data.step_down_on_cook else 0, stamp, user_id,
+            food_id,
+            name,
+            data.location_id,
+            mode,
+            quantity_text,
+            unit_id,
+            canonical_quantity,
+            gauge,
+            have,
+            1 if data.is_staple else 0,
+            min_text,
+            canonical_min,
+            data.expires_on or None,
+            1 if data.step_down_on_cook else 0,
+            stamp,
+            user_id,
         ),
     )
     item_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
     _record_adjustment(
-        conn, item_id, food_id, reason="correction", user_id=user_id, source="add",
-        delta_quantity_text=quantity_text, canonical_delta=canonical_quantity,
-        to_gauge=gauge, to_have=have,
+        conn,
+        item_id,
+        food_id,
+        reason="correction",
+        user_id=user_id,
+        source="add",
+        delta_quantity_text=quantity_text,
+        canonical_delta=canonical_quantity,
+        to_gauge=gauge,
+        to_have=have,
     )
     if commit:
         conn.commit()
@@ -280,8 +302,20 @@ def _record_adjustment(
             from_have, to_have, reason, source, cook_log_id, batch_id, user_id, undo_payload)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            item_id, food_id, delta_quantity_text, canonical_delta, from_gauge, to_gauge,
-            from_have, to_have, reason, source, cook_log_id, batch_id, user_id, undo_payload,
+            item_id,
+            food_id,
+            delta_quantity_text,
+            canonical_delta,
+            from_gauge,
+            to_gauge,
+            from_have,
+            to_have,
+            reason,
+            source,
+            cook_log_id,
+            batch_id,
+            user_id,
+            undo_payload,
         ),
     )
     return int(cur.lastrowid or 0)
@@ -328,9 +362,15 @@ def set_exact(
         (quantity.plain_str(new_value), new_canonical, stamp, user_id, item_id),
     )
     adjustment_id = _record_adjustment(
-        conn, item_id, item["food_id"], reason=reason, user_id=user_id,
-        delta_quantity_text=quantity.format_quantity(delta), canonical_delta=canonical_delta,
-        cook_log_id=cook_log_id, batch_id=batch_id,
+        conn,
+        item_id,
+        item["food_id"],
+        reason=reason,
+        user_id=user_id,
+        delta_quantity_text=quantity.format_quantity(delta),
+        canonical_delta=canonical_delta,
+        cook_log_id=cook_log_id,
+        batch_id=batch_id,
     )
     if commit:
         conn.commit()
@@ -358,7 +398,11 @@ def step_exact(
     if new_value < 0:
         new_value = Decimal(0)
     return set_exact(
-        conn, item_id, quantity.plain_str(new_value), reason=reason, user_id=user_id,
+        conn,
+        item_id,
+        quantity.plain_str(new_value),
+        reason=reason,
+        user_id=user_id,
         commit=commit,
     )
 
@@ -381,7 +425,12 @@ def set_gauge(
     if item["quantity_mode"] != "gauge":
         raise PantryError("not a gauge item")
     adjustment_id = _apply_gauge(
-        conn, item, gauge, reason=reason, user_id=user_id, cook_log_id=cook_log_id,
+        conn,
+        item,
+        gauge,
+        reason=reason,
+        user_id=user_id,
+        cook_log_id=cook_log_id,
         batch_id=batch_id,
     )
     if commit:
@@ -424,8 +473,15 @@ def _apply_gauge(
         (new_gauge, now_iso(), user_id, item["id"]),
     )
     return _record_adjustment(
-        conn, int(item["id"]), item["food_id"], reason=reason, user_id=user_id,
-        from_gauge=item["gauge"], to_gauge=new_gauge, cook_log_id=cook_log_id, batch_id=batch_id,
+        conn,
+        int(item["id"]),
+        item["food_id"],
+        reason=reason,
+        user_id=user_id,
+        from_gauge=item["gauge"],
+        to_gauge=new_gauge,
+        cook_log_id=cook_log_id,
+        batch_id=batch_id,
     )
 
 
@@ -450,8 +506,15 @@ def set_have(
         (new_have, now_iso(), user_id, item_id),
     )
     adjustment_id = _record_adjustment(
-        conn, item_id, item["food_id"], reason=reason, user_id=user_id,
-        from_have=item["have"], to_have=new_have, cook_log_id=cook_log_id, batch_id=batch_id,
+        conn,
+        item_id,
+        item["food_id"],
+        reason=reason,
+        user_id=user_id,
+        from_have=item["have"],
+        to_have=new_have,
+        cook_log_id=cook_log_id,
+        batch_id=batch_id,
     )
     if commit:
         conn.commit()
@@ -529,8 +592,15 @@ def set_quantity_mode(
         (mode, quantity_text, canonical, unit_id, gauge, have, now_iso(), user_id, item_id),
     )
     _record_adjustment(
-        conn, item_id, item["food_id"], reason="correction", user_id=user_id,
-        source="mode-change", delta_quantity_text=quantity_text, to_gauge=gauge, to_have=have,
+        conn,
+        item_id,
+        item["food_id"],
+        reason="correction",
+        user_id=user_id,
+        source="mode-change",
+        delta_quantity_text=quantity_text,
+        to_gauge=gauge,
+        to_have=have,
     )
     if item["food_id"] is not None:
         quantity_mode.remember(conn, int(item["food_id"]), mode, commit=False)
@@ -610,7 +680,11 @@ def remove_item(
         old_canonical = item["canonical_quantity"]
         old_value = _current_value(item)
         adjustment_id = _record_adjustment(
-            conn, item_id, item["food_id"], reason=reason, user_id=user_id,
+            conn,
+            item_id,
+            item["food_id"],
+            reason=reason,
+            user_id=user_id,
             delta_quantity_text=quantity.format_quantity(-old_value),
             canonical_delta=(-old_canonical if old_canonical is not None else None),
             undo_payload=payload,
@@ -622,8 +696,14 @@ def remove_item(
         )
     elif mode == "gauge":
         adjustment_id = _record_adjustment(
-            conn, item_id, item["food_id"], reason=reason, user_id=user_id,
-            from_gauge=item["gauge"], to_gauge="out", undo_payload=payload,
+            conn,
+            item_id,
+            item["food_id"],
+            reason=reason,
+            user_id=user_id,
+            from_gauge=item["gauge"],
+            to_gauge="out",
+            undo_payload=payload,
         )
         conn.execute(
             "UPDATE pantry_items SET gauge = 'out', updated_at = ?, updated_by = ? WHERE id = ?",
@@ -631,8 +711,14 @@ def remove_item(
         )
     else:  # binary
         adjustment_id = _record_adjustment(
-            conn, item_id, item["food_id"], reason=reason, user_id=user_id,
-            from_have=item["have"], to_have=0, undo_payload=payload,
+            conn,
+            item_id,
+            item["food_id"],
+            reason=reason,
+            user_id=user_id,
+            from_have=item["have"],
+            to_have=0,
+            undo_payload=payload,
         )
         conn.execute(
             "UPDATE pantry_items SET have = 0, updated_at = ?, updated_by = ? WHERE id = ?",
@@ -660,9 +746,20 @@ def remove_item(
 # The item's own columns, in the order the restore INSERT below expects them, so a deleted item
 # comes back configured the way it was rather than as a bare default.
 _RESTORE_COLUMNS = (
-    "display_name", "location_id", "food_id", "quantity_mode", "unit_id", "quantity_text",
-    "canonical_quantity", "gauge", "have", "is_staple", "min_quantity_text",
-    "canonical_min_quantity", "expires_on", "step_down_on_cook",
+    "display_name",
+    "location_id",
+    "food_id",
+    "quantity_mode",
+    "unit_id",
+    "quantity_text",
+    "canonical_quantity",
+    "gauge",
+    "have",
+    "is_staple",
+    "min_quantity_text",
+    "canonical_min_quantity",
+    "expires_on",
+    "step_down_on_cook",
 )
 
 
@@ -693,9 +790,7 @@ def undo_adjustment(
     The reversal is itself recorded as a 'correction' adjustment, so history stays append-only
     and shows both what happened and that it was taken back.
     """
-    row = conn.execute(
-        "SELECT * FROM pantry_adjustments WHERE id = ?", (adjustment_id,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM pantry_adjustments WHERE id = ?", (adjustment_id,)).fetchone()
     if row is None:
         raise UndoUnavailable("that change is no longer available to undo")
     if row["undone_at"] is not None:
@@ -718,7 +813,11 @@ def undo_adjustment(
         restored_id = int(cur.lastrowid or 0)
         name = str(saved.get("display_name") or "item")
         _record_adjustment(
-            conn, restored_id, saved.get("food_id"), reason="correction", user_id=user_id,
+            conn,
+            restored_id,
+            saved.get("food_id"),
+            reason="correction",
+            user_id=user_id,
             source="undo",
         )
     else:
@@ -727,15 +826,17 @@ def undo_adjustment(
         try:
             item = _row(conn, item_id)
         except PantryError as exc:
-            raise UndoUnavailable('that item no longer exists') from exc
+            raise UndoUnavailable("that item no longer exists") from exc
         name = str(item["display_name"])
         if row["from_gauge"] is not None:
-            _apply_gauge(
-                conn, item, row["from_gauge"], reason="correction", user_id=user_id
-            )
+            _apply_gauge(conn, item, row["from_gauge"], reason="correction", user_id=user_id)
         elif row["from_have"] is not None:
             set_have(
-                conn, item_id, bool(row["from_have"]), reason="correction", user_id=user_id,
+                conn,
+                item_id,
+                bool(row["from_have"]),
+                reason="correction",
+                user_id=user_id,
                 commit=False,
             )
         elif row["canonical_delta"] is not None or row["delta_quantity_text"] is not None:
@@ -744,8 +845,12 @@ def undo_adjustment(
                 raise UndoUnavailable("that change cannot be undone")
             # The stored delta is signed, so stepping by its negation returns the old amount.
             step_exact(
-                conn, item_id, quantity.plain_str(-_signed_decimal(delta_text)),
-                reason="correction", user_id=user_id, commit=False,
+                conn,
+                item_id,
+                quantity.plain_str(-_signed_decimal(delta_text)),
+                reason="correction",
+                user_id=user_id,
+                commit=False,
             )
         else:
             raise UndoUnavailable("that change cannot be undone")
@@ -819,8 +924,12 @@ def _to_item(row: sqlite3.Row) -> PantryItem:
         step_down_on_cook=bool(row["step_down_on_cook"]),
         updated_at=row["updated_at"],
         needs_restock=_needs_restock(
-            row["quantity_mode"], bool(row["is_staple"]), row["gauge"], row["have"],
-            row["canonical_quantity"], row["canonical_min_quantity"],
+            row["quantity_mode"],
+            bool(row["is_staple"]),
+            row["gauge"],
+            row["have"],
+            row["canonical_quantity"],
+            row["canonical_min_quantity"],
         ),
         display_quantity=_display_quantity(row),
     )
@@ -920,9 +1029,15 @@ def deduct_canonical(
         (quantity.plain_str(new_value), new_canonical, now_iso(), user_id, item_id),
     )
     _record_adjustment(
-        conn, item_id, item["food_id"], reason=reason, user_id=user_id,
+        conn,
+        item_id,
+        item["food_id"],
+        reason=reason,
+        user_id=user_id,
         delta_quantity_text=quantity.format_quantity(new_value - old_value),
-        canonical_delta=applied_delta, cook_log_id=cook_log_id, batch_id=batch_id,
+        canonical_delta=applied_delta,
+        cook_log_id=cook_log_id,
+        batch_id=batch_id,
     )
     if commit:
         conn.commit()

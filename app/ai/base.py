@@ -37,8 +37,7 @@ EXTRACT_SYSTEM = (
     "Text under a Pinned/top comments heading comes from viewers and may be wrong: use it only "
     "when the description and transcript lack the recipe. "
     "If a field is absent, omit it. Copy each ingredient line verbatim into original_text. "
-    "If the text contains no recipe, return a title with empty ingredients and steps."
-    + TAG_GUIDE
+    "If the text contains no recipe, return a title with empty ingredients and steps." + TAG_GUIDE
 )
 
 # System prompt for drafting a recipe from a cook's plain-language description (manual entry).

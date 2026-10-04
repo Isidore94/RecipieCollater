@@ -18,7 +18,8 @@ def _recipe(conn: sqlite3.Connection, title: str, food: str = "flour") -> int:
     rid = recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title=title, base_servings="4",
+            title=title,
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="200", unit="grams", food=food)],
         ),
     )
@@ -106,15 +107,23 @@ def test_board_route_and_shopping(
     assert page.status_code == 200 and "Weeknight Bowl" in page.text  # in the add-recipe select
     add = admin_client.post(
         "/plan/entry",
-        data={"week_start": _MON.isoformat(), "plan_date": _MON.isoformat(),
-              "recipe_id": str(rid), "slot": "dinner", "servings": "4"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        data={
+            "week_start": _MON.isoformat(),
+            "plan_date": _MON.isoformat(),
+            "recipe_id": str(rid),
+            "slot": "dinner",
+            "servings": "4",
+        },
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert add.status_code == 303
     assert len(planning.week_board(migrated_db, _MON)[0].entries) == 1
     ship = admin_client.post(
-        "/plan/shopping", data={"week_start": _MON.isoformat()},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        "/plan/shopping",
+        data={"week_start": _MON.isoformat()},
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert ship.status_code == 303
     ics = admin_client.get(f"/plan/export.ics?start={_MON.isoformat()}")
@@ -142,9 +151,7 @@ def test_move_entry_is_reachable_from_the_board(
     admin_client: TestClient, migrated_db: sqlite3.Connection
 ) -> None:
     """The move route existed but no template called it, so a meal could only be deleted."""
-    rid = recipes.create_recipe(
-        migrated_db, recipes.RecipeInput(title="Chili", base_servings="4")
-    )
+    rid = recipes.create_recipe(migrated_db, recipes.RecipeInput(title="Chili", base_servings="4"))
     recipes.set_status(migrated_db, rid, "cookbook")
     monday = planning.week_start().isoformat()
     entry_id = planning.add_recipe_entry(migrated_db, monday, rid, slot="dinner")
@@ -156,7 +163,8 @@ def test_move_entry_is_reachable_from_the_board(
     resp = admin_client.post(
         f"/plan/entry/{entry_id}/move",
         data={"week_start": monday, "plan_date": tuesday},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     columns = planning.week_board(migrated_db, planning.week_start())

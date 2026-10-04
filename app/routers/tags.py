@@ -45,11 +45,18 @@ def index(
 ) -> Response:
     all_tags = recipe_service.list_tags(db, limit=None)
     return render(
-        request, "tags/index.html", active_nav="cookbook", user=user,
-        tags=all_tags, vocabulary=tag_service.VOCABULARY,
+        request,
+        "tags/index.html",
+        active_nav="cookbook",
+        user=user,
+        tags=all_tags,
+        vocabulary=tag_service.VOCABULARY,
         drifted=tag_service.drifted([t.name for t in all_tags]),
         max_tag_length=tag_service.MAX_TAG_LENGTH,
-        notice=notice, error=error, undo=undo, undo_kind=undo_kind,
+        notice=notice,
+        error=error,
+        undo=undo,
+        undo_kind=undo_kind,
     )
 
 
@@ -69,7 +76,7 @@ async def rename(
         return flash.redirect(
             "/tags",
             notice=f"Renamed “{edit.source_name}” to “{edit.target_name}” "
-                   f"on {edit.recipes_affected} recipe{'s' if edit.recipes_affected != 1 else ''}.",
+            f"on {edit.recipes_affected} recipe{'s' if edit.recipes_affected != 1 else ''}.",
         )
 
 
@@ -92,7 +99,8 @@ async def merge(
         return flash.redirect(
             "/tags",
             notice=f"Merged “{edit.source_name}” into “{edit.target_name}”.",
-            undo=edit.edit_id, undo_kind="tag",
+            undo=edit.edit_id,
+            undo_kind="tag",
         )
 
 
@@ -111,8 +119,9 @@ async def delete(
     return flash.redirect(
         "/tags",
         notice=f"Removed “{edit.source_name}” from {edit.recipes_affected} "
-               f"recipe{'s' if edit.recipes_affected != 1 else ''}.",
-        undo=edit.edit_id, undo_kind="tag",
+        f"recipe{'s' if edit.recipes_affected != 1 else ''}.",
+        undo=edit.edit_id,
+        undo_kind="tag",
     )
 
 

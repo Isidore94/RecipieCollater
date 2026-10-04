@@ -27,7 +27,10 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     # "no key configured" paths silently stop being exercised on that machine.
     monkeypatch.delenv("RC_ANTHROPIC_API_KEY", raising=False)
     for _model_var in (
-        "RC_ANTHROPIC_MODEL", "RC_ANTHROPIC_MODEL_FAST", "RC_OPENAI_MODEL", "RC_OPENAI_MODEL_FAST",
+        "RC_ANTHROPIC_MODEL",
+        "RC_ANTHROPIC_MODEL_FAST",
+        "RC_OPENAI_MODEL",
+        "RC_OPENAI_MODEL_FAST",
     ):
         monkeypatch.delenv(_model_var, raising=False)
     monkeypatch.delenv("RC_OPENAI_API_KEY", raising=False)

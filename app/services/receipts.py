@@ -118,8 +118,13 @@ def capture(
         return CaptureResult(None, error="Receipt reading needs an AI key configured.")
     if not ai_usage.within_budget(conn, settings):
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_OPERATION,
-            job_id=None, status="blocked", error="daily or monthly AI spend cap reached",
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_OPERATION,
+            job_id=None,
+            status="blocked",
+            error="daily or monthly AI spend cap reached",
         )
         return CaptureResult(None, error="Today's AI spend limit has been reached.")
 
@@ -136,15 +141,28 @@ def capture(
         result = provider.receipt(prompt, image_jpeg=image_jpeg)
     except ai.AIError as exc:
         ai_usage.log_usage(
-            conn, provider=provider.provider, model=provider.model, operation=_OPERATION,
-            job_id=None, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens,
-            cost_micros=exc.cost_micros, status="error", error=str(exc)[:500],
+            conn,
+            provider=provider.provider,
+            model=provider.model,
+            operation=_OPERATION,
+            job_id=None,
+            input_tokens=exc.input_tokens,
+            output_tokens=exc.output_tokens,
+            cost_micros=exc.cost_micros,
+            status="error",
+            error=str(exc)[:500],
         )
         return CaptureResult(None, error="Couldn't read that - try a clearer photo or paste text.")
     ai_usage.log_usage(
-        conn, provider=result.provider, model=result.model, operation=_OPERATION,
-        job_id=None, input_tokens=result.input_tokens, output_tokens=result.output_tokens,
-        cost_micros=result.cost_micros, status="ok",
+        conn,
+        provider=result.provider,
+        model=result.model,
+        operation=_OPERATION,
+        job_id=None,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cost_micros=result.cost_micros,
+        status="ok",
     )
 
     cur = conn.execute(
@@ -152,7 +170,10 @@ def capture(
         "VALUES (?, ?, ?, ?, ?)",
         (
             "photo" if image_jpeg is not None else "paste",
-            pasted or None, result.provider, result.model, user_id,
+            pasted or None,
+            result.provider,
+            result.model,
+            user_id,
         ),
     )
     receipt_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
@@ -170,8 +191,11 @@ def capture(
                 quantity_text, size_text)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                receipt_id, order, item.original_text.strip() or "(item)",
-                (item.name or "").strip() or None, (item.food or "").strip().lower() or None,
+                receipt_id,
+                order,
+                item.original_text.strip() or "(item)",
+                (item.name or "").strip() or None,
+                (item.food or "").strip().lower() or None,
                 _match_food(conn, item.original_text, item.food),
                 (item.quantity_text or "").strip() or None,
                 (item.size_text or "").strip() or None,
@@ -258,9 +282,7 @@ def review(conn: sqlite3.Connection, receipt_id: int) -> ReceiptReview:
         food_id = row["food_id"]
         matched_name: str | None = None
         if food_id is not None:
-            name_row = conn.execute(
-                "SELECT name FROM foods WHERE id = ?", (food_id,)
-            ).fetchone()
+            name_row = conn.execute("SELECT name FROM foods WHERE id = ?", (food_id,)).fetchone()
             matched_name = str(name_row["name"]) if name_row else None
         display_food = matched_name or row["food_name"] or row["product_name"] or ""
 
@@ -298,12 +320,17 @@ def review(conn: sqlite3.Connection, receipt_id: int) -> ReceiptReview:
 
         lines.append(
             ReviewLine(
-                line_id=int(row["id"]), original_text=row["original_text"],
-                product_name=row["product_name"], food_name=display_food, food_id=food_id,
-                quantity_text=row["quantity_text"], size_text=row["size_text"],
+                line_id=int(row["id"]),
+                original_text=row["original_text"],
+                product_name=row["product_name"],
+                food_name=display_food,
+                food_id=food_id,
+                quantity_text=row["quantity_text"],
+                size_text=row["size_text"],
                 is_new_food=(food_id is None),
                 pantry_item_name=target.display_name if target else None,
-                action_text=action_text, add_canonical=add_canonical,
+                action_text=action_text,
+                add_canonical=add_canonical,
                 checks_off=checks_off,
             )
         )
@@ -362,9 +389,7 @@ def apply(
             ).fetchone()
             food_id = int(name_row["id"]) if name_row else None
         if food_id is None:
-            cur = conn.execute(
-                "INSERT INTO foods (name, status) VALUES (?, 'confirmed')", (name,)
-            )
+            cur = conn.execute("INSERT INTO foods (name, status) VALUES (?, 'confirmed')", (name,))
             food_id = int(cur.lastrowid) if cur.lastrowid is not None else 0
         conn.execute(
             "UPDATE receipt_lines SET food_id = ?, food_name = ? WHERE id = ?",
@@ -397,21 +422,28 @@ def apply(
                 if bought is not None and unit and unit.to_canonical_microunits:
                     total = (target.canonical_quantity or 0) + bought
                     pantry.set_exact(
-                        conn, target.id,
+                        conn,
+                        target.id,
                         quantity.plain_str(
                             quantity.from_canonical(total, unit.to_canonical_microunits)
                         ),
-                        reason="restock", user_id=user_id, commit=False,
+                        reason="restock",
+                        user_id=user_id,
+                        commit=False,
                     )
                     summary.append(f"{target.display_name} restocked")
         elif (loc_id := (line_locations or {}).get(line_id) or track_location_id) is not None:
             new_id = pantry.add_item(
                 conn,
                 pantry.PantryItemInput(
-                    display_name=name, location_id=loc_id,
-                    quantity_mode=pantry.AUTO_MODE, gauge="full", food=name,
+                    display_name=name,
+                    location_id=loc_id,
+                    quantity_mode=pantry.AUTO_MODE,
+                    gauge="full",
+                    food=name,
                 ),
-                user_id=user_id, commit=False,
+                user_id=user_id,
+                commit=False,
             )
             if new_id:
                 summary.append(f"{name} → now tracked")

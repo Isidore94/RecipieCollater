@@ -69,8 +69,10 @@ class InstagramData:
     def from_json(cls, text: str) -> InstagramData:
         raw = json.loads(text)
         return cls(
-            shortcode=str(raw["shortcode"]), caption=str(raw.get("caption") or ""),
-            author=raw.get("author"), thumbnail_url=raw.get("thumbnail_url"),
+            shortcode=str(raw["shortcode"]),
+            caption=str(raw.get("caption") or ""),
+            author=raw.get("author"),
+            thumbnail_url=raw.get("thumbnail_url"),
         )
 
 

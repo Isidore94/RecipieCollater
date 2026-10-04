@@ -29,15 +29,23 @@ def _str(form: FormData, key: str) -> str:
 
 
 def _render(
-    request: Request, db: sqlite3.Connection, user: User, conversation_id: int,
-    notice: str | None = None, error: str | None = None,
+    request: Request,
+    db: sqlite3.Connection,
+    user: User,
+    conversation_id: int,
+    notice: str | None = None,
+    error: str | None = None,
 ) -> Response:
     return render(
-        request, "chat/index.html", active_nav="chat", user=user,
+        request,
+        "chat/index.html",
+        active_nav="chat",
+        user=user,
         conversation_id=conversation_id,
         messages=assistant.list_messages(db, conversation_id),
         proposals=assistant.list_proposals(db, conversation_id),
-        notice=notice, error=error,
+        notice=notice,
+        error=error,
     )
 
 
@@ -63,7 +71,8 @@ async def message(
     async with request.form() as form:
         conversation_raw = _str(form, "conversation_id")
         conversation_id = (
-            int(conversation_raw) if conversation_raw.isdigit()
+            int(conversation_raw)
+            if conversation_raw.isdigit()
             else assistant.get_or_create_conversation(db, user_id=user.id)
         )
         result = assistant.ask(db, conversation_id, _str(form, "message"), user_id=user.id)

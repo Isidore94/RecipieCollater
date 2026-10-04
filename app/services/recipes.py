@@ -308,11 +308,17 @@ def _insert_children(
                 note, scaling_mode, package_quantity_text, package_unit_id)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                recipe_id, order, _clean(ing.section), _compose_original(ing),
-                _clean(ing.quantity_text), unit_obj.id if unit_obj else None,
-                _resolve_food_id(conn, ing.food, food_status=food_status), _clean(ing.note),
+                recipe_id,
+                order,
+                _clean(ing.section),
+                _compose_original(ing),
+                _clean(ing.quantity_text),
+                unit_obj.id if unit_obj else None,
+                _resolve_food_id(conn, ing.food, food_status=food_status),
+                _clean(ing.note),
                 ing.scaling_mode,
-                _clean(ing.package_quantity_text), package_obj.id if package_obj else None,
+                _clean(ing.package_quantity_text),
+                package_obj.id if package_obj else None,
             ),
         )
     for order, step in enumerate(data.steps):
@@ -360,11 +366,24 @@ def create_recipe(
             source_name, created_by, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            _unique_slug(conn, data.title), data.title.strip(), _clean(data.tldr),
-            _clean(data.description), data.tier, data.base_servings.strip(),
-            _clean(data.servings_text), data.prep_minutes, data.cook_minutes, data.total_minutes,
-            data.active_minutes, data.elapsed_minutes, data.source_type, _clean(data.source_url),
-            _clean(data.source_name), created_by, stamp, stamp,
+            _unique_slug(conn, data.title),
+            data.title.strip(),
+            _clean(data.tldr),
+            _clean(data.description),
+            data.tier,
+            data.base_servings.strip(),
+            _clean(data.servings_text),
+            data.prep_minutes,
+            data.cook_minutes,
+            data.total_minutes,
+            data.active_minutes,
+            data.elapsed_minutes,
+            data.source_type,
+            _clean(data.source_url),
+            _clean(data.source_name),
+            created_by,
+            stamp,
+            stamp,
         ),
     )
     recipe_id = _last_id(cur)
@@ -398,10 +417,21 @@ def update_recipe(
              active_minutes = ?, elapsed_minutes = ?, source_url = ?, source_name = ?,
              updated_at = ? WHERE id = ?""",
         (
-            data.title.strip(), _clean(data.tldr), _clean(data.description), data.tier,
-            data.base_servings.strip(), _clean(data.servings_text), data.prep_minutes,
-            data.cook_minutes, data.total_minutes, data.active_minutes, data.elapsed_minutes,
-            _clean(data.source_url), _clean(data.source_name), now_iso(), recipe_id,
+            data.title.strip(),
+            _clean(data.tldr),
+            _clean(data.description),
+            data.tier,
+            data.base_servings.strip(),
+            _clean(data.servings_text),
+            data.prep_minutes,
+            data.cook_minutes,
+            data.total_minutes,
+            data.active_minutes,
+            data.elapsed_minutes,
+            _clean(data.source_url),
+            _clean(data.source_name),
+            now_iso(),
+            recipe_id,
         ),
     )
     # Ingredient rows are replaced wholesale, but the pantry knowledge earned on them - which
@@ -452,8 +482,11 @@ def _carry_over_step_metadata(
         (recipe_id,),
     ).fetchall()
     for new in new_rows:
-        if new["section"] is not None or new["minutes"] is not None \
-                or new["video_seconds"] is not None:
+        if (
+            new["section"] is not None
+            or new["minutes"] is not None
+            or new["video_seconds"] is not None
+        ):
             continue  # the caller supplied real metadata; keep it
         for index, old in enumerate(old_steps):
             if index in consumed:
@@ -504,8 +537,10 @@ def _carry_over_pantry_knowledge(
                            deduction_trusted_at = ?, deduction_trust_signature = ?
                        WHERE id = ?""",
                     (
-                        old["deduct_from_pantry"], old["pantry_item_hint"],
-                        old["deduction_trusted_at"], old["deduction_trust_signature"],
+                        old["deduct_from_pantry"],
+                        old["pantry_item_hint"],
+                        old["deduction_trusted_at"],
+                        old["deduction_trust_signature"],
                         int(new["id"]),
                     ),
                 )
@@ -642,9 +677,7 @@ def restore_recipe(
     cook log does not: those rows referenced an id that no longer exists, and re-pointing them at
     a new recipe would be inventing history.
     """
-    row = conn.execute(
-        "SELECT * FROM deleted_recipes WHERE id = ?", (archive_id,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM deleted_recipes WHERE id = ?", (archive_id,)).fetchone()
     if row is None:
         raise RestoreUnavailable("that recipe is no longer available to restore")
     if row["restored_at"] is not None:
@@ -661,9 +694,7 @@ def restore_recipe(
     if payload.get("image_path"):
         set_image(conn, new_id, payload["image_path"])
 
-    conn.execute(
-        "UPDATE deleted_recipes SET restored_at = ? WHERE id = ?", (now_iso(), archive_id)
-    )
+    conn.execute("UPDATE deleted_recipes SET restored_at = ? WHERE id = ?", (now_iso(), archive_id))
     conn.commit()
     restored = get_recipe(conn, new_id)
     if restored is None:  # pragma: no cover - just created above
@@ -735,13 +766,21 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
     ).fetchall()
     ingredients = tuple(
         IngredientView(
-            id=int(r["id"]), section=r["section"], original_text=r["original_text"],
-            quantity_text=r["quantity_text"], unit_id=r["unit_id"], unit_name=r["unit_name"],
-            unit_plural=r["unit_plural"], food_id=r["food_id"], food_name=r["food_name"],
+            id=int(r["id"]),
+            section=r["section"],
+            original_text=r["original_text"],
+            quantity_text=r["quantity_text"],
+            unit_id=r["unit_id"],
+            unit_name=r["unit_name"],
+            unit_plural=r["unit_plural"],
+            food_id=r["food_id"],
+            food_name=r["food_name"],
             note=r["note"],
-            scaling_mode=r["scaling_mode"], package_quantity_text=r["package_quantity_text"],
+            scaling_mode=r["scaling_mode"],
+            package_quantity_text=r["package_quantity_text"],
             package_unit_id=r["package_unit_id"],
-            unit_dimension=r["unit_dimension"], unit_to_canonical=r["unit_to_canonical"],
+            unit_dimension=r["unit_dimension"],
+            unit_to_canonical=r["unit_to_canonical"],
             package_unit_dimension=r["package_unit_dimension"],
             package_unit_to_canonical=r["package_unit_to_canonical"],
         )
@@ -752,8 +791,12 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
     ).fetchall()
     steps = tuple(
         StepView(
-            id=int(r["id"]), sort_order=int(r["sort_order"]), section=r["section"],
-            instruction=r["instruction"], minutes=r["minutes"], video_seconds=r["video_seconds"],
+            id=int(r["id"]),
+            sort_order=int(r["sort_order"]),
+            section=r["section"],
+            instruction=r["instruction"],
+            minutes=r["minutes"],
+            video_seconds=r["video_seconds"],
         )
         for r in step_rows
     )
@@ -764,18 +807,34 @@ def _detail_from_row(conn: sqlite3.Connection, row: sqlite3.Row) -> RecipeDetail
     ).fetchall()
     tags = tuple(str(r["name"]) for r in tag_rows)
     return RecipeDetail(
-        id=recipe_id, slug=row["slug"], title=row["title"], status=row["status"], tier=row["tier"],
-        tldr=row["tldr"], description=row["description"], base_servings=row["base_servings"],
-        servings_text=row["servings_text"], prep_minutes=row["prep_minutes"],
-        cook_minutes=row["cook_minutes"], total_minutes=row["total_minutes"],
-        active_minutes=row["active_minutes"], elapsed_minutes=row["elapsed_minutes"],
-        source_type=row["source_type"], source_url=row["source_url"],
-        source_name=row["source_name"], image_path=row["image_path"],
-        rating=row["rating"], notes=row["notes"],
-        our_minutes=row["our_minutes"], our_active_minutes=row["our_active_minutes"],
+        id=recipe_id,
+        slug=row["slug"],
+        title=row["title"],
+        status=row["status"],
+        tier=row["tier"],
+        tldr=row["tldr"],
+        description=row["description"],
+        base_servings=row["base_servings"],
+        servings_text=row["servings_text"],
+        prep_minutes=row["prep_minutes"],
+        cook_minutes=row["cook_minutes"],
+        total_minutes=row["total_minutes"],
+        active_minutes=row["active_minutes"],
+        elapsed_minutes=row["elapsed_minutes"],
+        source_type=row["source_type"],
+        source_url=row["source_url"],
+        source_name=row["source_name"],
+        image_path=row["image_path"],
+        rating=row["rating"],
+        notes=row["notes"],
+        our_minutes=row["our_minutes"],
+        our_active_minutes=row["our_active_minutes"],
         video_id=row["video_id"],
-        created_at=row["created_at"], updated_at=row["updated_at"],
-        ingredients=ingredients, steps=steps, tags=tags,
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        ingredients=ingredients,
+        steps=steps,
+        tags=tags,
     )
 
 
@@ -815,10 +874,17 @@ def _fts_query(raw: str, *, prefix: bool = False) -> str:
 
 def _summary(row: sqlite3.Row) -> RecipeSummary:
     return RecipeSummary(
-        id=int(row["id"]), slug=row["slug"], title=row["title"], status=row["status"],
-        tier=row["tier"], tldr=row["tldr"], updated_at=row["updated_at"],
-        rating=row["rating"], image_path=row["image_path"],
-        total_minutes=row["total_minutes"], base_servings=row["base_servings"],
+        id=int(row["id"]),
+        slug=row["slug"],
+        title=row["title"],
+        status=row["status"],
+        tier=row["tier"],
+        tldr=row["tldr"],
+        updated_at=row["updated_at"],
+        rating=row["rating"],
+        image_path=row["image_path"],
+        total_minutes=row["total_minutes"],
+        base_servings=row["base_servings"],
     )
 
 
@@ -930,7 +996,11 @@ def list_recipes(
     default page size would silently truncate them.
     """
     where, params = _library_where(
-        status=status, tags=tags, tier=tier, max_minutes=max_minutes, min_rating=min_rating,
+        status=status,
+        tags=tags,
+        tier=tier,
+        max_minutes=max_minutes,
+        min_rating=min_rating,
         exclude_status=exclude_status,
     )
     if query and query.strip():
@@ -967,7 +1037,11 @@ def count_recipes(
 ) -> int:
     """How many recipes the same filters match, for "showing 1-48 of 312" and page links."""
     where, params = _library_where(
-        status=status, tags=tags, tier=tier, max_minutes=max_minutes, min_rating=min_rating,
+        status=status,
+        tags=tags,
+        tier=tier,
+        max_minutes=max_minutes,
+        min_rating=min_rating,
         exclude_status=exclude_status,
     )
     if query and query.strip():
@@ -1044,8 +1118,7 @@ def list_tags(
         sql += " LIMIT ?"
         params.append(limit)
     return [
-        TagCount(name=r["name"], count=int(r["n"]))
-        for r in conn.execute(sql, params).fetchall()
+        TagCount(name=r["name"], count=int(r["n"])) for r in conn.execute(sql, params).fetchall()
     ]
 
 

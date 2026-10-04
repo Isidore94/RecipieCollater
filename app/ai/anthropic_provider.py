@@ -67,13 +67,17 @@ class AnthropicExtractor:
                 {
                     "type": "image",
                     "source": {
-                        "type": "base64", "media_type": "image/jpeg", "data": encoded,
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": encoded,
                     },
                 },
                 {"type": "text", "text": content[:_MAX_INPUT_CHARS]},
             ]
         payload, input_tokens, output_tokens, billed = self._call_tool(
-            RECEIPT_SYSTEM, user_content, tool_name=_RECEIPT_TOOL,
+            RECEIPT_SYSTEM,
+            user_content,
+            tool_name=_RECEIPT_TOOL,
             description="Record the grocery items bought on this receipt or order.",
             schema=ExtractedReceipt.model_json_schema(),
         )
@@ -82,16 +86,24 @@ class AnthropicExtractor:
         except Exception as exc:
             raise AIError(
                 f"model output failed schema validation: {exc}",
-                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_micros=billed,
             ) from exc
         return AIReceipt(
-            receipt=parsed, provider=self.provider, model=self.model,
-            input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+            receipt=parsed,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_micros=billed,
         )
 
     def assist(self, content: str) -> AIAssist:
         payload, input_tokens, output_tokens, billed = self._call_tool(
-            ASSISTANT_SYSTEM, content[:_MAX_INPUT_CHARS], tool_name=_ASSIST_TOOL,
+            ASSISTANT_SYSTEM,
+            content[:_MAX_INPUT_CHARS],
+            tool_name=_ASSIST_TOOL,
             description="Reply to the household and optionally propose a plan or pantry update.",
             schema=AssistantResponse.model_json_schema(),
         )
@@ -100,11 +112,17 @@ class AnthropicExtractor:
         except Exception as exc:
             raise AIError(
                 f"model output failed schema validation: {exc}",
-                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_micros=billed,
             ) from exc
         return AIAssist(
-            response=parsed, provider=self.provider, model=self.model,
-            input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+            response=parsed,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_micros=billed,
         )
 
     def recipe_from_photo(self, image_jpeg: bytes) -> AIExtraction:
@@ -120,7 +138,9 @@ class AnthropicExtractor:
 
     def _run_recipe(self, system: str, content: str | list[dict[str, Any]]) -> AIExtraction:
         payload, input_tokens, output_tokens, billed = self._call_tool(
-            system, content, tool_name=_RECIPE_TOOL,
+            system,
+            content,
+            tool_name=_RECIPE_TOOL,
             description="Record the recipe found on the page or in the photo.",
             schema=ExtractedRecipe.model_json_schema(),
         )
@@ -129,11 +149,17 @@ class AnthropicExtractor:
         except Exception as exc:
             raise AIError(
                 f"model output failed schema validation: {exc}",
-                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_micros=billed,
             ) from exc
         return AIExtraction(
-            recipe=recipe, provider=self.provider, model=self.model,
-            input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+            recipe=recipe,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_micros=billed,
         )
 
     def _call_tool(
@@ -151,9 +177,7 @@ class AnthropicExtractor:
                 model=self.model,
                 max_tokens=_MAX_OUTPUT_TOKENS,
                 system=system,
-                tools=[
-                    {"name": tool_name, "description": description, "input_schema": schema}
-                ],
+                tools=[{"name": tool_name, "description": description, "input_schema": schema}],
                 tool_choice={"type": "tool", "name": tool_name},
                 messages=[{"role": "user", "content": content}],
             )
@@ -171,7 +195,9 @@ class AnthropicExtractor:
         if payload is None:
             raise AIError(
                 f"model did not return the {tool_name} tool call",
-                input_tokens=input_tokens, output_tokens=output_tokens, cost_micros=billed,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_micros=billed,
             )
         return payload, input_tokens, output_tokens, billed
 
@@ -180,8 +206,7 @@ def _tool_input(message: Any, tool_name: str) -> dict[str, Any] | None:
     """Pull the forced tool_use block's input dict out of a Claude message."""
     for block in getattr(message, "content", None) or []:
         is_target_tool = (
-            getattr(block, "type", None) == "tool_use"
-            and getattr(block, "name", None) == tool_name
+            getattr(block, "type", None) == "tool_use" and getattr(block, "name", None) == tool_name
         )
         if is_target_tool:
             data = getattr(block, "input", None)

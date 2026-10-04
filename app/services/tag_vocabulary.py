@@ -19,7 +19,13 @@ VOCABULARY: dict[str, tuple[str, ...]] = {
     "meal": ("breakfast", "lunch", "dinner", "side", "dessert", "snack", "drink"),
     "protein": ("chicken", "beef", "pork", "seafood", "lamb", "turkey", "vegetarian"),
     "method": (
-        "baked", "grilled", "stovetop", "slow-cooked", "instant-pot", "air-fryer", "no-cook",
+        "baked",
+        "grilled",
+        "stovetop",
+        "slow-cooked",
+        "instant-pot",
+        "air-fryer",
+        "no-cook",
     ),
     "effort": ("weeknight", "project"),
 }
@@ -28,9 +34,7 @@ VOCABULARY: dict[str, tuple[str, ...]] = {
 # pretending the list is closed.
 EXAMPLE_CUISINES: tuple[str, ...] = ("italian", "mexican", "thai")
 
-ALL_WORDS: frozenset[str] = frozenset(
-    word for group in VOCABULARY.values() for word in group
-)
+ALL_WORDS: frozenset[str] = frozenset(word for group in VOCABULARY.values() for word in group)
 
 
 def _singular(word: str) -> str:

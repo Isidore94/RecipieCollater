@@ -54,9 +54,7 @@ def test_two_tags_mean_both_not_either(migrated_db: sqlite3.Connection) -> None:
     listed = recipes.list_recipes(migrated_db, status="cookbook", tags=["chicken", "weeknight"])
     assert [r.id for r in listed] == [both]
     assert recipes.count_recipes(migrated_db, status="cookbook", tags=["chicken"]) == 2
-    assert (
-        recipes.count_recipes(migrated_db, status="cookbook", tags=["chicken", "weeknight"]) == 1
-    )
+    assert recipes.count_recipes(migrated_db, status="cookbook", tags=["chicken", "weeknight"]) == 1
 
 
 def test_tag_filters_are_case_insensitive_and_deduplicated(
@@ -73,9 +71,7 @@ def test_tag_filters_compose_with_search_and_the_other_filters(
 ) -> None:
     keep = _recipe(migrated_db, "Chicken Cacciatore", ["chicken", "italian"])
     _recipe(migrated_db, "Chicken Curry", ["chicken", "thai"])
-    listed = recipes.list_recipes(
-        migrated_db, status="cookbook", query="chicken", tags=["italian"]
-    )
+    listed = recipes.list_recipes(migrated_db, status="cookbook", query="chicken", tags=["italian"])
     assert [r.id for r in listed] == [keep]
 
 
@@ -145,9 +141,7 @@ def test_callers_that_need_every_recipe_still_get_every_recipe(
 
 
 def test_library_url_repeats_the_tag_parameter_and_keeps_the_rest() -> None:
-    url = library_url(
-        "/cookbook", query="pie", tags=["chicken", "weeknight"], rating="8", page=3
-    )
+    url = library_url("/cookbook", query="pie", tags=["chicken", "weeknight"], rating="8", page=3)
     assert url.startswith("/cookbook?")
     assert "tag=chicken" in url and "tag=weeknight" in url
     assert "q=pie" in url and "rating=8" in url and "page=3" in url
@@ -253,18 +247,20 @@ def test_reindex_produces_exactly_what_the_trigger_produces(
     rid = _recipe(migrated_db, "Souvlaki", ["dinner", "grilled"])
     columns = "title, tldr, description, ingredients, tags"
     from_trigger = migrated_db.execute(
-        f"SELECT {columns} FROM recipe_fts WHERE rowid = ?", (rid,)  # noqa: S608 - fixed
+        f"SELECT {columns} FROM recipe_fts WHERE rowid = ?",  # noqa: S608 - fixed columns
+        (rid,),
     ).fetchone()
 
     recipes.reindex_recipes(migrated_db, [rid])
     from_reindex = migrated_db.execute(
-        f"SELECT {columns} FROM recipe_fts WHERE rowid = ?", (rid,)  # noqa: S608 - fixed
+        f"SELECT {columns} FROM recipe_fts WHERE rowid = ?",  # noqa: S608 - fixed columns
+        (rid,),
     ).fetchone()
     assert tuple(from_reindex) == tuple(from_trigger)
     assert (
-        migrated_db.execute(
-            "SELECT COUNT(*) c FROM recipe_fts WHERE rowid = ?", (rid,)
-        ).fetchone()["c"]
+        migrated_db.execute("SELECT COUNT(*) c FROM recipe_fts WHERE rowid = ?", (rid,)).fetchone()[
+            "c"
+        ]
         == 1
     ), "reindexing left a duplicate row behind"
 
@@ -288,9 +284,7 @@ def test_merge_moves_every_recipe_and_removes_the_old_tag(
 ) -> None:
     a = _recipe(migrated_db, "Souvlaki", ["Entree"])
     b = _recipe(migrated_db, "Chicken", ["dinner"])
-    edit = tags.merge(
-        migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner")
-    )
+    edit = tags.merge(migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner"))
     assert edit.recipes_affected == 1
     assert _tags_of(migrated_db, a) == {"dinner"}
     assert _tags_of(migrated_db, b) == {"dinner"}
@@ -314,9 +308,7 @@ def test_undo_a_merge_restores_exactly_what_moved(migrated_db: sqlite3.Connectio
     had_both = _recipe(migrated_db, "Both", ["Entree", "dinner"])
     always = _recipe(migrated_db, "Chicken", ["dinner"])
 
-    edit = tags.merge(
-        migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner")
-    )
+    edit = tags.merge(migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner"))
     assert tags.undo(migrated_db, edit.edit_id) == "Entree"
 
     assert _tags_of(migrated_db, moved) == {"Entree"}, "the moved recipe lost its dinner tag"
@@ -328,9 +320,7 @@ def test_merge_undo_is_single_shot(migrated_db: sqlite3.Connection) -> None:
     """A double tap must not strip the target tag off those recipes a second time."""
     _recipe(migrated_db, "Souvlaki", ["Entree"])
     keep = _recipe(migrated_db, "Chicken", ["dinner"])
-    edit = tags.merge(
-        migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner")
-    )
+    edit = tags.merge(migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner"))
     tags.undo(migrated_db, edit.edit_id)
     with pytest.raises(tags.UndoUnavailable, match="already been undone"):
         tags.undo(migrated_db, edit.edit_id)
@@ -381,9 +371,7 @@ def test_undo_finds_the_target_even_after_it_was_renamed(
     would find nothing here, and the undo would leave both tags on the moved recipe."""
     moved = _recipe(migrated_db, "Souvlaki", ["Entree"])
     _recipe(migrated_db, "Chicken", ["dinner"])
-    edit = tags.merge(
-        migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner")
-    )
+    edit = tags.merge(migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner"))
     tags.rename(migrated_db, _tag_id(migrated_db, "dinner"), "supper")
 
     tags.undo(migrated_db, edit.edit_id)
@@ -398,9 +386,7 @@ def test_undo_survives_a_recipe_deleted_since_the_merge(
     doomed = _recipe(migrated_db, "Souvlaki", ["Entree"])
     survivor = _recipe(migrated_db, "Gyros", ["Entree"])
     _recipe(migrated_db, "Chicken", ["dinner"])
-    edit = tags.merge(
-        migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner")
-    )
+    edit = tags.merge(migrated_db, _tag_id(migrated_db, "Entree"), _tag_id(migrated_db, "dinner"))
     recipes.delete_recipe(migrated_db, doomed)
 
     assert tags.undo(migrated_db, edit.edit_id) == "Entree"
@@ -512,8 +498,6 @@ def test_tag_mutations_require_csrf(
 ) -> None:
     _recipe(migrated_db, "Chicken", ["dinner"])
     tag_id = _tag_id(migrated_db, "dinner")
-    blocked = admin_client.post(
-        f"/tags/{tag_id}/delete", headers={"Sec-Fetch-Site": "cross-site"}
-    )
+    blocked = admin_client.post(f"/tags/{tag_id}/delete", headers={"Sec-Fetch-Site": "cross-site"})
     assert blocked.status_code == 403
     assert _tag_id(migrated_db, "dinner") == tag_id

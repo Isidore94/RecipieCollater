@@ -88,8 +88,11 @@ def gather(conn: sqlite3.Connection, settings: Settings) -> DashboardStats:
     failed = _scalar(conn, "SELECT COUNT(*) FROM ingest_jobs WHERE status = 'failed'")
     failures = [
         FailedJob(
-            id=int(r["id"]), url=r["url"], error_category=r["error_category"],
-            error_message=r["error_message"], updated_at=r["updated_at"],
+            id=int(r["id"]),
+            url=r["url"],
+            error_category=r["error_category"],
+            error_message=r["error_message"],
+            updated_at=r["updated_at"],
         )
         for r in conn.execute(
             "SELECT id, url, error_category, error_message, updated_at FROM ingest_jobs "
@@ -105,16 +108,15 @@ def gather(conn: sqlite3.Connection, settings: Settings) -> DashboardStats:
            FROM ai_usage_log GROUP BY provider ORDER BY provider"""
     ).fetchall()
     provider_spend = [
-        ProviderSpend(provider=r["provider"], today_micros=int(r["today"]),
-                      month_micros=int(r["month"]))
+        ProviderSpend(
+            provider=r["provider"], today_micros=int(r["today"]), month_micros=int(r["month"])
+        )
         for r in provider_rows
     ]
 
     heartbeat = worker_health.read_heartbeat(settings)
     db_bytes = settings.db_path.stat().st_size if settings.db_path.exists() else 0
-    schema_version = _scalar(
-        conn, "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
-    )
+    schema_version = _scalar(conn, "SELECT COALESCE(MAX(version), 0) FROM schema_migrations")
 
     last_backup: str | None = None
     last_backup_healthy = False
@@ -142,8 +144,9 @@ def gather(conn: sqlite3.Connection, settings: Settings) -> DashboardStats:
         db_bytes=db_bytes,
         schema_version=schema_version,
         worker_age_seconds=heartbeat.age_seconds if heartbeat else None,
-        worker_ok=bool(heartbeat and heartbeat.age_seconds < worker_health.MAX_HEARTBEAT_AGE
-                       .total_seconds()),
+        worker_ok=bool(
+            heartbeat and heartbeat.age_seconds < worker_health.MAX_HEARTBEAT_AGE.total_seconds()
+        ),
         last_backup=last_backup,
         last_backup_healthy=last_backup_healthy,
         ytdlp_version=_ytdlp_version(),

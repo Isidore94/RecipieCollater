@@ -52,15 +52,73 @@ def find_timers(text: str) -> list[TimerSpec]:
 
 # Words that appear in an ingredient line but are not the food itself - excluded so a step's
 # "you'll need" list matches on the actual food, not on 'diced'/'cup'/'fresh'.
-_ING_STOPWORDS: frozenset[str] = frozenset({
-    "and", "the", "for", "with", "plus", "more", "fresh", "large", "small", "medium",
-    "chopped", "diced", "sliced", "grated", "ground", "minced", "crushed", "taste", "virgin",
-    "extra", "optional", "needed", "room", "temperature", "cup", "cups", "tablespoon",
-    "tablespoons", "teaspoon", "teaspoons", "pound", "pounds", "ounce", "ounces", "gram", "grams",
-    "kilogram", "millilitre", "litre", "clove", "cloves", "can", "cans", "jar", "package",
-    "packages", "into", "cut", "peeled", "seeded", "drained", "rinsed", "about", "your",
-    "favorite", "good", "quality", "warm", "cold", "hot", "thinly", "finely", "roughly",
-})
+_ING_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "and",
+        "the",
+        "for",
+        "with",
+        "plus",
+        "more",
+        "fresh",
+        "large",
+        "small",
+        "medium",
+        "chopped",
+        "diced",
+        "sliced",
+        "grated",
+        "ground",
+        "minced",
+        "crushed",
+        "taste",
+        "virgin",
+        "extra",
+        "optional",
+        "needed",
+        "room",
+        "temperature",
+        "cup",
+        "cups",
+        "tablespoon",
+        "tablespoons",
+        "teaspoon",
+        "teaspoons",
+        "pound",
+        "pounds",
+        "ounce",
+        "ounces",
+        "gram",
+        "grams",
+        "kilogram",
+        "millilitre",
+        "litre",
+        "clove",
+        "cloves",
+        "can",
+        "cans",
+        "jar",
+        "package",
+        "packages",
+        "into",
+        "cut",
+        "peeled",
+        "seeded",
+        "drained",
+        "rinsed",
+        "about",
+        "your",
+        "favorite",
+        "good",
+        "quality",
+        "warm",
+        "cold",
+        "hot",
+        "thinly",
+        "finely",
+        "roughly",
+    }
+)
 
 
 def _stem(word: str) -> str:
@@ -226,7 +284,15 @@ def record_cook(
             actual_active_minutes, actual_elapsed_minutes, rating, notes, additions)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            recipe_id, user_id, stamp, servings_made, elapsed, active, elapsed, rating, notes,
+            recipe_id,
+            user_id,
+            stamp,
+            servings_made,
+            elapsed,
+            active,
+            elapsed,
+            rating,
+            notes,
             additions,
         ),
     )
@@ -250,8 +316,14 @@ def record_cook(
                 deviation, used_text, used_quantity_text)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                cook_log_id, ing.id, ing.original_text, ing.food_id, planned_text,
-                deviation.kind if deviation else None, used_text, used_quantity_text,
+                cook_log_id,
+                ing.id,
+                ing.original_text,
+                ing.food_id,
+                planned_text,
+                deviation.kind if deviation else None,
+                used_text,
+                used_quantity_text,
             ),
         )
 
@@ -352,7 +424,9 @@ def _deviations_by_cook(conn: sqlite3.Connection, recipe_id: int) -> dict[int, l
             CookDeviation(
                 kind=r["deviation"],
                 display=_deviation_display(r["deviation"], name, r["used_text"]),
-                food_id=r["food_id"], food_name=r["food_name"], used_text=r["used_text"],
+                food_id=r["food_id"],
+                food_name=r["food_name"],
+                used_text=r["used_text"],
                 remembered=bool(r["remembered"]),
             )
         )
@@ -370,10 +444,15 @@ def list_cook_log(conn: sqlite3.Connection, recipe_id: int) -> list[CookLogEntry
     ).fetchall()
     return [
         CookLogEntry(
-            id=int(r["id"]), cooked_at=r["cooked_at"], cook_name=r["cook_name"],
-            servings_made=r["servings_made"], rating=r["rating"],
-            active_minutes=r["actual_active_minutes"], elapsed_minutes=r["actual_elapsed_minutes"],
-            notes=r["notes"], additions=r["additions"],
+            id=int(r["id"]),
+            cooked_at=r["cooked_at"],
+            cook_name=r["cook_name"],
+            servings_made=r["servings_made"],
+            rating=r["rating"],
+            active_minutes=r["actual_active_minutes"],
+            elapsed_minutes=r["actual_elapsed_minutes"],
+            notes=r["notes"],
+            additions=r["additions"],
             deviations=deviations.get(int(r["id"]), []),
         )
         for r in rows
@@ -408,7 +487,9 @@ def list_recipes_by_staleness(
     ).fetchall()
     return [
         RecipeStaleness(
-            slug=r["slug"], title=r["title"], last_cooked=r["last_cooked"],
+            slug=r["slug"],
+            title=r["title"],
+            last_cooked=r["last_cooked"],
             cook_count=int(r["cook_count"]),
         )
         for r in rows

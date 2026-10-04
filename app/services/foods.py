@@ -200,6 +200,7 @@ def family_ids(conn: sqlite3.Connection, food_id: int) -> set[int]:
 # Merge (collapse a duplicate food into its canonical one)
 # --------------------------------------------------------------------------------------
 
+
 @dataclass(frozen=True, slots=True)
 class MergeResult:
     """What a merge did, so the caller can describe it and offer to undo it."""
@@ -221,8 +222,12 @@ _REFERENCE_UPDATES: tuple[tuple[str, str], ...] = (
 
 
 def merge_foods(
-    conn: sqlite3.Connection, source_id: int, target_id: int, *,
-    merged_by: int | None = None, commit: bool = True,
+    conn: sqlite3.Connection,
+    source_id: int,
+    target_id: int,
+    *,
+    merged_by: int | None = None,
+    commit: bool = True,
 ) -> MergeResult:
     """Rewrite every reference from source to target, alias the source name, drop the source.
 
@@ -258,12 +263,16 @@ def merge_foods(
         "INSERT INTO food_merges (source_name, target_id, target_name, payload, merged_by) "
         "VALUES (?, ?, ?, ?, ?)",
         (
-            source["name"], target_id, target["name"] if target else "",
-            json.dumps({
-                "source": dict(source),
-                "moved": moved,
-                "aliases": moved_aliases,
-            }),
+            source["name"],
+            target_id,
+            target["name"] if target else "",
+            json.dumps(
+                {
+                    "source": dict(source),
+                    "moved": moved,
+                    "aliases": moved_aliases,
+                }
+            ),
             merged_by,
         ),
     )
@@ -299,8 +308,11 @@ def merge_foods(
              purchase_label = COALESCE(purchase_label, ?)
            WHERE id = ?""",
         (
-            source["category"], source["purchase_quantity_text"], source["purchase_unit_id"],
-            source["purchase_label"], target_id,
+            source["category"],
+            source["purchase_quantity_text"],
+            source["purchase_unit_id"],
+            source["purchase_label"],
+            target_id,
         ),
     )
     conn.execute("DELETE FROM foods WHERE id = ?", (source_id,))
@@ -312,15 +324,11 @@ def merge_foods(
         (target_id, target_id),
     )
     seen = {target_id}
-    cursor = conn.execute(
-        "SELECT parent_food_id FROM foods WHERE id = ?", (target_id,)
-    ).fetchone()
+    cursor = conn.execute("SELECT parent_food_id FROM foods WHERE id = ?", (target_id,)).fetchone()
     walk = cursor["parent_food_id"] if cursor else None
     while walk is not None:
         if walk in seen:
-            conn.execute(
-                "UPDATE foods SET parent_food_id = NULL WHERE id = ?", (target_id,)
-            )
+            conn.execute("UPDATE foods SET parent_food_id = NULL WHERE id = ?", (target_id,))
             break
         seen.add(int(walk))
         row = conn.execute("SELECT parent_food_id FROM foods WHERE id = ?", (walk,)).fetchone()
@@ -358,10 +366,15 @@ def undo_merge(conn: sqlite3.Connection, merge_id: int, *, commit: bool = True) 
         "purchase_quantity_text, purchase_unit_id, purchase_label, default_quantity_mode) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            source["name"], source.get("plural_name"), source.get("category"),
-            source.get("density_mg_per_ml"), source.get("status") or "confirmed",
-            source.get("purchase_quantity_text"), source.get("purchase_unit_id"),
-            source.get("purchase_label"), source.get("default_quantity_mode"),
+            source["name"],
+            source.get("plural_name"),
+            source.get("category"),
+            source.get("density_mg_per_ml"),
+            source.get("status") or "confirmed",
+            source.get("purchase_quantity_text"),
+            source.get("purchase_unit_id"),
+            source.get("purchase_label"),
+            source.get("default_quantity_mode"),
         ),
     )
     new_id = int(restored.lastrowid or 0)
@@ -406,14 +419,8 @@ def record_substitute(
     if not clean:
         raise FoodError("nothing to remember")
     _exists(conn, food_id)
-    sub_food = conn.execute(
-        "SELECT food_id FROM food_aliases WHERE alias = ?", (clean,)
-    ).fetchone()
-    sub_food_id = (
-        int(sub_food["food_id"])
-        if sub_food
-        else _id_by_name(conn, clean)
-    )
+    sub_food = conn.execute("SELECT food_id FROM food_aliases WHERE alias = ?", (clean,)).fetchone()
+    sub_food_id = int(sub_food["food_id"]) if sub_food else _id_by_name(conn, clean)
     updated = conn.execute(
         "UPDATE food_substitutes SET times_used = times_used + 1 "
         "WHERE food_id = ? AND substitute_text = ? COLLATE NOCASE",
@@ -479,11 +486,17 @@ def list_foods(
     ).fetchall()
     return [
         FoodInfo(
-            id=int(r["id"]), name=r["name"], category=r["category"], status=r["status"],
-            parent_food_id=r["parent_food_id"], parent_name=r["parent_name"],
+            id=int(r["id"]),
+            name=r["name"],
+            category=r["category"],
+            status=r["status"],
+            parent_food_id=r["parent_food_id"],
+            parent_name=r["parent_name"],
             purchase_quantity_text=r["purchase_quantity_text"],
-            purchase_unit_name=r["purchase_unit_name"], purchase_label=r["purchase_label"],
-            recipe_count=int(r["recipe_count"]), pantry_count=int(r["pantry_count"]),
+            purchase_unit_name=r["purchase_unit_name"],
+            purchase_label=r["purchase_label"],
+            recipe_count=int(r["recipe_count"]),
+            pantry_count=int(r["pantry_count"]),
         )
         for r in rows
     ]

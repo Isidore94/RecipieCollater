@@ -17,14 +17,14 @@ def _item(conn: sqlite3.Connection, item_id: int) -> pantry.PantryItem:
     return item
 
 
-
 def _loc(conn: sqlite3.Connection, name: str = "Pantry", *, freezer: bool = False) -> int:
     return pantry.create_location(conn, name, is_freezer=freezer)
 
 
 def _add(conn: sqlite3.Connection, name: str, loc: int, mode: str = "gauge", **kw: object) -> int:
     return pantry.add_item(
-        conn, pantry.PantryItemInput(display_name=name, location_id=loc, quantity_mode=mode, **kw)  # type: ignore[arg-type]
+        conn,
+        pantry.PantryItemInput(display_name=name, location_id=loc, quantity_mode=mode, **kw),  # type: ignore[arg-type]
     )
 
 
@@ -49,8 +49,12 @@ def test_add_exact_item_computes_canonical(migrated_db: sqlite3.Connection) -> N
     item_id = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Chopped tomatoes", location_id=loc, quantity_mode="exact",
-            food="canned tomatoes", quantity_text="3", unit="each",
+            display_name="Chopped tomatoes",
+            location_id=loc,
+            quantity_mode="exact",
+            food="canned tomatoes",
+            quantity_text="3",
+            unit="each",
         ),
     )
     item = _item(migrated_db, item_id)
@@ -89,8 +93,11 @@ def test_set_and_step_exact_track_delta(migrated_db: sqlite3.Connection) -> None
     item_id = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Rice", location_id=loc, quantity_mode="exact",
-            quantity_text="1000", unit="grams",
+            display_name="Rice",
+            location_id=loc,
+            quantity_mode="exact",
+            quantity_text="1000",
+            unit="grams",
         ),
     )
     pantry.set_exact(migrated_db, item_id, "800")
@@ -110,8 +117,11 @@ def test_step_rejects_bad_amount(migrated_db: sqlite3.Connection) -> None:
     item_id = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Rice", location_id=loc, quantity_mode="exact",
-            quantity_text="5", unit="each",
+            display_name="Rice",
+            location_id=loc,
+            quantity_mode="exact",
+            quantity_text="5",
+            unit="each",
         ),
     )
     with pytest.raises(pantry.PantryError):
@@ -131,8 +141,11 @@ def test_remove_spoiled_empties_and_logs(migrated_db: sqlite3.Connection) -> Non
     item_id = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Spinach", location_id=loc, quantity_mode="exact",
-            quantity_text="2", unit="each",
+            display_name="Spinach",
+            location_id=loc,
+            quantity_mode="exact",
+            quantity_text="2",
+            unit="each",
         ),
     )
     pantry.remove_item(migrated_db, item_id, reason="spoiled")
@@ -160,8 +173,11 @@ def test_staple_thresholds_drive_shopping_candidates(migrated_db: sqlite3.Connec
     rice = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Rice", location_id=loc, quantity_mode="exact",
-            quantity_text="1000", unit="grams",
+            display_name="Rice",
+            location_id=loc,
+            quantity_mode="exact",
+            quantity_text="1000",
+            unit="grams",
         ),
     )
     pantry.set_staple(migrated_db, rice, is_staple=True, min_quantity_text="500")
@@ -226,8 +242,11 @@ def test_undo_restores_an_exact_amount(migrated_db: sqlite3.Connection) -> None:
     item_id = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Tinned tomatoes", location_id=loc, quantity_mode="exact",
-            quantity_text="6", unit="each",
+            display_name="Tinned tomatoes",
+            location_id=loc,
+            quantity_mode="exact",
+            quantity_text="6",
+            unit="each",
         ),
     )
     adjustment = pantry.step_exact(migrated_db, item_id, "-2")
@@ -245,8 +264,11 @@ def test_undo_brings_back_a_deleted_item_with_its_settings(
     item_id = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Puff pastry", location_id=loc, quantity_mode="gauge",
-            is_staple=True, expires_on="2026-12-01",
+            display_name="Puff pastry",
+            location_id=loc,
+            quantity_mode="gauge",
+            is_staple=True,
+            expires_on="2026-12-01",
         ),
     )
     adjustment = pantry.remove_item(migrated_db, item_id, delete=True)

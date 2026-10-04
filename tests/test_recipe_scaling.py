@@ -72,9 +72,12 @@ def _package_recipe(
             base_servings="4",
             ingredients=[
                 recipes.IngredientInput(
-                    quantity_text="300", unit=unit, food="flour",
+                    quantity_text="300",
+                    unit=unit,
+                    food="flour",
                     scaling_mode="round_to_package",
-                    package_quantity_text=package_qty, package_unit=package_unit,
+                    package_quantity_text=package_qty,
+                    package_unit=package_unit,
                 )
             ],
         ),
@@ -108,9 +111,12 @@ def test_round_to_package_rejects_incompatible_dimension(migrated_db: sqlite3.Co
                 title="Bad",
                 ingredients=[
                     recipes.IngredientInput(
-                        quantity_text="300", unit="grams", food="flour",
+                        quantity_text="300",
+                        unit="grams",
+                        food="flour",
                         scaling_mode="round_to_package",
-                        package_quantity_text="1", package_unit="cups",  # volume vs mass
+                        package_quantity_text="1",
+                        package_unit="cups",  # volume vs mass
                     )
                 ],
             ),
@@ -118,7 +124,7 @@ def test_round_to_package_rejects_incompatible_dimension(migrated_db: sqlite3.Co
 
 
 def test_bare_count_defaults_to_each_and_scales(migrated_db: sqlite3.Connection) -> None:
-    """"3 bananas" is how people write countable ingredients; it must not be rejected.
+    """ "3 bananas" is how people write countable ingredients; it must not be rejected.
 
     A quantity with no unit is a count, so it stores as 'each' and scales — but the unit word
     never shows, because "6 each bananas" is not English.

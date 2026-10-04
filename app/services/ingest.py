@@ -25,8 +25,18 @@ ACTIVE_STATUSES: tuple[str, ...] = ("queued", "fetching", "extracting", "normali
 
 _TRACKING_PARAMS = frozenset(
     {
-        "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-        "gclid", "fbclid", "mc_cid", "mc_eid", "igshid", "si", "feature",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "gclid",
+        "fbclid",
+        "mc_cid",
+        "mc_eid",
+        "igshid",
+        "si",
+        "feature",
     }
 )
 _YOUTUBE_HOSTS = frozenset(
@@ -188,13 +198,21 @@ def read_artifact(conn: sqlite3.Connection, job_id: int, kind: str) -> bytes | N
 
 def _row_to_job(row: sqlite3.Row) -> IngestJob:
     return IngestJob(
-        id=int(row["id"]), url=row["url"], normalized_url=row["normalized_url"],
-        source=row["source"], has_html=bool(row["has_html"]), status=row["status"],
-        attempts=int(row["attempts"]), error_category=row["error_category"],
-        error_message=row["error_message"], recipe_id=row["recipe_id"],
-        submitted_by=row["submitted_by"], created_at=row["created_at"],
+        id=int(row["id"]),
+        url=row["url"],
+        normalized_url=row["normalized_url"],
+        source=row["source"],
+        has_html=bool(row["has_html"]),
+        status=row["status"],
+        attempts=int(row["attempts"]),
+        error_category=row["error_category"],
+        error_message=row["error_message"],
+        recipe_id=row["recipe_id"],
+        submitted_by=row["submitted_by"],
+        created_at=row["created_at"],
         updated_at=row["updated_at"],
-        reextract_recipe_id=row["reextract_recipe_id"], refetch=bool(row["refetch"]),
+        reextract_recipe_id=row["reextract_recipe_id"],
+        refetch=bool(row["refetch"]),
     )
 
 
@@ -234,9 +252,7 @@ def enqueue_job(
             )
             if html:
                 store_artifact(conn, int(existing["id"]), "supplied_html", html.encode("utf-8"))
-                conn.execute(
-                    "UPDATE ingest_jobs SET has_html = 1 WHERE id = ?", (existing["id"],)
-                )
+                conn.execute("UPDATE ingest_jobs SET has_html = 1 WHERE id = ?", (existing["id"],))
             conn.commit()
             requeued = get_job(conn, int(existing["id"]))
             assert requeued is not None
@@ -266,8 +282,14 @@ def create_reextract_job(
            (url, normalized_url, idempotency_key, source, submitted_by,
             reextract_recipe_id, refetch)
            VALUES (?, ?, ?, 'manual', ?, ?, ?)""",
-        (url, normalized_url, f"reextract:{recipe_id}:{secrets.token_hex(6)}", submitted_by,
-         recipe_id, 1 if refetch else 0),
+        (
+            url,
+            normalized_url,
+            f"reextract:{recipe_id}:{secrets.token_hex(6)}",
+            submitted_by,
+            recipe_id,
+            1 if refetch else 0,
+        ),
     )
     conn.commit()
     job = get_job(conn, int(cur.lastrowid) if cur.lastrowid is not None else 0)
@@ -351,7 +373,10 @@ def waiting_message(plan: BlockedRetry) -> str:
 def mark_waiting_retry(conn: sqlite3.Connection, job_id: int, plan: BlockedRetry) -> None:
     """Park a blocked job as 'queued' (visibly waiting) with the youtube_blocked category kept."""
     set_status(
-        conn, job_id, "queued", error_category=YOUTUBE_BLOCKED,
+        conn,
+        job_id,
+        "queued",
+        error_category=YOUTUBE_BLOCKED,
         error_message=waiting_message(plan),
     )
 
@@ -381,9 +406,7 @@ def requeue_failed(conn: sqlite3.Connection, job_id: int) -> bool:
 
 def discard_failed(conn: sqlite3.Connection, job_id: int) -> bool:
     """Delete a failed job so a link she has given up on stops occupying the inbox."""
-    cur = conn.execute(
-        "DELETE FROM ingest_jobs WHERE id = ? AND status = 'failed'", (job_id,)
-    )
+    cur = conn.execute("DELETE FROM ingest_jobs WHERE id = ? AND status = 'failed'", (job_id,))
     conn.commit()
     return cur.rowcount > 0
 

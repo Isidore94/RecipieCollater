@@ -44,12 +44,12 @@ def _resolves_to(*ips: str) -> object:
 
 
 def test_public_host_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(socket, "getaddrinfo",_resolves_to("93.184.216.34"))
+    monkeypatch.setattr(socket, "getaddrinfo", _resolves_to("93.184.216.34"))
     fetch.assert_host_is_public("example.com")  # does not raise
 
 
 def test_private_host_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(socket, "getaddrinfo",_resolves_to("127.0.0.1"))
+    monkeypatch.setattr(socket, "getaddrinfo", _resolves_to("127.0.0.1"))
     with pytest.raises(fetch.FetchError) as exc:
         fetch.assert_host_is_public("localhost.evil.test")
     assert exc.value.category == "fetch_blocked"
@@ -57,7 +57,7 @@ def test_private_host_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_host_with_any_private_address_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
     # A host resolving to both a public and a private address is refused (rebind defense).
-    monkeypatch.setattr(socket, "getaddrinfo",_resolves_to("93.184.216.34", "10.0.0.1"))
+    monkeypatch.setattr(socket, "getaddrinfo", _resolves_to("93.184.216.34", "10.0.0.1"))
     with pytest.raises(fetch.FetchError):
         fetch.assert_host_is_public("rebind.test")
 
@@ -66,7 +66,7 @@ def test_dns_failure_is_fetch_dns(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(*args: object, **kwargs: object) -> list[object]:
         raise OSError("nxdomain")
 
-    monkeypatch.setattr(socket, "getaddrinfo",boom)
+    monkeypatch.setattr(socket, "getaddrinfo", boom)
     with pytest.raises(fetch.FetchError) as exc:
         fetch.assert_host_is_public("nope.invalid")
     assert exc.value.category == "fetch_dns"

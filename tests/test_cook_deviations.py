@@ -36,7 +36,8 @@ def test_deviations_recorded_and_rendered(migrated_db: sqlite3.Connection) -> No
     detail = _sour_cream_recipe(migrated_db)
     sour_id, onion_id = detail.ingredients[0].id, detail.ingredients[1].id
     cooking.record_cook(
-        migrated_db, detail.id,
+        migrated_db,
+        detail.id,
         cooking.CookCaptureInput(
             rating=8,
             deviations={
@@ -65,7 +66,8 @@ def test_invalid_deviation_kind_rejected(migrated_db: sqlite3.Connection) -> Non
     detail = _sour_cream_recipe(migrated_db)
     with pytest.raises(cooking.CookError):
         cooking.record_cook(
-            migrated_db, detail.id,
+            migrated_db,
+            detail.id,
             cooking.CookCaptureInput(
                 deviations={detail.ingredients[0].id: cooking.DeviationInput(kind="exploded")}
             ),
@@ -77,7 +79,8 @@ def test_adjusted_amount_stored_when_parseable(migrated_db: sqlite3.Connection) 
     detail = _sour_cream_recipe(migrated_db)
     sour_id = detail.ingredients[0].id
     cook_id = cooking.record_cook(
-        migrated_db, detail.id,
+        migrated_db,
+        detail.id,
         cooking.CookCaptureInput(
             deviations={sour_id: cooking.DeviationInput(kind="adjusted", text="100")}
         ),
@@ -99,19 +102,28 @@ def test_deductions_honor_deviations(migrated_db: sqlite3.Connection) -> None:
     sour_item = pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Sour cream", location_id=loc, quantity_mode="exact",
-            food="sour cream", quantity_text="500", unit="grams",
+            display_name="Sour cream",
+            location_id=loc,
+            quantity_mode="exact",
+            food="sour cream",
+            quantity_text="500",
+            unit="grams",
         ),
     )
     pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Onions", location_id=loc, quantity_mode="exact",
-            food="onion", quantity_text="3", unit="each",
+            display_name="Onions",
+            location_id=loc,
+            quantity_mode="exact",
+            food="onion",
+            quantity_text="3",
+            unit="each",
         ),
     )
     cook_id = cooking.record_cook(
-        migrated_db, detail.id,
+        migrated_db,
+        detail.id,
         cooking.CookCaptureInput(
             deviations={
                 sour_id: cooking.DeviationInput(kind="adjusted", text="100"),
@@ -124,7 +136,9 @@ def test_deductions_honor_deviations(migrated_db: sqlite3.Connection) -> None:
     onion_line = by_label["1 each onion"]
     assert onion_line.kind == "skip" and "left it out" in (onion_line.reason or "")
     deductions.apply(
-        migrated_db, detail.id, cook_id,
+        migrated_db,
+        detail.id,
+        cook_id,
         line_ids={line.ingredient_id for line in proposal.deductible_lines},
     )
     item = pantry.get_item(migrated_db, sour_item)
@@ -139,7 +153,8 @@ def test_remember_sub_route(admin_client: TestClient, migrated_db: sqlite3.Conne
     resp = admin_client.post(
         f"/recipes/{detail.slug}/remember-sub",
         data={"food_id": str(food_id), "text": "greek yogurt"},
-        headers=SAME_ORIGIN, follow_redirects=False,
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     assert foods.substitutes_for(migrated_db, food_id)[0].substitute_text == "greek yogurt"
@@ -154,11 +169,14 @@ def test_after_cook_form_posts_deviations(
     resp = admin_client.post(
         f"/recipes/{detail.slug}/after-cook",
         data={
-            "rating": "9", "servings_made": "4",
-            f"dev_{sour_id}": "substituted", f"dev_text_{sour_id}": "greek yogurt",
+            "rating": "9",
+            "servings_made": "4",
+            f"dev_{sour_id}": "substituted",
+            f"dev_text_{sour_id}": "greek yogurt",
             "additions": "extra lime",
         },
-        headers=SAME_ORIGIN, follow_redirects=False,
+        headers=SAME_ORIGIN,
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     entry = cooking.list_cook_log(migrated_db, detail.id)[0]
@@ -173,16 +191,17 @@ def test_deviation_survives_recipe_edit(migrated_db: sqlite3.Connection) -> None
     detail = _sour_cream_recipe(migrated_db)
     onion_id = detail.ingredients[1].id
     cook_id = cooking.record_cook(
-        migrated_db, detail.id,
-        cooking.CookCaptureInput(
-            deviations={onion_id: cooking.DeviationInput(kind="omitted")}
-        ),
+        migrated_db,
+        detail.id,
+        cooking.CookCaptureInput(deviations={onion_id: cooking.DeviationInput(kind="omitted")}),
     )
     # Edit with the SAME ingredient lines (e.g. a title/notes tweak resubmits the form).
     recipes.update_recipe(
-        migrated_db, detail.id,
+        migrated_db,
+        detail.id,
         recipes.RecipeInput(
-            title="Tacos v2", base_servings="4",
+            title="Tacos v2",
+            base_servings="4",
             ingredients=[
                 recipes.IngredientInput(quantity_text="200", unit="grams", food="sour cream"),
                 recipes.IngredientInput(quantity_text="1", unit="each", food="onion"),
@@ -193,8 +212,12 @@ def test_deviation_survives_recipe_edit(migrated_db: sqlite3.Connection) -> None
     pantry.add_item(
         migrated_db,
         pantry.PantryItemInput(
-            display_name="Onions", location_id=loc, quantity_mode="exact",
-            food="onion", quantity_text="3", unit="each",
+            display_name="Onions",
+            location_id=loc,
+            quantity_mode="exact",
+            food="onion",
+            quantity_text="3",
+            unit="each",
         ),
     )
     proposal = deductions.propose(migrated_db, detail.id, cook_log_id=cook_id)

@@ -166,8 +166,15 @@ def run_smoke_test() -> int:
     # import - check them here so --smoke-test validates the whole app, not just the web path.
     missing = []
     for module in (
-        "recipe_scrapers", "yt_dlp", "bs4", "PIL.Image", "anthropic", "openai",
-        "huey.consumer", "app.tasks", "app.services.pipeline",
+        "recipe_scrapers",
+        "yt_dlp",
+        "bs4",
+        "PIL.Image",
+        "anthropic",
+        "openai",
+        "huey.consumer",
+        "app.tasks",
+        "app.services.pipeline",
     ):
         try:
             __import__(module)

@@ -37,8 +37,14 @@ def index(
 ) -> Response:
     prefs = preferences.load(db)
     return render(
-        request, "preferences/index.html", active_nav="plan", user=user,
-        rows=preferences.list_rows(db), scalars=prefs.scalars, notice=notice, error=error,
+        request,
+        "preferences/index.html",
+        active_nav="plan",
+        user=user,
+        rows=preferences.list_rows(db),
+        scalars=prefs.scalars,
+        notice=notice,
+        error=error,
     )
 
 
@@ -89,7 +95,5 @@ async def set_scalars(
                 # dropping the whole submission on the floor.
                 rejected.append(key.replace("_", " "))
     if rejected:
-        return flash.redirect(
-            "/preferences", error="Saved, except: " + ", ".join(rejected) + "."
-        )
+        return flash.redirect("/preferences", error="Saved, except: " + ", ".join(rejected) + ".")
     return flash.redirect("/preferences", notice="Saved.")

@@ -20,7 +20,8 @@ def _recipe(conn: sqlite3.Connection, food: str, qty: str = "200", unit: str = "
     return recipes.create_recipe(
         conn,
         recipes.RecipeInput(
-            title=f"{food} dish", base_servings="4",
+            title=f"{food} dish",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text=qty, unit=unit, food=food)],
         ),
     )
@@ -132,7 +133,8 @@ def test_list_foods_pending_first_with_counts(migrated_db: sqlite3.Connection) -
     recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="Imported", base_servings="4",
+            title="Imported",
+            base_servings="4",
             ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="jicama")],
         ),
         food_status="pending",
@@ -157,9 +159,7 @@ def test_merge_never_leaves_a_self_parent(migrated_db: sqlite3.Connection) -> No
 
     foods.merge_foods(migrated_db, chicken, breast)  # merge the ROOT into the child
 
-    row = migrated_db.execute(
-        "SELECT parent_food_id FROM foods WHERE id = ?", (breast,)
-    ).fetchone()
+    row = migrated_db.execute("SELECT parent_food_id FROM foods WHERE id = ?", (breast,)).fetchone()
     assert row["parent_food_id"] is None  # not itself
     foods.set_parent(migrated_db, breast, None)  # and set_parent still works
 
@@ -198,7 +198,7 @@ def test_undo_merge_is_single_shot(migrated_db: sqlite3.Connection) -> None:
 
     with pytest.raises(foods.MergeUndoUnavailable, match="already been undone"):
         foods.undo_merge(migrated_db, merged.merge_id)
-    count = migrated_db.execute(
-        "SELECT COUNT(*) AS n FROM foods WHERE name = 'onions'"
-    ).fetchone()["n"]
+    count = migrated_db.execute("SELECT COUNT(*) AS n FROM foods WHERE name = 'onions'").fetchone()[
+        "n"
+    ]
     assert count == 1

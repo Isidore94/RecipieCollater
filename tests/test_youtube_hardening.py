@@ -36,15 +36,24 @@ class _Extractor:
 
     def extract(self, content: str, *, source_url: str) -> AIExtraction:
         return AIExtraction(
-            recipe=_RECIPE, provider=self.provider, model=self.model,
-            input_tokens=1, output_tokens=1, cost_micros=1,
+            recipe=_RECIPE,
+            provider=self.provider,
+            model=self.model,
+            input_tokens=1,
+            output_tokens=1,
+            cost_micros=1,
         )
 
 
 def _data(description: str, captions: str | None) -> youtube.YoutubeData:
     return youtube.YoutubeData(
-        video_id="blk123", title="Soup", description=description, uploader="Chef",
-        thumbnail_url=None, duration_seconds=60, captions=captions,
+        video_id="blk123",
+        title="Soup",
+        description=description,
+        uploader="Chef",
+        thumbnail_url=None,
+        duration_seconds=60,
+        captions=captions,
     )
 
 
@@ -259,7 +268,8 @@ def test_task_reschedules_blocked_job_with_backoff(
     job, _ = ingest.enqueue_job(migrated_db, _URL)
     scheduled: list[tuple[tuple[int, int], int]] = []
     monkeypatch.setattr(
-        tasks_module.process_ingest_job, "schedule",
+        tasks_module.process_ingest_job,
+        "schedule",
         lambda args, delay: scheduled.append((args, delay)),
     )
 

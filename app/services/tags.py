@@ -89,9 +89,7 @@ def _recipe_ids(conn: sqlite3.Connection, tag_id: int) -> list[int]:
     ]
 
 
-def rename(
-    conn: sqlite3.Connection, tag_id: int, new_name: str, *, commit: bool = True
-) -> TagEdit:
+def rename(conn: sqlite3.Connection, tag_id: int, new_name: str, *, commit: bool = True) -> TagEdit:
     """Rename a tag everywhere at once.
 
     Renaming onto a name another tag already holds is refused rather than quietly merged:
@@ -113,14 +111,20 @@ def rename(
     if commit:
         conn.commit()
     return TagEdit(
-        edit_id=0, source_name=str(row["name"]), target_name=clean,
+        edit_id=0,
+        source_name=str(row["name"]),
+        target_name=clean,
         recipes_affected=len(affected),
     )
 
 
 def merge(
-    conn: sqlite3.Connection, source_id: int, target_id: int, *,
-    edited_by: int | None = None, commit: bool = True,
+    conn: sqlite3.Connection,
+    source_id: int,
+    target_id: int,
+    *,
+    edited_by: int | None = None,
+    commit: bool = True,
 ) -> TagEdit:
     """Fold one tag into another: every recipe tagged source ends up tagged target.
 
@@ -146,8 +150,11 @@ def merge(
         "INSERT INTO tag_edits (kind, source_name, target_id, target_name, payload, edited_by) "
         "VALUES ('merge', ?, ?, ?, ?, ?)",
         (
-            str(source["name"]), target_id, str(target["name"]),
-            json.dumps({"unlinked": unlinked, "linked": linked}), edited_by,
+            str(source["name"]),
+            target_id,
+            str(target["name"]),
+            json.dumps({"unlinked": unlinked, "linked": linked}),
+            edited_by,
         ),
     )
     for recipe_id in linked:
@@ -163,7 +170,8 @@ def merge(
         conn.commit()
     return TagEdit(
         edit_id=int(receipt.lastrowid or 0),
-        source_name=str(source["name"]), target_name=str(target["name"]),
+        source_name=str(source["name"]),
+        target_name=str(target["name"]),
         recipes_affected=len(unlinked),
     )
 
@@ -184,7 +192,9 @@ def delete(
     if commit:
         conn.commit()
     return TagEdit(
-        edit_id=int(receipt.lastrowid or 0), source_name=str(row["name"]), target_name="",
+        edit_id=int(receipt.lastrowid or 0),
+        source_name=str(row["name"]),
+        target_name="",
         recipes_affected=len(unlinked),
     )
 

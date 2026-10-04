@@ -78,8 +78,13 @@ def test_within_budget_flips_when_daily_cap_reached(migrated_db: sqlite3.Connect
     settings = config.get_settings()  # default daily cap $1.00 = 1_000_000 micro-USD
     assert ai_usage.within_budget(migrated_db, settings) is True
     ai_usage.log_usage(
-        migrated_db, provider="anthropic", model="m", operation="extract_web",
-        job_id=None, cost_micros=1_000_000, status="ok",
+        migrated_db,
+        provider="anthropic",
+        model="m",
+        operation="extract_web",
+        job_id=None,
+        cost_micros=1_000_000,
+        status="ok",
     )
     assert ai_usage.within_budget(migrated_db, settings) is False
 
@@ -161,7 +166,8 @@ def test_model_env_overrides_and_blank_falls_back(
     config.reset_settings_cache()
     settings = config.get_settings()
     assert (settings.anthropic_model, settings.anthropic_model_fast) == (
-        "claude-opus-5-5", "claude-sonnet-5-5",
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
     )
     assert settings.openai_model == "strong-x"
     assert settings.openai_model_fast == "gpt-4o-mini"
@@ -210,7 +216,9 @@ def test_each_operation_asks_for_its_tier(
     rid = recipes.create_recipe(
         migrated_db,
         recipes.RecipeInput(
-            title="T", base_servings="4", tags=[],
+            title="T",
+            base_servings="4",
+            tags=[],
             ingredients=[recipes.IngredientInput(quantity_text="1", unit="each", food="egg")],
         ),
     )
