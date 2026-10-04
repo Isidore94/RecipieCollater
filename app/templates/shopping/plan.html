@@ -10,14 +10,34 @@
 <p class="muted">Pick what you&rsquo;re cooking. The list is built once across everything you pick,
   minus what the pantry already covers &mdash; you review it before anything is added.</p>
 
-<form method="post" action="/shopping/plan/preview" class="trip-form">
-  {% macro pick_rows(recipe_list) %}
+{# The whole list is always rendered; the filter box (Alpine, no network) only hides rows, so
+   the form still works with JavaScript off. #}
+<form method="post" action="/shopping/plan/preview" class="trip-form"
+      x-data="{
+        picked: 0,
+        count() { this.picked = this.$root.querySelectorAll('input[name=recipe]:checked').length; },
+        filter(q) {
+          q = q.trim().toLowerCase();
+          this.$root.querySelectorAll('.trip-pick').forEach(li => {
+            li.hidden = q !== '' && !li.dataset.hay.includes(q);
+          });
+          this.$root.querySelectorAll('.trip-section').forEach(sec => {
+            sec.hidden = !sec.querySelector('.trip-pick:not([hidden])');
+          });
+        }
+      }"
+      x-init="count()" @change="count()">
+  {% macro pick_rows(picks) %}
   <ul class="trip-picks">
-    {% for r in recipe_list %}
-    <li class="trip-pick">
+    {% for p in picks %}
+    {% set r = p.recipe %}
+    <li class="trip-pick" data-hay="{{ (r.title ~ ' ' ~ (p.tags | join(' '))) | lower }}">
       <label class="check trip-pick-label">
         <input type="checkbox" name="recipe" value="{{ r.id }}">
-        <span>{{ r.title }}</span>
+        <span>{{ r.title }}
+          {% if p.favourite %}<span class="trip-fav" title="Favourite">&#9733;</span>{% endif %}
+          {% if p.tags %}<span class="muted trip-tags">{{ p.tags | join(', ') }}</span>{% endif %}
+        </span>
       </label>
       <label class="trip-servings muted">servings
         <input name="servings_{{ r.id }}" value="" placeholder="{{ r.base_servings if r.base_servings else '4' }}"
@@ -28,24 +48,38 @@
   </ul>
   {% endmacro %}
 
-  {% if cookbook %}
-  <section class="card">
-    <h2>Cookbook</h2>
-    {{ pick_rows(cookbook) }}
-  </section>
-  {% endif %}
-
-  {% if inbox %}
-  <section class="card">
-    <h2>Inbox (not tried yet)</h2>
-    {{ pick_rows(inbox) }}
-  </section>
-  {% endif %}
-
-  {% if not cookbook and not inbox %}
+  {% if picker.empty %}
   <p class="muted">No recipes yet. <a href="/recipes/new">Add one first.</a></p>
   {% else %}
-  <div class="form-actions">
+  <input type="search" class="trip-filter" placeholder="Filter recipes&hellip;" hidden
+         x-init="$el.hidden = false" aria-label="Filter recipes by title or tag"
+         autocomplete="off" @input="filter($event.target.value)">
+
+  {% if picker.this_week %}
+  <section class="card trip-section" id="trip-this-week">
+    <h2>This week</h2>
+    <p class="muted">On your meal plan.</p>
+    {{ pick_rows(picker.this_week) }}
+  </section>
+  {% endif %}
+
+  {% if picker.cookbook %}
+  <section class="card trip-section">
+    <h2>Cookbook</h2>
+    {{ pick_rows(picker.cookbook) }}
+  </section>
+  {% endif %}
+
+  {% if picker.inbox %}
+  <section class="card trip-section">
+    <h2>Inbox (not tried yet)</h2>
+    {{ pick_rows(picker.inbox) }}
+  </section>
+  {% endif %}
+
+  <div class="form-actions trip-actions">
+    <span class="muted trip-count" role="status"
+          x-text="picked ? picked + (picked === 1 ? ' recipe selected' : ' recipes selected') : ''"></span>
     <button type="submit" class="btn-primary">Preview the list &rarr;</button>
   </div>
   {% endif %}

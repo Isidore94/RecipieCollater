@@ -440,3 +440,50 @@ def discard(conn: sqlite3.Connection, receipt_id: int) -> None:
         (receipt_id,),
     )
     conn.commit()
+
+
+@dataclass(frozen=True, slots=True)
+class ReceiptSummary:
+    receipt_id: int
+    status: str  # pending | applied | discarded
+    source: str  # photo | paste
+    created_at: str
+    line_count: int
+    preview: str  # first few line texts - receipts record no store name (no schema column)
+
+
+def pending_count(conn: sqlite3.Connection) -> int:
+    """Parsed-but-unapplied receipts, for the nudge on Pantry and Shopping."""
+    row = conn.execute("SELECT COUNT(*) FROM receipts WHERE status = 'pending'").fetchone()
+    return int(row[0]) if row else 0
+
+
+def list_receipts(conn: sqlite3.Connection, *, limit: int = 100) -> list[ReceiptSummary]:
+    """Newest first, so a stranded pending receipt can be found and resumed."""
+    rows = conn.execute(
+        """SELECT r.id, r.status, r.source, r.created_at,
+                  (SELECT COUNT(*) FROM receipt_lines l WHERE l.receipt_id = r.id) AS n
+           FROM receipts r ORDER BY r.created_at DESC, r.id DESC LIMIT ?""",
+        (max(1, int(limit)),),
+    ).fetchall()
+    out: list[ReceiptSummary] = []
+    for r in rows:
+        texts = [
+            str(x["original_text"])
+            for x in conn.execute(
+                "SELECT original_text FROM receipt_lines WHERE receipt_id = ? "
+                "ORDER BY sort_order LIMIT 3",
+                (r["id"],),
+            ).fetchall()
+        ]
+        out.append(
+            ReceiptSummary(
+                receipt_id=int(r["id"]),
+                status=r["status"],
+                source=r["source"],
+                created_at=r["created_at"],
+                line_count=int(r["n"]),
+                preview=", ".join(texts),
+            )
+        )
+    return out

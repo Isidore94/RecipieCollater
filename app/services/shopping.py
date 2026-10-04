@@ -34,6 +34,89 @@ class ShoppingError(ValueError):
 
 
 # --------------------------------------------------------------------------------------
+# Trip builder: the recipe picker
+# --------------------------------------------------------------------------------------
+
+# Ratings are 1-10 (migration 009); this and above counts as a favourite for ordering.
+FAVOURITE_RATING = 8
+
+
+@dataclass(frozen=True, slots=True)
+class TripPick:
+    """One row in the trip picker: the recipe plus what the client-side filter matches on."""
+
+    recipe: recipes.RecipeSummary
+    tags: tuple[str, ...]
+    favourite: bool
+    last_cooked: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class TripPicker:
+    this_week: list[TripPick]
+    cookbook: list[TripPick]
+    inbox: list[TripPick]
+
+    @property
+    def empty(self) -> bool:
+        return not (self.this_week or self.cookbook or self.inbox)
+
+
+def trip_picker(conn: sqlite3.Connection, *, planned: set[int]) -> TripPicker:
+    """Everything the trip builder offers, in the order a cook wants it.
+
+    The full list is always returned (the page must work without JavaScript; the filter box
+    only hides rows). Recipes already planned for this week come first under their own heading
+    and are not repeated below, since a duplicate checkbox would post the recipe twice.
+    ``planned`` is the recipe ids on this week's meal plan (the caller reads them from
+    planning, which itself imports this module).
+    Within Cookbook and Inbox: recently cooked or favourite recipes first (most recently
+    cooked, then highest rated), then everything else alphabetically.
+    """
+    last_cooked = {
+        int(r["recipe_id"]): str(r["last"])
+        for r in conn.execute(
+            "SELECT recipe_id, MAX(cooked_at) AS last FROM cook_log GROUP BY recipe_id"
+        ).fetchall()
+    }
+    tag_rows: dict[int, list[str]] = {}
+    for r in conn.execute(
+        "SELECT rt.recipe_id, t.name FROM recipe_tags rt JOIN tags t ON t.id = rt.tag_id "
+        "ORDER BY t.name"
+    ).fetchall():
+        tag_rows.setdefault(int(r["recipe_id"]), []).append(str(r["name"]))
+
+    def pick(rec: recipes.RecipeSummary) -> TripPick:
+        return TripPick(
+            recipe=rec,
+            tags=tuple(tag_rows.get(rec.id, ())),
+            favourite=(rec.rating or 0) >= FAVOURITE_RATING,
+            last_cooked=last_cooked.get(rec.id),
+        )
+
+    def ordered(picks: list[TripPick]) -> list[TripPick]:
+        picks.sort(key=lambda p: p.recipe.title.casefold())
+        picks.sort(key=lambda p: -(p.recipe.rating or 0))
+        # Stable sorts, last key is primary: cooked/favourite group, then recency within it.
+        picks.sort(key=lambda p: p.last_cooked or "", reverse=True)
+        picks.sort(key=lambda p: not (p.favourite or p.last_cooked))
+        return picks
+
+    everything = [
+        pick(r)
+        for status in ("cookbook", "inbox")
+        for r in recipes.list_recipes(conn, status=status)
+    ]
+    week = [p for p in everything if p.recipe.id in planned]
+    rest = [p for p in everything if p.recipe.id not in planned]
+    return TripPicker(
+        this_week=sorted(week, key=lambda p: p.recipe.title.casefold()),
+        cookbook=ordered([p for p in rest if p.recipe.status == "cookbook"]),
+        inbox=ordered([p for p in rest if p.recipe.status == "inbox"]),
+    )
+
+
+# --------------------------------------------------------------------------------------
 # Items + display (the store-language layer)
 # --------------------------------------------------------------------------------------
 

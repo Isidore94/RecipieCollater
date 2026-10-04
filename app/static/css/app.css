@@ -722,3 +722,20 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fail-msg { flex-basis: 100%; }
 .draft-photo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .draft-photo label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--ink-soft); }
+
+/* Trip builder: filter, sections, selected count */
+.trip-filter { width: 100%; margin: 12px 0; min-height: 44px; }
+.trip-pick[hidden], .trip-section[hidden] { display: none; }
+.trip-fav { color: var(--brand); }
+.trip-tags { display: block; font-size: 12px; }
+.trip-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Receipts index + nudge */
+.receipt-nudge { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.receipt-index { list-style: none; padding: 0; margin: 0; }
+.receipt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.receipt-row-main { flex: 1; min-width: 200px; }
+.receipt-row-actions { display: flex; gap: 8px; align-items: center; }
+.receipt-status { font-size: 13px; font-weight: 600; margin: 0 6px; }
+.receipt-pending .receipt-status { color: var(--brand); }
+.receipt-preview { font-size: 13px; }

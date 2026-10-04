@@ -16,6 +16,12 @@
 </header>
 
 {% include "partials/_flash.html" %}
+{% if pending_receipts %}
+<p class="banner receipt-nudge" role="status">
+  <span>{{ pending_receipts }} receipt{{ 's' if pending_receipts != 1 }} waiting for review.</span>
+  <a href="/receipts" class="btn-secondary">Review</a>
+</p>
+{% endif %}
 
 {% if restock_count %}
 <form method="post" action="/shopping/add-staples" class="pantry-restock">
