@@ -309,3 +309,46 @@ def test_web_ai_still_requires_steps(
     done = ingest.get_job(migrated_db, job.id)
     assert done is not None and done.status == "failed"
     assert done.error_category == "no_recipe"
+
+
+def test_youtube_step_timestamps_persist(
+    migrated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Model timestamps and the chapter fallback both land in recipe_steps.video_seconds."""
+    monkeypatch.setenv("RC_ANTHROPIC_API_KEY", "test-key")
+    config.reset_settings_cache()
+    chapters = (youtube.Chapter(0, "Prep"), youtube.Chapter(60, "Cook"))
+
+    def run(video_id: str, recipe: ExtractedRecipe) -> list[int | None]:
+        job, _ = ingest.enqueue_job(migrated_db, f"https://www.youtube.com/watch?v={video_id}")
+        data = youtube.YoutubeData(
+            video_id=video_id, title=video_id, description="2 cups rice", uploader="Chef",
+            thumbnail_url=None, duration_seconds=300, captions=None, chapters=chapters,
+        )
+        monkeypatch.setattr("app.services.youtube.fetch", lambda url: data)
+        monkeypatch.setattr("app.ai.get_provider", lambda settings: _FakeExtractor(recipe))
+        pipeline.run_job(migrated_db, job)
+        done = ingest.get_job(migrated_db, job.id)
+        assert done is not None and done.recipe_id is not None
+        detail = recipes.get_recipe(migrated_db, done.recipe_id)
+        assert detail is not None
+        return [s.video_seconds for s in detail.steps]
+
+    ingredient = [ExtractedIngredient(original_text="2 cups rice")]
+    # A model timestamp wins (and an out-of-range one is dropped) - no chapter guessing on top.
+    given = ExtractedRecipe(
+        title="Rice",
+        ingredients=ingredient,
+        steps=[
+            ExtractedStep(instruction="Rinse.", video_seconds=15),
+            ExtractedStep(instruction="Boil.", video_seconds=9999),
+        ],
+    )
+    assert run("chap123", given) == [15, None]
+    # No model timestamps and step count == chapter count: map by order.
+    plain = ExtractedRecipe(
+        title="Rice 2",
+        ingredients=ingredient,
+        steps=[ExtractedStep(instruction="Rinse."), ExtractedStep(instruction="Boil.")],
+    )
+    assert run("chap456", plain) == [0, 60]

@@ -5,6 +5,27 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### YouTube chapters and pinned comments reach the recipe (2026-10-04)
+
+No schema change. Cook mode has had a "Watch this step" link since migration 010, but nothing
+ever filled `recipe_steps.video_seconds`, so it never appeared. Creators already say where each
+step is, in chapters and in the description; the importer now listens.
+
+- **Chapters.** `parse_info` keeps yt-dlp's `chapters` (and falls back to explicit "0:45 Sear the
+  chicken" lines in the description when there are none, via `parse_description_chapters` - two
+  ascending lines minimum, so "ready in 2:30 hours" is not a chapter list). They go to the model
+  as a "Chapters:" block and into the `youtube_metadata` artifact.
+- **Step timestamps.** `ExtractedStep.video_seconds` is a new optional integer the model fills
+  when a step obviously sits in one chapter. `assign_step_seconds` is the authority on what is
+  stored: model values win (out-of-range dropped); otherwise a step starting with a chapter title
+  takes it; otherwise steps map to chapters in order when the counts are within one, setting
+  aside an intro/outro. Anything murkier stays NULL - a wrong deep link is worse than none.
+- **Pinned/top comments, only when thin.** `is_thin` (description + captions under ~600
+  characters) triggers a second, best-effort yt-dlp call with `getcomments`. `select_comments`
+  keeps the pinned comment, then the channel owner's, then the top three by likes, capped by
+  characters, and the prompt labels them as viewer text. The common path makes no extra call.
+- Tests are all offline on plain dicts, plus a pipeline test showing timestamps persisted.
+
 ### Tags that survive a big cookbook (2026-08-01)
 
 Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into
