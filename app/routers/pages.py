@@ -23,7 +23,7 @@ from app.config import get_settings
 from app.deps import get_db
 from app.routers import flash
 from app.routers.ingest_api import schedule_processing
-from app.services import cooking, discovery, ingest, matching
+from app.services import cooking, discovery, ingest, matching, reextract
 from app.services import recipes as recipe_service
 from app.services.users import User
 from app.templating import render, safe_url
@@ -219,6 +219,7 @@ def _render_library(
             rating=rating or "", page=page + 1,
         ) if page < pages else "",
         notice=notice, error=error, undo=undo, undo_kind=undo_kind,
+        drafts=reextract.list_pending_drafts(db) if status in ("inbox", "cookbook") else [],
         status_code=status_code,
         **(extra or {}),
     )
@@ -237,6 +238,14 @@ def _jobs_context(db: sqlite3.Connection) -> dict[str, Any]:
                 titles[job.id] = (recipe.title, recipe.slug)
                 if recipe_service.needs_transcript_review(db, job.recipe_id):
                     review.add(job.id)
+    # A finished re-read names the recipe it is a new reading OF and links to the comparison.
+    drafts: dict[int, tuple[str, str]] = {}
+    for job in jobs:
+        if job.status == "done" and job.reextract_recipe_id is not None:
+            draft = reextract.pending_draft(db, job.reextract_recipe_id)
+            target = recipe_service.get_recipe(db, job.reextract_recipe_id)
+            if draft is not None and target is not None:
+                drafts[job.id] = (target.title, f"/recipes/{target.id}/compare/{draft.id}")
     return {
         "jobs": jobs,
         "jobs_active": any(j.status in ingest.ACTIVE_STATUSES for j in jobs),
@@ -244,6 +253,7 @@ def _jobs_context(db: sqlite3.Connection) -> dict[str, Any]:
         "job_recipes": titles,
         "job_review": review,
         "review_note": recipe_service.TRANSCRIPT_REVIEW_NOTE,
+        "job_drafts": drafts,
     }
 
 

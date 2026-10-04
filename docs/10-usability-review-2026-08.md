@@ -267,5 +267,4 @@ rather than applied twice.
   is now fixed too** (2026-10-04): a search box in the rail and the mobile tools row, an htmx
   typeahead, `/` to focus on desktop, and a grouped `/search` page (recipes, pantry items, foods,
   tags). Still open from that item: the pantry-item branch of "+".
-- From the docs-vs-code gap analysis: big-event mode, re-extract comparison, the embedded
-  per-step video player, and structured after-cook quantities remain unbuilt.
+- From the docs-vs-code gap analysis: big-event mode, the embedded per-step video player, and structured after-cook quantities remain unbuilt.

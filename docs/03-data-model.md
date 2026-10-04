@@ -482,6 +482,8 @@ CREATE TABLE extraction_runs (
 );
 ```
 
+As built, `extraction_runs` stores the validated `ExtractedRecipe` as `payload` and carries a lifecycle `state` (`accepted` | `draft` | `applied` | `dismissed`, migration 020) with `reviewed_at`, `reviewed_by`, and `applied_sections`; `ingest_jobs` gained `reextract_recipe_id` and `refetch` for re-reads (docs/04 section 8). The SQL above is the original target model.
+
 Duplicate detection uses `normalized_url` and the unique idempotency key. An explicit duplicate override generates a new key while retaining the relationship to the existing recipe. Worker stages are restartable; recipe creation and job completion are transactionally/idempotently linked.
 
 ## 10. AI bookkeeping

@@ -27,6 +27,15 @@
 {% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
 {% if review_note %}<p class="banner banner-todo no-print" role="note">{{ review_note }}</p>{% endif %}
 
+{% if draft %}
+<p class="banner banner-todo no-print" role="status">
+  A new reading is ready to compare.
+  <a href="/recipes/{{ recipe.id }}/compare/{{ draft.id }}">Review what changed &rarr;</a>
+</p>
+{% elif rereading %}
+<p class="banner banner-ok no-print" role="status">Reading the source again&hellip; a comparison will appear here when it is ready.</p>
+{% endif %}
+
 {% if recipe.image_path %}
 <img class="recipe-hero" src="/recipes/{{ recipe.slug }}/image" alt="{{ recipe.title }}">
 {% endif %}
@@ -104,6 +113,17 @@
   {% if safe_source %}<a href="{{ safe_source }}" rel="noopener nofollow">{{ recipe.source_name or recipe.source_url }}</a>
   {% else %}{{ recipe.source_name or recipe.source_url }}{% endif %}
 </p>
+{% endif %}
+
+{% if recipe.source_url | safe_url and not rereading %}
+<details class="reread no-print">
+  <summary>Re-read source</summary>
+  <form method="post" action="/recipes/{{ recipe.id }}/reread" class="reread-form">
+    <p class="muted">Reads the source again and shows what differs. Your recipe is not changed until you choose.</p>
+    <label><input type="checkbox" name="refetch" value="1"> Fetch the page again (otherwise the saved copy is used)</label>
+    <button type="submit" class="btn-secondary">Re-read source</button>
+  </form>
+</details>
 {% endif %}
 
 {% if cook_log %}

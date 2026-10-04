@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Compare readings · {{ recipe.title }} · RecipeCollater{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>A new reading of {{ recipe.title }}</h1>
+  <p class="muted">
+    Read again {{ run.created_at[:10] }}{% if run.model %} with {{ run.model }}{% elif run.extractor %} ({{ run.extractor | replace('_', ' ') }}){% endif %}.
+    Nothing has changed yet. Tick the parts of the new reading you want; everything else, including
+    your own edits, stays exactly as it is.
+  </p>
+</header>
+
+{% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
+{% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
+
+<form method="post" action="/recipes/{{ recipe.id }}/compare/{{ run.id }}/apply" class="compare-form">
+  {% for s in sections %}
+  {% set tag = 'ol' if s.key == 'steps' else 'ul' %}
+  <section class="card compare-section{% if not s.changed %} is-same{% endif %}">
+    <div class="compare-head">
+      <h2>{{ s.label }}</h2>
+      {% if s.changed %}
+      <label class="compare-take">
+        <input type="checkbox" name="take" value="{{ s.key }}"> Take theirs
+      </label>
+      {% else %}
+      <span class="muted">No change</span>
+      {% endif %}
+    </div>
+    {% if s.changed %}
+    <div class="two-col compare-cols">
+      {% for side, lines in (('Your recipe now', s.current), ('New reading', s.draft)) %}
+      <div>
+        <h3 class="compare-side">{{ side }}</h3>
+        {% if not lines %}
+        <p class="muted">(empty)</p>
+        {% elif s.key in ('ingredients', 'steps') %}
+        <{{ tag }} class="compare-lines">
+          {% for line in lines %}<li>{{ line }}</li>{% endfor %}
+        </{{ tag }}>
+        {% else %}
+        <p>{{ lines | join(' · ') }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  {% if any_changed %}
+  <div class="compare-actions">
+    <button type="submit" class="btn-primary">Apply ticked sections</button>
+    <button type="submit" name="take_all" value="1" class="btn-secondary">Take all changes</button>
+    <button type="submit" formaction="/recipes/{{ recipe.id }}/compare/{{ run.id }}/dismiss"
+            class="btn-secondary">Keep my recipe as it is</button>
+  </div>
+  {% else %}
+  <p class="muted">The new reading matches your recipe, so there is nothing to take.</p>
+  <div class="compare-actions">
+    <button type="submit" formaction="/recipes/{{ recipe.id }}/compare/{{ run.id }}/dismiss"
+            class="btn-primary">Done</button>
+  </div>
+  {% endif %}
+</form>
+<p><a href="/recipes/{{ recipe.slug }}">&larr; Back to {{ recipe.title }}</a></p>
+{% endblock %}

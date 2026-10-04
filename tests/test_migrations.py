@@ -65,12 +65,12 @@ def test_real_migration_001_is_only_phase0_tables(tmp_path: Path) -> None:
 def test_fresh_install_and_idempotent_rerun(tmp_path: Path) -> None:
     db_path = tmp_path / "app.db"
     first = run_migrations(db_path, backup_dir=tmp_path / "bk")
-    assert first.applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
-    assert first.current_version == 19
+    assert first.applied == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    assert first.current_version == 20
     second = run_migrations(db_path, backup_dir=tmp_path / "bk")
     assert second.already_current is True
     assert second.applied == []
-    assert current_version(db_path) == 19
+    assert current_version(db_path) == 20
 
 
 def test_snapshot_taken_before_each_apply(tmp_path: Path) -> None:
@@ -213,7 +213,7 @@ def test_real_upgrade_from_phase0_001_to_002(tmp_path: Path) -> None:
         conn.close()
 
     result = run_migrations(db_path, backup_dir=tmp_path / "new-backups")
-    assert result.applied == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    assert result.applied == [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
     conn = connect(db_path)
     try:
         columns = {
@@ -269,3 +269,64 @@ def test_real_migrations_discoverable() -> None:
     migrations = discover_migrations()
     assert migrations
     assert migrations[0].version == 1
+
+
+# ---- Migration 020: re-read drafts -----------------------------------------------------
+
+
+def test_migration_020_fresh_has_reextract_columns_and_defaults(tmp_path: Path) -> None:
+    db_path = tmp_path / "fresh.db"
+    run_migrations(db_path, backup_dir=tmp_path / "bk")
+    conn = connect(db_path)
+    try:
+        jobs = {r["name"] for r in conn.execute("PRAGMA table_info(ingest_jobs)").fetchall()}
+        runs = {r["name"] for r in conn.execute("PRAGMA table_info(extraction_runs)").fetchall()}
+        assert {"reextract_recipe_id", "refetch"} <= jobs
+        assert {"state", "reviewed_at", "reviewed_by", "applied_sections"} <= runs
+        # An unlabelled run is an accepted first reading; an unknown state is refused.
+        conn.execute(
+            "INSERT INTO extraction_runs (extractor, schema_version, payload) "
+            "VALUES ('manual', '1', '{}')"
+        )
+        assert conn.execute("SELECT state FROM extraction_runs").fetchone()["state"] == "accepted"
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO extraction_runs (extractor, schema_version, payload, state) "
+                "VALUES ('manual', '1', '{}', 'bogus')"
+            )
+    finally:
+        conn.close()
+
+
+def test_migration_020_upgrades_a_019_database_keeping_runs_accepted(tmp_path: Path) -> None:
+    old = tmp_path / "old-migrations"
+    old.mkdir()
+    for path in MIGRATIONS_DIR.glob("*.sql"):
+        if not path.name.startswith("020_"):
+            shutil.copy2(path, old)
+    db_path = tmp_path / "019.db"
+    run_migrations(db_path, old, backup_dir=tmp_path / "bk-old")
+    conn = connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO ingest_jobs (url, normalized_url, idempotency_key) "
+            "VALUES ('https://e.test/a', 'https://e.test/a', 'https://e.test/a')"
+        )
+        conn.execute(
+            "INSERT INTO extraction_runs (job_id, extractor, schema_version, payload) "
+            "VALUES (1, 'recipe_scrapers', '1', '{}')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = run_migrations(db_path, backup_dir=tmp_path / "bk-new")
+    assert result.applied == [20]
+    conn = connect(db_path)
+    try:
+        run = conn.execute("SELECT state, applied_sections FROM extraction_runs").fetchone()
+        assert run["state"] == "accepted" and run["applied_sections"] is None
+        job = conn.execute("SELECT reextract_recipe_id, refetch FROM ingest_jobs").fetchone()
+        assert job["reextract_recipe_id"] is None and job["refetch"] == 0
+    finally:
+        conn.close()

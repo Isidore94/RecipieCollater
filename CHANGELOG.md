@@ -142,6 +142,41 @@ restore-tested" was true at backup time but nothing said how stale that test had
 - Not claimed: none of this was run on the N95. Tests use `tmp_path` and fake clients; CI stays
   offline.
 
+### Re-read a source without losing what the family changed (2026-10-04)
+
+Schema 020. The docs have always promised that re-extraction creates a comparison draft and never
+overwrites family edits, but nothing could re-extract: the pipeline refuses a job that already has
+a recipe (that refusal is its replay safety), and a run had no way to say "proposed, not yet
+accepted". A site fixes a typo or an AI model improves, and the only recourse was deleting the
+recipe and losing the cook log, tags and pantry mappings with it.
+
+- **Re-read source** on the recipe sheet records a re-read job and a new `extraction_runs` row in
+  state `draft`. It reuses the newest stored immutable artifact by default (no network, same blob,
+  linked rather than copied) or, with "fetch the page again", goes through the same SSRF-safe
+  fetchers as a first import. The recipe and its accepted run are not touched.
+- **The re-read is its own intent**, `ingest_jobs.reextract_recipe_id`, not a loosened normal job.
+  A normal job's `recipe_id` and the same-URL reuse in `apply_extraction` are what stop a retry
+  from creating a second recipe; a re-read leaves `recipe_id` NULL, has its own key, and cannot
+  create or reuse a recipe. The replay-safety tests are unchanged and still pass; new ones cover
+  a worker retry of a re-read job and a stale replay of the original after a re-read.
+- **`/recipes/{id}/compare/{run_id}`** shows the recipe as it is now beside the new reading -
+  title, description, times, servings, ingredients, steps, tags - with a "Take theirs" box on each
+  section that really differs. The diff (`reextract.diff_sections`) ignores case, whitespace, tag
+  order and unit spelling, so an unchanged page reads as unchanged rather than as every ingredient
+  line rewritten (`tbsp` against `tablespoon`).
+- **Apply writes only the ticked sections**, through `update_recipe` with everything else
+  round-tripped from the current recipe, so revisions, search, quantity parsing and pantry
+  mappings on unchanged lines behave as for a manual edit. New foods arrive `pending`, like a
+  first import. The run is claimed atomically first so a double-submit cannot apply twice, and
+  `current_extraction_run_id` only moves when every changed section was taken. "Keep my recipe as
+  it is" dismisses the draft.
+- "A new reading is ready to compare" shows on the recipe sheet, Inbox and Cookbook; a newer
+  reading supersedes an older unreviewed one.
+- Honest limits: stored YouTube metadata keeps the description but not the transcript, so a reuse
+  reading of a video is description-only (fetch again for captions); the extraction schema has no
+  TLDR, base servings or active/elapsed minutes, so those are never compared or overwritten. Not
+  tried on the N95, an iPhone, or a live site - tests are offline against the fixture page.
+
 ### Tags that survive a big cookbook (2026-08-01)
 
 Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into

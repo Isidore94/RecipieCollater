@@ -15,7 +15,7 @@ def test_migrate_and_schema_version(data_dir: Path, capsys) -> None:  # type: ig
     assert main(["migrate"]) == 0
     assert main(["schema-version"]) == 0
     out = capsys.readouterr().out.strip().splitlines()[-1]
-    assert out == "19"
+    assert out == "20"
 
 
 def test_backup_verify_restore_cycle(data_dir: Path) -> None:
