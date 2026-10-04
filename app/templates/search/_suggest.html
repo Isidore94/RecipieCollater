@@ -1,0 +1,18 @@
+{# Typeahead dropdown (htmx partial; no layout). Autoescaped; the query only reaches an href
+   via a server-built, urlencoded URL. #}
+{% if query %}
+<ul class="suggest-list">
+  {% for r in recipes %}
+  <li><a href="/recipes/{{ r.slug }}" class="suggest-link">
+    <span class="suggest-kind">Recipe</span><span class="suggest-name">{{ r.title }}</span></a></li>
+  {% endfor %}
+  {% for f in foods %}
+  <li><a href="/foods?q={{ f.name | urlencode }}" class="suggest-link">
+    <span class="suggest-kind">Food</span><span class="suggest-name">{{ f.name }}</span></a></li>
+  {% endfor %}
+  {% if not recipes and not foods %}
+  <li class="suggest-none muted">Nothing matches &ldquo;{{ query }}&rdquo; yet.</li>
+  {% endif %}
+  <li><a href="{{ full_url }}" class="suggest-link suggest-all">See all results for &ldquo;{{ query }}&rdquo;</a></li>
+</ul>
+{% endif %}

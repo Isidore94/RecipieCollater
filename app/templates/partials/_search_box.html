@@ -1,0 +1,21 @@
+{# The global search box, used in the desktop rail and the mobile tools row (`where` keeps the
+   two instances' ids apart). A plain GET form, so Enter and no-JS both reach /search; htmx adds
+   the debounced typeahead and Alpine the "/" shortcut + Escape - both only niceties. #}
+{% from "partials/_icons.html" import icon %}
+<form class="global-search global-search-{{ where }}" role="search" action="/search" method="get"
+      x-data
+      {% if where == 'rail' %}@keydown.window="if ($event.key === '/' && !$event.target.closest('input, textarea, select, [contenteditable]')) { $event.preventDefault(); $refs.q.focus(); }"{% endif %}
+      @keydown.escape="$refs.sug.innerHTML = ''"
+      @click.outside="$refs.sug.innerHTML = ''">
+  <label class="visually-hidden" for="global-search-{{ where }}">Search recipes, pantry and foods</label>
+  <div class="global-search-row">
+    <input id="global-search-{{ where }}" x-ref="q" type="search" name="q" autocomplete="off"
+           placeholder="{% if where == 'rail' %}Search  ( / ){% else %}Search{% endif %}" maxlength="100"
+           hx-get="/search/suggest" hx-trigger="keyup changed delay:250ms, search"
+           hx-target="#global-suggest-{{ where }}" hx-swap="innerHTML" hx-sync="this:replace">
+    <button type="submit" class="global-search-btn" aria-label="Search">
+      <span class="search-icon" aria-hidden="true">{{ icon('search') }}</span>
+    </button>
+  </div>
+  <div id="global-suggest-{{ where }}" x-ref="sug" class="suggest" aria-live="polite"></div>
+</form>

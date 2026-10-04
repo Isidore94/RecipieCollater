@@ -455,8 +455,10 @@ def substitutes_for(conn: sqlite3.Connection, food_id: int) -> list[SubstituteOp
 # --------------------------------------------------------------------------------------
 
 
-def list_foods(conn: sqlite3.Connection, *, query: str | None = None) -> list[FoodInfo]:
-    """Foods with usage counts, pending-review first, then most-used."""
+def list_foods(
+    conn: sqlite3.Connection, *, query: str | None = None, limit: int | None = None
+) -> list[FoodInfo]:
+    """Foods with usage counts, pending-review first, then most-used. ``limit`` is opt-in."""
     pattern = f"%{query.strip()}%" if query and query.strip() else "%"
     rows = conn.execute(
         """SELECT f.id, f.name, f.category, f.status, f.parent_food_id,
@@ -471,8 +473,9 @@ def list_foods(conn: sqlite3.Connection, *, query: str | None = None) -> list[Fo
            LEFT JOIN units u ON u.id = f.purchase_unit_id
            WHERE f.name LIKE ?
            ORDER BY (f.status = 'pending') DESC, recipe_count + pantry_count DESC,
-                    f.name COLLATE NOCASE""",
-        (pattern,),
+                    f.name COLLATE NOCASE
+           LIMIT ?""",
+        (pattern, -1 if limit is None else max(0, int(limit))),
     ).fetchall()
     return [
         FoodInfo(

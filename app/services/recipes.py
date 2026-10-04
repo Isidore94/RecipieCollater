@@ -781,9 +781,14 @@ def get_recipe_by_slug(conn: sqlite3.Connection, slug: str) -> RecipeDetail | No
     return _detail_from_row(conn, row) if row else None
 
 
-def _fts_query(raw: str) -> str:
+def _fts_query(raw: str, *, prefix: bool = False) -> str:
+    """Quote every word; with ``prefix`` the last one also matches as a word-start, so a
+    typeahead finds "chili" while the reader has only typed "chi"."""
     tokens = re.findall(r"\w+", raw.lower())
-    return " ".join(f'"{token}"' for token in tokens)
+    parts = [f'"{token}"' for token in tokens]
+    if prefix and parts:
+        parts[-1] += "*"
+    return " ".join(parts)
 
 
 def _summary(row: sqlite3.Row) -> RecipeSummary:
@@ -848,6 +853,7 @@ def _library_where(
     tier: str | None,
     max_minutes: int | None,
     min_rating: int | None,
+    exclude_status: str | None = None,
 ) -> tuple[list[str], list[str | int]]:
     """The filter half of a library query, shared by the listing and its count.
 
@@ -859,6 +865,9 @@ def _library_where(
     if status:
         where.append("r.status = ?")
         params.append(status)
+    if exclude_status:
+        where.append("r.status <> ?")
+        params.append(exclude_status)
     for tag in normalize_tag_filters(tags):
         where.append(
             "EXISTS (SELECT 1 FROM recipe_tags rt JOIN tags t ON t.id = rt.tag_id "
@@ -886,6 +895,8 @@ def list_recipes(
     tier: str | None = None,
     max_minutes: int | None = None,
     min_rating: int | None = None,
+    exclude_status: str | None = None,
+    prefix: bool = False,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[RecipeSummary]:
@@ -897,10 +908,11 @@ def list_recipes(
     default page size would silently truncate them.
     """
     where, params = _library_where(
-        status=status, tags=tags, tier=tier, max_minutes=max_minutes, min_rating=min_rating
+        status=status, tags=tags, tier=tier, max_minutes=max_minutes, min_rating=min_rating,
+        exclude_status=exclude_status,
     )
     if query and query.strip():
-        match = _fts_query(query)
+        match = _fts_query(query, prefix=prefix)
         if not match:
             return []
         sql = _SUMMARY_SELECT_FTS
@@ -928,13 +940,16 @@ def count_recipes(
     tier: str | None = None,
     max_minutes: int | None = None,
     min_rating: int | None = None,
+    exclude_status: str | None = None,
+    prefix: bool = False,
 ) -> int:
     """How many recipes the same filters match, for "showing 1-48 of 312" and page links."""
     where, params = _library_where(
-        status=status, tags=tags, tier=tier, max_minutes=max_minutes, min_rating=min_rating
+        status=status, tags=tags, tier=tier, max_minutes=max_minutes, min_rating=min_rating,
+        exclude_status=exclude_status,
     )
     if query and query.strip():
-        match = _fts_query(query)
+        match = _fts_query(query, prefix=prefix)
         if not match:
             return 0
         sql = _COUNT_SELECT_FTS
@@ -980,17 +995,28 @@ class TagCount:
 
 
 def list_tags(
-    conn: sqlite3.Connection, *, status: str | None = None, limit: int | None = 12
+    conn: sqlite3.Connection,
+    *,
+    status: str | None = None,
+    query: str | None = None,
+    limit: int | None = 12,
 ) -> list[TagCount]:
-    """The most-used tags (for the Cookbook filter chips); ``limit=None`` for all of them."""
+    """The most-used tags (for the Cookbook filter chips); ``limit=None`` for all of them.
+    ``query`` keeps only tags whose name contains it (global search)."""
     params: list[str | int] = []
+    where: list[str] = []
     sql = (
         "SELECT t.name, COUNT(*) AS n FROM tags t "
         "JOIN recipe_tags rt ON rt.tag_id = t.id JOIN recipes r ON r.id = rt.recipe_id "
     )
     if status:
-        sql += "WHERE r.status = ? "
+        where.append("r.status = ?")
         params.append(status)
+    if query and query.strip():
+        where.append("t.name LIKE ?")
+        params.append(f"%{query.strip()}%")
+    if where:
+        sql += "WHERE " + " AND ".join(where) + " "
     sql += "GROUP BY t.id ORDER BY n DESC, t.name COLLATE NOCASE"
     if limit is not None:
         sql += " LIMIT ?"

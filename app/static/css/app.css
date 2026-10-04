@@ -739,3 +739,41 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .receipt-status { font-size: 13px; font-weight: 600; margin: 0 6px; }
 .receipt-pending .receipt-status { color: var(--brand); }
 .receipt-preview { font-size: 13px; }
+
+/* ---- Global search (nav shell + /search) ---- */
+.global-search { position: relative; margin: 0 0 12px; }
+.global-search-mobile { flex: 1 1 100%; margin: 0; }
+.global-search-row { display: flex; gap: 6px; align-items: stretch; }
+.global-search input[type="search"] { flex: 1 1 auto; min-width: 0; min-height: 44px; font-size: 16px; }
+.global-search-btn {
+  flex: none; width: 44px; min-height: 44px; padding: 0; display: inline-flex;
+  align-items: center; justify-content: center;
+}
+.search-icon { width: 20px; height: 20px; display: inline-flex; }
+.suggest { position: absolute; top: 100%; left: 0; right: 0; z-index: 30; margin-top: 4px; }
+.suggest:empty { display: none; }
+.suggest-list {
+  list-style: none; margin: 0; padding: 4px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+}
+@media (min-width: 820px) { .suggest { right: auto; width: 320px; } }
+.suggest-link {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px;
+  border-radius: 8px; text-decoration: none; color: var(--ink);
+}
+.suggest-link:hover, .suggest-link:focus-visible { background: var(--paper); }
+.suggest-kind { flex: none; font-size: 11px; text-transform: uppercase; color: var(--brand); width: 52px; }
+.suggest-name { min-width: 0; overflow-wrap: anywhere; }
+.suggest-all { font-size: 14px; color: var(--brand); }
+.suggest-none { padding: 10px; font-size: 14px; }
+.search-list { list-style: none; margin: 0 0 10px; padding: 0; }
+.search-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px;
+  padding: 8px 4px; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink);
+}
+.search-row-main { min-width: 0; overflow-wrap: anywhere; }
+.search-row-meta { flex: none; font-size: 13px; text-align: right; }
+.search-more { display: inline-block; min-height: 40px; line-height: 40px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.chip-row .chip { display: inline-flex; align-items: center; min-height: 40px; text-decoration: none; color: var(--ink); }
+.chip-row .chip[aria-current] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }

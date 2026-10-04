@@ -36,9 +36,11 @@ Chat returns):
 | **Plan** | Week board + shopping list (segmented control between them), saved menus. |
 | **Chat** | The AI assistant (persistent conversations). |
 
-Global: instant-search overlay (FTS5, keystroke-fast on LAN), "+" action (paste URL / new recipe / add pantry item), settings (devices, tokens, AI spend, backups, export).
+Global: search (FTS5, keystroke-fast on LAN), "+" action (paste URL / new recipe / add pantry item), settings (devices, tokens, AI spend, backups, export).
 
-The "+" action's first half is built: **`+ Add a recipe`** sits above the rail (and in the mobile tools row) and leads to `/add` — paste, drop, or bookmarklet a link, with manual entry one step further in. The instant-search overlay and the pantry-item branch of "+" are still open.
+The "+" action's first half is built: **`+ Add a recipe`** sits above the rail (and in the mobile tools row) and leads to `/add` — paste, drop, or bookmarklet a link, with manual entry one step further in. 
+
+**Global search is built**: a search box heads the desktop rail and the mobile tools row. It is a plain `GET /search?q=` form (works with JS off); htmx adds a debounced typeahead (`/search/suggest`: top 5 recipes + 3 foods, word-start matching on the last word) and Alpine focuses the box on `/` on desktop. `/search` lists one card per kind — Recipes (FTS, paged, `?tag=` chips preserved, archived excluded), Pantry items, Foods and Tags — each linking to its full screen with the query carried over; an empty query shows recent cookbook recipes and common tags. It is an overlay-free page rather than a modal, so it needs no JS to function. The pantry-item branch of "+" is still open.
 
 ## 3. Key screens
 

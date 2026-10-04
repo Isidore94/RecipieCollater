@@ -262,6 +262,10 @@ rather than applied twice.
 
 ## Still open
 - **Assistant has no conversation history** (Tier 2.10), and replies render markdown literally.
-- **No global search or "+" affordance**, and no motion anywhere (Tier 3).
+- **No motion anywhere** (Tier 3). The "+" half of "no global search or '+' affordance" was
+  fixed earlier (`+ Add a recipe` in the rail and the mobile tools row); the **global search half
+  is now fixed too** (2026-10-04): a search box in the rail and the mobile tools row, an htmx
+  typeahead, `/` to focus on desktop, and a grouped `/search` page (recipes, pantry items, foods,
+  tags). Still open from that item: the pantry-item branch of "+".
 - From the docs-vs-code gap analysis: big-event mode, re-extract comparison, the embedded
   per-step video player, and structured after-cook quantities remain unbuilt.
