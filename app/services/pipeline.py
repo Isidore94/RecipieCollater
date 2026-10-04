@@ -18,7 +18,7 @@ from collections.abc import Sequence
 
 from app import ai
 from app.ai import usage as ai_usage
-from app.config import get_settings
+from app.config import TASK_FAST, get_settings
 from app.extraction import SCHEMA_VERSION, ExtractedRecipe
 from app.security import now_iso
 from app.services import (
@@ -319,7 +319,7 @@ def _ai_extract_and_apply(
     YouTube path so spend accounting and provenance stay identical across sources.
     """
     settings = get_settings()
-    provider = ai.get_provider(settings)
+    provider = ai.get_provider(settings.for_task(TASK_FAST))
     if provider is None:
         return False
     if not ai_usage.within_budget(conn, settings):

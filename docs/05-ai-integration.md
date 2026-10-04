@@ -35,6 +35,20 @@ chat    = "openai/<verified-reasoning-model>"
 embed   = "openai/text-embedding-3-small"   # or "local/all-MiniLM-L6-v2" or "off"
 ```
 
+**As built.** Routing is two tiers rather than per-feature keys: `RC_ANTHROPIC_MODEL_FAST` /
+`RC_OPENAI_MODEL_FAST` for one-shot structured work (URL/YouTube/Instagram extraction, tag
+suggestion and backfill, receipt reading, typed-description drafts) and `RC_ANTHROPIC_MODEL` /
+`RC_OPENAI_MODEL` for the stronger tier (the meal-planning assistant and recipe-photo drafting).
+Each call site asks for its tier with `ai.get_provider(settings.for_task(TASK_FAST | TASK_STRONG))`
+(`app/config.py`), so the provider adapters only ever see one model id and nothing fails over
+between providers. Defaults (Anthropic ids and prices verified 2026-09-25 against the
+claude-api model table):
+
+| Tier | Anthropic default | $/Mtok in / out | OpenAI default |
+|---|---|---|---|
+| fast | `claude-haiku-4-5` | 1.00 / 5.00 | `gpt-4o-mini` |
+| strong | `claude-sonnet-5-5` | 2.00 / 10.00 | `gpt-4o-mini` (unchanged; not re-verified) |
+
 Model IDs, capability metadata, context/output limits, and pricing are **versioned config, not scattered code**. Verify them at build/configuration time. The Settings UI offers only models known to support the requested capability, while an advanced override remains possible. A startup self-test validates configured extraction/chat models without spending more than a tiny bounded call.
 
 ### Cost posture & guardrails

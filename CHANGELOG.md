@@ -110,6 +110,38 @@ step is, in chapters and in the description; the importer now listens.
   characters, and the prompt labels them as viewer text. The common path makes no extra call.
 - Tests are all offline on plain dicts, plus a pipeline test showing timestamps persisted.
 
+### Cheaper models for cheap jobs, and a restore test that actually runs (2026-10-04)
+
+No migration. Two loose ends from the invariants: "provider/model selected per task" was written
+down in `docs/05` but the code used one model for everything, and "backups count only when
+restore-tested" was true at backup time but nothing said how stale that test had become.
+
+- **Two model tiers.** `RC_ANTHROPIC_MODEL_FAST` (default `claude-haiku-4-5`) runs the one-shot
+  structured work: extraction, tagging, receipts and typed-description drafts. `RC_ANTHROPIC_MODEL`
+  (default `claude-sonnet-5-5`, was `claude-sonnet-5`) runs the assistant and recipe-photo
+  drafting. OpenAI gets the same pair of settings; both default to the existing `gpt-4o-mini`
+  because the reference we checked ids against does not cover OpenAI, and guessing a model name is
+  how you get a 404 at 6 p.m. Call sites ask for a tier with `settings.for_task(...)`, so the
+  adapters still see exactly one model id, the `get_provider(settings)` signature is unchanged,
+  and `store: false` on OpenAI Responses is untouched. No cross-provider failover was added.
+- **Prices re-dated.** `app/ai/pricing.py` carries the Anthropic rates as verified 2026-09-25:
+  Haiku 4.5 $1/$5, Sonnet 5 and 5.5 $2/$10, Sonnet 4.6 $3/$15, Opus 5.5 $4/$20, Opus 5/4.8/4.7/4.6
+  $5/$25, Fable and Mythos $10/$50 per Mtok. The bare `claude-opus` / `claude-sonnet` /
+  `claude-haiku` prefixes keep their old, higher rates for ids the table does not name, so an
+  unknown model still over-counts against the spend cap instead of under-counting.
+- **`python -m app.manage restore-test [--backup PATH]`.** Restores the newest set (or the one
+  named) into a scratch directory on the data disk, runs `PRAGMA integrity_check`, opens the
+  restored database, compares recipe and image counts to the manifest, re-hashes a sample of up to
+  20 image files, deletes the scratch, and writes the result to `<data>/restore-test.json`. New
+  manifests record `recipe_count` and `image_count` for this; older manifests skip the recipe
+  comparison rather than fail. Any problem, including "no backups at all", is a recorded FAILED.
+- **Weekly, from the worker.** `weekly_restore_test` runs Sundays 04:15, after the nightly
+  backup, with the import kept lazy.
+- **Admin dashboard.** "Last restore test: <when>, OK/FAILED" under System, red when it has never
+  run, failed, or is more than 7 days old - the roadmap budget. `deploy/RESTORE.md` documents it.
+- Not claimed: none of this was run on the N95. Tests use `tmp_path` and fake clients; CI stays
+  offline.
+
 ### Tags that survive a big cookbook (2026-08-01)
 
 Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into

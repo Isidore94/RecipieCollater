@@ -1,9 +1,11 @@
 """Model pricing in integer micro-USD (money stays integer, per CONVENTIONS 1).
 
 Rates are Anthropic and OpenAI list prices per 1,000,000 tokens, expressed in micro-USD (so
-$3.00/Mtok is 3_000_000). Prices change over time and are easy to update here; an unknown model
-falls back to a deliberately high rate so a call's cost is never under-counted (a spend cap should
-fail safe by over-estimating, never by silently counting zero).
+$3.00/Mtok is 3_000_000). Anthropic rates last verified 2026-09-25 (claude-api skill model table,
+first-party API rates); the OpenAI rates below predate that and were not re-verified. Prices
+change over time and are easy to update here; an unknown model falls back to a deliberately
+high rate so a call's cost is never under-counted (a spend cap should fail safe by
+over-estimating, never by silently counting zero).
 
 Prefixes are matched with str.startswith, so a more specific id must precede a shorter one it
 would otherwise shadow ("gpt-4o-mini" before "gpt-4o", "gpt-4.1-mini" before "gpt-4.1").
@@ -13,9 +15,20 @@ from __future__ import annotations
 
 # model-id prefix -> (input micro-USD per Mtok, output micro-USD per Mtok)
 _PRICES: dict[str, tuple[int, int]] = {
-    # Anthropic
+    # Anthropic (verified 2026-09-25). Specific ids first; the bare family prefixes are the
+    # older-model fallback and keep their previous, higher rates so they never under-count.
+    "claude-fable": (10_000_000, 50_000_000),
+    "claude-mythos": (10_000_000, 50_000_000),
+    "claude-opus-5-5": (4_000_000, 20_000_000),
+    "claude-opus-5": (5_000_000, 25_000_000),
+    "claude-opus-4-8": (5_000_000, 25_000_000),
+    "claude-opus-4-7": (5_000_000, 25_000_000),
+    "claude-opus-4-6": (5_000_000, 25_000_000),
     "claude-opus": (15_000_000, 75_000_000),
+    "claude-sonnet-5": (2_000_000, 10_000_000),  # sonnet-5 and sonnet-5-5
+    "claude-sonnet-4-6": (3_000_000, 15_000_000),
     "claude-sonnet": (3_000_000, 15_000_000),
+    "claude-haiku-4-5": (1_000_000, 5_000_000),
     "claude-haiku": (800_000, 4_000_000),
     # OpenAI (specific ids first so startswith doesn't shadow them)
     "gpt-4o-mini": (150_000, 600_000),

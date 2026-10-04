@@ -9,13 +9,25 @@ from __future__ import annotations
 
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from app.version import release_id
+
+# AI task tiers (docs/05 "selected per task"): fast = one-shot structured extraction, tagging,
+# receipts; strong = the assistant and photo drafting.
+TASK_FAST = "fast"
+TASK_STRONG = "strong"
+
+# Defaults from the claude-api skill's current lineup (cached 2026-09-25). OpenAI is unchanged:
+# that lineup does not cover OpenAI, so no unverified OpenAI id is introduced here.
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5-5"
+DEFAULT_ANTHROPIC_MODEL_FAST = "claude-haiku-4-5"
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_OPENAI_MODEL_FAST = "gpt-4o-mini"
 
 
 def _frozen() -> bool:
@@ -57,6 +69,10 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_str(name: str, default: str) -> str:
+    return os.environ.get(name, default).strip() or default
+
+
 def _env_usd_micros(name: str, default: str) -> int:
     """Read a dollar amount (e.g. "1.50") as integer micro-USD - money stays integer, not float."""
     raw = os.environ.get(name, default).strip() or default
@@ -89,12 +105,31 @@ class Settings:
     # ai_provider selects which SDK to use: "auto" (first configured), "anthropic", or "openai".
     ai_provider: str
     anthropic_api_key: str | None
+    # The stronger model (assistant, photo drafting) ...
     anthropic_model: str
+    # ... and the cheap fast one for one-shot structured extraction/tagging/receipts.
+    anthropic_model_fast: str
     openai_api_key: str | None
     openai_model: str
+    openai_model_fast: str
     # Spend caps in integer micro-USD (money stays integer, per CONVENTIONS 1).
     ai_daily_cap_micros: int
     ai_monthly_cap_micros: int
+
+    def for_task(self, tier: str) -> Settings:
+        """Settings with the provider models resolved for a task tier.
+
+        ``TASK_FAST`` swaps the fast models into the ``*_model`` fields, so providers (which only
+        ever read ``anthropic_model`` / ``openai_model``) need no knowledge of tiers. Any other
+        tier (``TASK_STRONG``) returns the settings unchanged.
+        """
+        if tier != TASK_FAST:
+            return self
+        return replace(
+            self,
+            anthropic_model=self.anthropic_model_fast,
+            openai_model=self.openai_model_fast,
+        )
 
     @property
     def ai_enabled(self) -> bool:
@@ -124,6 +159,11 @@ class Settings:
     @property
     def worker_heartbeat_path(self) -> Path:
         return self.data_dir / "worker-heartbeat.json"
+
+    @property
+    def restore_test_path(self) -> Path:
+        # Result of the weekly restore smoke test: a small JSON file, deliberately not a DB table.
+        return self.data_dir / "restore-test.json"
 
     @property
     def cookie_secure(self) -> bool:
@@ -166,10 +206,11 @@ def get_settings() -> Settings:
         setup_token=os.environ.get("RC_SETUP_TOKEN", "").strip() or None,
         ai_provider=os.environ.get("RC_AI_PROVIDER", "auto").strip().lower() or "auto",
         anthropic_api_key=os.environ.get("RC_ANTHROPIC_API_KEY", "").strip() or None,
-        anthropic_model=os.environ.get("RC_ANTHROPIC_MODEL", "claude-sonnet-5").strip()
-        or "claude-sonnet-5",
+        anthropic_model=_env_str("RC_ANTHROPIC_MODEL", DEFAULT_ANTHROPIC_MODEL),
+        anthropic_model_fast=_env_str("RC_ANTHROPIC_MODEL_FAST", DEFAULT_ANTHROPIC_MODEL_FAST),
         openai_api_key=os.environ.get("RC_OPENAI_API_KEY", "").strip() or None,
-        openai_model=os.environ.get("RC_OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini",
+        openai_model=_env_str("RC_OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
+        openai_model_fast=_env_str("RC_OPENAI_MODEL_FAST", DEFAULT_OPENAI_MODEL_FAST),
         ai_daily_cap_micros=_env_usd_micros("RC_AI_DAILY_CAP_USD", "1.00"),
         ai_monthly_cap_micros=_env_usd_micros("RC_AI_MONTHLY_CAP_USD", "10.00"),
     )

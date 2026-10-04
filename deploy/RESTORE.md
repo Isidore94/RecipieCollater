@@ -57,5 +57,29 @@ curl -fsS http://127.0.0.1/healthz
 ## Restore-test cadence
 
 The nightly worker immediately restores every new set into a private scratch directory, checks the
-restored database, records `restore_tested_at`, and then prunes to the latest 14 sets. Phase 6 adds
-weekly retention and surfaces backup/restore age in Admin.
+restored database, records `restore_tested_at`, and then prunes to the latest 14 sets.
+
+### Weekly restore smoke test
+
+A backup only counts if it has been restored recently, so the worker also runs a fuller test every
+Sunday at 04:15 (after the nightly backup). It can be run by hand at any time:
+
+```sh
+/opt/recipecollater/current/.venv/bin/python -m app.manage restore-test            # newest set
+/opt/recipecollater/current/.venv/bin/python -m app.manage restore-test --backup <backup_dir>
+```
+
+It restores the set into a scratch directory under the data dir (not `/tmp`, which is RAM on some
+installs), then checks, in order: the set verifies (every manifest checksum), `PRAGMA
+integrity_check` passes on the restored database, the database opens and its recipe count equals
+the manifest's `recipe_count`, the restored image count equals the manifest's, and up to 20
+evenly spaced image files exist with matching SHA-256. The scratch directory is always deleted.
+Sets written before `recipe_count` existed skip only the recipe comparison. Exit status is 0 for OK
+and 1 for FAILED; a missing or unverifiable backup is a FAILED result, not a crash.
+
+The outcome (timestamp, backup id, ok, error, counts) is written to
+`<data_dir>/restore-test.json` - a file, not a database table, so it survives a database restore and
+is readable with `cat` when the web app is down. **Admin -> Dashboard -> System** shows "Last
+restore test", and turns red when the test has never run, failed, or is older than 7 days (the
+roadmap budget). Red means: run the command above, read the error, and fix the backup path before
+you need it.

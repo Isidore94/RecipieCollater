@@ -20,17 +20,22 @@ import shutil
 import sqlite3
 import tempfile
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from app import __version__
 from app.config import Settings
-from app.security import now
+from app.security import now, now_iso, parse_iso
 
 MANIFEST_NAME = "manifest.json"
 MANIFEST_VERSION = 1
 _DB_SNAPSHOT_NAME = "recipecollater.db"
+
+# The roadmap budget: a restore test older than this is a red flag on the admin dashboard.
+RESTORE_TEST_MAX_AGE = timedelta(days=7)
+_RESTORE_TEST_SAMPLE = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +72,17 @@ def _schema_version(db_path: Path) -> int:
     try:
         row = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()
         return int(row[0] or 0)
+    finally:
+        conn.close()
+
+
+def _count_recipes(db_path: Path) -> int | None:
+    """Recipe rows in a database file, or None when the table is absent/unreadable."""
+    conn = sqlite3.connect(db_path)
+    try:
+        return int(conn.execute("SELECT COUNT(*) FROM recipes").fetchone()[0])
+    except sqlite3.Error:
+        return None
     finally:
         conn.close()
 
@@ -160,6 +176,9 @@ def create_backup(settings: Settings, dest_root: Path | None = None) -> BackupRe
         "created_at": now().strftime("%Y-%m-%d %H:%M:%S"),
         "schema_version": _schema_version(snapshot),
         "db_snapshot": _DB_SNAPSHOT_NAME,
+        # What restore-test compares the restored copy against (absent in older manifests).
+        "recipe_count": _count_recipes(snapshot),
+        "image_count": sum(1 for f in files if f["path"].startswith("images/")),
         "integrity_ok": integrity_ok,
         "restore_tested_at": None,
         "files": files,
@@ -272,6 +291,135 @@ def restore_backup(backup_dir: Path, target_data_dir: Path) -> None:
             shutil.copytree(src, dst)
         else:
             dst.mkdir(parents=True, exist_ok=True)
+
+
+@dataclass(frozen=True, slots=True)
+class RestoreTestResult:
+    """Outcome of one restore smoke test; persisted as JSON under the data dir."""
+
+    tested_at: str
+    backup_id: str | None
+    ok: bool
+    error: str | None
+    recipe_count: int | None
+    manifest_recipe_count: int | None
+    image_count: int | None
+    manifest_image_count: int | None
+    sampled_files: int
+
+
+def _write_restore_test(settings: Settings, result: RestoreTestResult) -> None:
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    target = settings.restore_test_path
+    temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(asdict(result), indent=2), encoding="utf-8")
+    temporary.replace(target)
+
+
+def read_restore_test(settings: Settings) -> RestoreTestResult | None:
+    """The last recorded restore test, or None when never run or the file is unreadable."""
+    try:
+        payload = json.loads(settings.restore_test_path.read_text(encoding="utf-8"))
+        result = RestoreTestResult(**payload)
+        parse_iso(result.tested_at)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    return result
+
+
+def restore_test_age(result: RestoreTestResult) -> timedelta:
+    return now() - parse_iso(result.tested_at)
+
+
+def _restore_test_problems(
+    manifest: dict[str, Any], restored: Path, sample: int
+) -> tuple[list[str], int | None, int | None, int]:
+    """Check an already-restored data dir against its manifest.
+
+    Returns (problems, restored recipe count, restored image count, files sampled).
+    """
+    problems: list[str] = []
+    db_path = restored / _DB_SNAPSHOT_NAME
+    if not _integrity_check(db_path):
+        problems.append("PRAGMA integrity_check failed on the restored database")
+
+    recipes = _count_recipes(db_path)
+    if recipes is None:
+        problems.append("restored database could not be opened or has no recipes table")
+    expected_recipes = manifest.get("recipe_count")
+    if isinstance(expected_recipes, int) and recipes != expected_recipes:
+        problems.append(f"recipe count {recipes} does not match the manifest ({expected_recipes})")
+
+    images = [e for e in manifest["files"] if e["path"].startswith("images/")]
+    image_root = restored / "images"
+    restored_images = (
+        sum(1 for p in image_root.rglob("*") if p.is_file()) if image_root.is_dir() else 0
+    )
+    if restored_images != len(images):
+        problems.append(
+            f"image count {restored_images} does not match the manifest ({len(images)})"
+        )
+
+    # Evenly spaced sample so a big library costs a bounded number of re-hashes per week.
+    step = max(1, len(images) // sample) if images else 1
+    picked = images[::step][:sample]
+    for entry in picked:
+        path = restored / entry["path"]
+        if not path.is_file():
+            problems.append(f"missing after restore: {entry['path']}")
+        elif _sha256_file(path) != entry["sha256"]:
+            problems.append(f"checksum mismatch after restore: {entry['path']}")
+    return problems, recipes, restored_images, len(picked)
+
+
+def run_restore_test(
+    settings: Settings, backup_dir: Path | None = None, *, sample: int = _RESTORE_TEST_SAMPLE
+) -> RestoreTestResult:
+    """Restore a backup set into a scratch dir, check it against its manifest, delete the scratch.
+
+    Defaults to the newest set under the backup root. Never raises for a bad backup: any failure
+    is recorded as ``ok=False`` with the reason, because a restore test that crashes silently is
+    worse than one that says FAILED. The result is always written to ``restore_test_path``.
+    """
+    problems: list[str] = []
+    backup_id: str | None = None
+    manifest: dict[str, Any] = {}
+    recipes: int | None = None
+    images: int | None = None
+    sampled = 0
+    try:
+        if backup_dir is None:
+            sets = list_backups(backup_root(settings))
+            if not sets:
+                raise ValueError("no backup sets found")
+            backup_dir = sets[-1]
+        backup_id = backup_dir.name
+        settings.data_dir.mkdir(parents=True, exist_ok=True)
+        # Scratch lives on the data disk, not /tmp (often a small tmpfs, i.e. RAM, on the N95).
+        with tempfile.TemporaryDirectory(prefix=".restore-test-", dir=settings.data_dir) as scratch:
+            restored = Path(scratch) / "data"
+            restore_backup(backup_dir, restored)  # verifies the set first; raises if it doesn't
+            manifest = json.loads((backup_dir / MANIFEST_NAME).read_text(encoding="utf-8"))
+            problems, recipes, images, sampled = _restore_test_problems(manifest, restored, sample)
+    except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, BackupDestinationError) as exc:
+        problems.append(f"{type(exc).__name__}: {exc}")
+
+    manifest_images = sum(
+        1 for e in manifest.get("files", []) if str(e.get("path", "")).startswith("images/")
+    )
+    result = RestoreTestResult(
+        tested_at=now_iso(),
+        backup_id=backup_id,
+        ok=not problems,
+        error="; ".join(problems) or None,
+        recipe_count=recipes,
+        manifest_recipe_count=manifest.get("recipe_count"),
+        image_count=images,
+        manifest_image_count=manifest_images if manifest else None,
+        sampled_files=sampled,
+    )
+    _write_restore_test(settings, result)
+    return result
 
 
 def list_backups(root: Path) -> list[Path]:

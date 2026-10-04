@@ -7,6 +7,8 @@ criterion.
 
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -193,3 +195,162 @@ def test_backup_rejects_symlinks(data_dir: Path) -> None:
     result = backup.create_backup(settings)
     (result.backup_dir / "unexpected-link").symlink_to(result.backup_dir / "images")
     assert backup.verify_backup(result.backup_dir) is False
+
+
+# ---- restore smoke test (weekly) -------------------------------------------------------
+
+
+def _backup_with_images(data_dir: Path, n_images: int = 3) -> backup.BackupResult:
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    _make_data(data_dir)
+    for i in range(n_images):
+        (settings.images_dir / str(i)).mkdir(parents=True, exist_ok=True)
+        (settings.images_dir / str(i) / "hero.webp").write_bytes(f"img-{i}".encode())
+    return backup.create_backup(settings)
+
+
+def test_manifest_records_recipe_and_image_counts(data_dir: Path) -> None:
+    result = _backup_with_images(data_dir, 3)
+    assert result.manifest["recipe_count"] == 0
+    assert result.manifest["image_count"] == 3
+
+
+def test_restore_test_passes_and_writes_json(data_dir: Path) -> None:
+    result = _backup_with_images(data_dir, 3)
+    settings = config.get_settings()
+
+    outcome = backup.run_restore_test(settings)
+
+    assert outcome.ok is True and outcome.error is None
+    assert outcome.backup_id == result.backup_dir.name
+    assert (outcome.recipe_count, outcome.manifest_recipe_count) == (0, 0)
+    assert (outcome.image_count, outcome.manifest_image_count) == (3, 3)
+    assert outcome.sampled_files == 3
+    saved = backup.read_restore_test(settings)
+    assert saved == outcome
+    assert json.loads(settings.restore_test_path.read_text())["ok"] is True
+    # scratch dir is gone, the data dir holds no leftovers
+    assert not [p for p in data_dir.iterdir() if p.name.startswith(".restore-test-")]
+
+
+def test_restore_test_counts_real_recipes(data_dir: Path) -> None:
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    _make_data(data_dir)
+    conn = connect(settings.db_path)
+    try:
+        conn.execute(
+            "INSERT INTO recipes (title, slug, base_servings) "
+            "VALUES ('A', 'a', '4'), ('B', 'b', '4')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    backup.create_backup(settings)
+
+    outcome = backup.run_restore_test(settings)
+    assert outcome.ok is True
+    assert (outcome.recipe_count, outcome.manifest_recipe_count) == (2, 2)
+
+
+def test_restore_test_samples_a_bounded_number_of_images(data_dir: Path) -> None:
+    _backup_with_images(data_dir, 6)
+    outcome = backup.run_restore_test(config.get_settings(), sample=2)
+    assert outcome.ok is True
+    assert outcome.sampled_files == 2
+
+
+def test_restore_test_fails_on_tampered_backup_and_records_it(data_dir: Path) -> None:
+    result = _backup_with_images(data_dir, 2)
+    (result.backup_dir / "images" / "0" / "hero.webp").write_bytes(b"flipped")
+    settings = config.get_settings()
+
+    outcome = backup.run_restore_test(settings)
+
+    assert outcome.ok is False
+    assert outcome.error is not None and "does not verify" in outcome.error
+    saved = backup.read_restore_test(settings)
+    assert saved is not None and saved.ok is False
+    assert not [p for p in data_dir.iterdir() if p.name.startswith(".restore-test-")]
+
+
+def test_restore_test_detects_count_mismatch_with_manifest(data_dir: Path) -> None:
+    """A manifest that promises more recipes than the restored DB holds is a failure."""
+    result = _backup_with_images(data_dir, 1)
+    manifest_path = result.backup_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["recipe_count"] = 5
+    manifest_path.write_text(json.dumps(manifest))
+
+    outcome = backup.run_restore_test(config.get_settings(), result.backup_dir)
+    assert outcome.ok is False
+    assert outcome.error is not None and "recipe count 0 does not match" in outcome.error
+
+
+def test_restore_test_accepts_older_manifest_without_counts(data_dir: Path) -> None:
+    result = _backup_with_images(data_dir, 1)
+    manifest_path = result.backup_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    del manifest["recipe_count"], manifest["image_count"]
+    manifest_path.write_text(json.dumps(manifest))
+
+    outcome = backup.run_restore_test(config.get_settings(), result.backup_dir)
+    assert outcome.ok is True
+    assert outcome.manifest_recipe_count is None
+
+
+def test_restore_test_with_no_backups_fails_cleanly(data_dir: Path) -> None:
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    outcome = backup.run_restore_test(settings)
+    assert outcome.ok is False and outcome.backup_id is None
+    assert outcome.error is not None and "no backup sets" in outcome.error
+
+
+def test_read_restore_test_tolerates_missing_and_garbage(data_dir: Path) -> None:
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    assert backup.read_restore_test(settings) is None
+    settings.restore_test_path.write_text("{not json")
+    assert backup.read_restore_test(settings) is None
+    settings.restore_test_path.write_text('{"unexpected": 1}')
+    assert backup.read_restore_test(settings) is None
+
+
+def test_dashboard_restore_test_alerting(data_dir: Path) -> None:
+    from datetime import timedelta
+
+    from app.security import now, to_iso
+    from app.services import admin_stats
+
+    settings = config.get_settings()
+    settings.ensure_dirs()
+    _make_data(data_dir)
+    conn = connect(settings.db_path)
+    try:
+        # never run -> red
+        stats = admin_stats.gather(conn, settings)
+        assert stats.restore_test_at is None and stats.restore_test_alert is True
+
+        def _write(age_days: int, ok: bool) -> None:
+            result = backup.RestoreTestResult(
+                tested_at=to_iso(now() - timedelta(days=age_days)), backup_id="b", ok=ok,
+                error=None if ok else "boom", recipe_count=0, manifest_recipe_count=0,
+                image_count=0, manifest_image_count=0, sampled_files=0,
+            )
+            settings.restore_test_path.write_text(json.dumps(asdict(result)))
+
+        _write(1, True)  # fresh and OK -> not red
+        stats = admin_stats.gather(conn, settings)
+        assert stats.restore_test_ok and not stats.restore_test_alert
+        assert stats.restore_test_age_days == 1
+
+        _write(8, True)  # older than 7 days -> red
+        assert admin_stats.gather(conn, settings).restore_test_alert is True
+
+        _write(0, False)  # fresh but failed -> red
+        stats = admin_stats.gather(conn, settings)
+        assert stats.restore_test_alert is True and stats.restore_test_error == "boom"
+    finally:
+        conn.close()

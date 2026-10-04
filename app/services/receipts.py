@@ -22,7 +22,7 @@ from decimal import Decimal
 
 from app import ai
 from app.ai import usage as ai_usage
-from app.config import get_settings
+from app.config import TASK_FAST, get_settings
 from app.security import now_iso
 from app.services import pantry, quantity, units
 
@@ -113,7 +113,7 @@ def capture(
         return CaptureResult(None, error="Snap the receipt or paste the order text first.")
 
     settings = get_settings()
-    provider = ai.get_provider(settings)
+    provider = ai.get_provider(settings.for_task(TASK_FAST))
     if provider is None:
         return CaptureResult(None, error="Receipt reading needs an AI key configured.")
     if not ai_usage.within_budget(conn, settings):

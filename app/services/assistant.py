@@ -24,7 +24,7 @@ from datetime import date, timedelta
 
 from app import ai
 from app.ai import usage as ai_usage
-from app.config import get_settings
+from app.config import TASK_STRONG, get_settings
 from app.extraction import AssistantResponse
 from app.security import now_iso
 from app.services import matching, pantry, planning, preferences, quantity, recipes, units
@@ -218,7 +218,7 @@ def ask(
     start = week_start or planning.week_start()
 
     settings = get_settings()
-    provider = ai.get_provider(settings)
+    provider = ai.get_provider(settings.for_task(TASK_STRONG))
     if provider is None:
         return AskResult(reply="", error="The assistant needs an AI key configured on the server.")
 

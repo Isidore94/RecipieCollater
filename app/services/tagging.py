@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from app import ai
 from app.ai import usage as ai_usage
-from app.config import get_settings
+from app.config import TASK_FAST, get_settings
 from app.services import recipes
 
 _OPERATION = "tag_backfill"
@@ -46,7 +46,7 @@ def suggest_tags(conn: sqlite3.Connection, recipe_id: int) -> TagResult:
         return TagResult(recipe_id, "?", [], error="recipe not found")
 
     settings = get_settings()
-    provider = ai.get_provider(settings)
+    provider = ai.get_provider(settings.for_task(TASK_FAST))
     if provider is None:
         return TagResult(recipe_id, detail.title, [], error="no AI provider configured")
     if not ai_usage.within_budget(conn, settings):

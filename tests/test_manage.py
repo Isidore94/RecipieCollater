@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from app import config
@@ -61,3 +62,35 @@ def test_snapshot_db_and_admin_recovery(data_dir: Path, capsys) -> None:  # type
     assert main(["recover-admin", "--user", "aaron", "--device-name", "New PC"]) == 0
     output = capsys.readouterr().out
     assert "Pairing code" in output
+
+
+def test_restore_test_command_ok_and_failed(data_dir: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    assert main(["migrate"]) == 0
+    assert main(["restore-test"]) == 1  # no backup sets yet -> FAILED, not a crash
+    assert "FAILED" in capsys.readouterr().out
+    settings = config.get_settings()
+    assert json.loads(settings.restore_test_path.read_text())["ok"] is False
+
+    (settings.images_dir / "1").mkdir(parents=True)
+    (settings.images_dir / "1" / "hero.webp").write_bytes(b"img")
+    assert main(["backup"]) == 0
+    assert main(["restore-test"]) == 0
+    assert "restore-test OK" in capsys.readouterr().out
+    saved = json.loads(settings.restore_test_path.read_text())
+    assert saved["ok"] is True and saved["image_count"] == 1 and saved["recipe_count"] == 0
+    assert not [p for p in data_dir.iterdir() if p.name.startswith(".restore-test-")]
+
+
+def test_restore_test_command_accepts_explicit_backup(data_dir: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    assert main(["migrate"]) == 0
+    assert main(["backup"]) == 0
+    older = sorted(config.get_settings().backups_dir.glob("*/manifest.json"))[-1].parent
+    assert main(["backup"]) == 0
+    capsys.readouterr()
+
+    assert main(["restore-test", "--backup", str(older)]) == 0
+    saved = json.loads(config.get_settings().restore_test_path.read_text())
+    assert saved["backup_id"] == older.name
+
+    (older / "recipecollater.db").write_bytes(b"corrupted")
+    assert main(["restore-test", "--backup", str(older)]) == 1

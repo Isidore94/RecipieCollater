@@ -4,6 +4,7 @@
     python -m app.manage backup                  # create a verified backup set
     python -m app.manage verify-backup <dir>     # re-verify an existing backup set
     python -m app.manage restore <dir> <target>  # restore a backup into a data dir
+    python -m app.manage restore-test [--backup <dir>]  # scratch-restore + check a backup set
     python -m app.manage schema-version          # print the applied schema version
 
 All commands honour RC_DATA_DIR (and RC_BACKUP_DIR for backups), so the staged updater
@@ -94,6 +95,24 @@ def _cmd_restore(backup_dir: str, target: str) -> int:
     return 0
 
 
+def _cmd_restore_test(backup_dir: str | None) -> int:
+    settings = get_settings()
+    result = backup.run_restore_test(settings, Path(backup_dir) if backup_dir else None)
+    log.info(
+        "restore_test",
+        backup=result.backup_id,
+        ok=result.ok,
+        recipes=result.recipe_count,
+        images=result.image_count,
+        sampled=result.sampled_files,
+        error=result.error,
+    )
+    print(f"restore-test {'OK' if result.ok else 'FAILED'}: {result.backup_id}")
+    if result.error:
+        print(result.error)
+    return 0 if result.ok else 1
+
+
 def _cmd_schema_version() -> int:
     print(current_version(get_settings().db_path))
     return 0
@@ -149,6 +168,8 @@ def main(argv: list[str] | None = None) -> int:
     p_restore = sub.add_parser("restore")
     p_restore.add_argument("backup_dir")
     p_restore.add_argument("target")
+    p_rtest = sub.add_parser("restore-test")
+    p_rtest.add_argument("--backup", default=None, help="backup set dir (default: the newest)")
     p_tags = sub.add_parser("backfill-tags")
     p_tags.add_argument("--all", action="store_true", help="retag even recipes that have tags")
     p_tags.add_argument("--limit", type=int, default=None)
@@ -171,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_verify_backup(args.backup_dir)
         case "restore":
             return _cmd_restore(args.backup_dir, args.target)
+        case "restore-test":
+            return _cmd_restore_test(args.backup)
         case "backfill-tags":
             return _cmd_backfill_tags(args.all, args.limit)
         case "export-cookbook":
