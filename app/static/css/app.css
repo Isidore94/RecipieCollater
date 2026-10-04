@@ -722,3 +722,17 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fail-msg { flex-basis: 100%; }
 .draft-photo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .draft-photo label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--ink-soft); }
+
+/* ---- Re-read comparison (migration 020) ---- */
+.reread { margin: 12px 0 18px; }
+.reread summary { cursor: pointer; color: var(--ink-soft); font-size: 14px; }
+.reread-form { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; margin-top: 8px; }
+.reread-draft-list { margin: 0; padding-left: 20px; line-height: 1.8; }
+.compare-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.compare-head h2 { margin: 0; }
+.compare-take { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; min-height: 40px; }
+.compare-section.is-same { padding-top: 12px; padding-bottom: 12px; opacity: .8; }
+.compare-cols { margin-top: 10px; }
+.compare-side { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); }
+.compare-lines { margin: 0; padding-left: 20px; line-height: 1.6; }
+.compare-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 18px; }

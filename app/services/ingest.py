@@ -12,6 +12,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import re
+import secrets
 import sqlite3
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -60,6 +61,10 @@ class IngestJob:
     submitted_by: int | None
     created_at: str
     updated_at: str
+    # Migration 020: a re-read of an existing recipe's source. recipe_id stays NULL for these (it
+    # is what makes a *normal* job replay-safe); the target recipe is named here instead.
+    reextract_recipe_id: int | None = None
+    refetch: bool = False
 
 
 # --------------------------------------------------------------------------------------
@@ -188,6 +193,7 @@ def _row_to_job(row: sqlite3.Row) -> IngestJob:
         error_message=row["error_message"], recipe_id=row["recipe_id"],
         submitted_by=row["submitted_by"], created_at=row["created_at"],
         updated_at=row["updated_at"],
+        reextract_recipe_id=row["reextract_recipe_id"], refetch=bool(row["refetch"]),
     )
 
 
@@ -241,6 +247,41 @@ def enqueue_job(
     job = get_job(conn, job_id)
     assert job is not None
     return job, True
+
+
+def create_reextract_job(
+    conn: sqlite3.Connection,
+    *,
+    recipe_id: int,
+    url: str,
+    normalized_url: str,
+    refetch: bool,
+    submitted_by: int | None,
+) -> IngestJob:
+    """Record a re-read of ``recipe_id``'s source. Never deduplicated by URL: the URL belongs to
+    the original job, so the key is unique per request (the caller guards double-submits)."""
+    cur = conn.execute(
+        """INSERT INTO ingest_jobs
+           (url, normalized_url, idempotency_key, source, submitted_by,
+            reextract_recipe_id, refetch)
+           VALUES (?, ?, ?, 'manual', ?, ?, ?)""",
+        (url, normalized_url, f"reextract:{recipe_id}:{secrets.token_hex(6)}", submitted_by,
+         recipe_id, 1 if refetch else 0),
+    )
+    conn.commit()
+    job = get_job(conn, int(cur.lastrowid) if cur.lastrowid is not None else 0)
+    assert job is not None
+    return job
+
+
+def link_artifact(conn: sqlite3.Connection, artifact_id: int, job_id: int) -> None:
+    """Attach an existing immutable artifact to another job without touching its bytes."""
+    conn.execute(
+        """INSERT OR REPLACE INTO artifacts (job_id, kind, sha256, path, bytes)
+           SELECT ?, kind, sha256, path, bytes FROM artifacts WHERE id = ?""",
+        (job_id, artifact_id),
+    )
+    conn.commit()
 
 
 def set_status(

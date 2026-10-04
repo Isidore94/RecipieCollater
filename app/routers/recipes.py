@@ -23,7 +23,7 @@ from app.config import get_settings
 from app.deps import get_db
 from app.extraction import ExtractedRecipe
 from app.routers import flash
-from app.services import ai_draft, cooking, matching, quantity, recipes, tag_vocabulary
+from app.services import ai_draft, cooking, matching, quantity, recipes, reextract, tag_vocabulary
 from app.services.users import User
 from app.templating import render
 
@@ -388,6 +388,8 @@ def view(
         base_servings=detail.base_servings, presets=_presets(detail.base_servings),
         cook_log=cooking.list_cook_log(db, detail.id),
         coverage=matching.recipe_coverage(db, detail.id),
+        draft=reextract.pending_draft(db, detail.id),
+        rereading=reextract.active_reread(db, detail.id) is not None,
         notice=notice, error=error,
     )
 

@@ -9,6 +9,12 @@ path is testable offline (no network).
 Replay safety: a job that already has a linked recipe is re-marked done and never re-extracted,
 and applying an extraction reuses an existing recipe with the same source URL rather than creating
 a duplicate. This keeps a worker retry or crash-replay from producing two recipes for one job.
+
+Re-reading is a separate, explicit intent (migration 020): a job with ``reextract_recipe_id``
+runs the same fetch/extract stages but ends in :func:`record_draft` instead of
+:func:`apply_extraction`'s create-or-reuse. It never creates a recipe, never touches the recipe
+or its accepted run, and is replay-safe on its own terms (a job that already produced its draft
+is just re-marked done). The family reviews the draft in app.services.reextract.
 """
 
 from __future__ import annotations
@@ -82,8 +88,14 @@ def apply_extraction(
     """Create (or reuse) the recipe, record an extraction_run, and link it to the job.
 
     The whole apply is committed as one unit and marks the job done, so a replay finds the recipe
-    already linked and does nothing further.
+    already linked and does nothing further. For a re-read job (``reextract_recipe_id``) this
+    records a comparison draft instead and returns the target recipe's id, changing nothing else.
     """
+    if job.reextract_recipe_id is not None:
+        return record_draft(
+            conn, job, extracted, extractor=extractor, provider=provider, model=model,
+            prompt_version=prompt_version, confidence=confidence,
+        )
     existing = conn.execute("SELECT id FROM recipes WHERE source_url = ?", (job.url,)).fetchone()
     if existing is not None:
         recipe_id = int(existing["id"])
@@ -118,6 +130,42 @@ def apply_extraction(
     return recipe_id
 
 
+def record_draft(
+    conn: sqlite3.Connection,
+    job: ingest.IngestJob,
+    extracted: ExtractedRecipe,
+    *,
+    extractor: str,
+    provider: str | None = None,
+    model: str | None = None,
+    prompt_version: str | None = None,
+    confidence: str = "high",
+) -> int:
+    """Store a re-read as a 'draft' extraction run linked to the recipe, and mark the job done.
+
+    Deliberately does NOT touch the recipe row, its children, its photo, or
+    ``current_extraction_run_id``. A newer reading supersedes an older unreviewed draft for the
+    same recipe (at most one is live). Returns the recipe id.
+    """
+    recipe_id = job.reextract_recipe_id
+    assert recipe_id is not None
+    conn.execute(
+        "UPDATE extraction_runs SET state = 'dismissed' WHERE recipe_id = ? AND state = 'draft'",
+        (recipe_id,),
+    )
+    conn.execute(
+        """INSERT INTO extraction_runs
+           (recipe_id, job_id, extractor, provider, model, prompt_version, schema_version,
+            confidence, payload, state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')""",
+        (recipe_id, job.id, extractor, provider, model, prompt_version, SCHEMA_VERSION,
+         confidence, extracted.model_dump_json()),
+    )
+    conn.commit()
+    ingest.set_status(conn, job.id, "done")
+    return recipe_id
+
+
 def _maybe_set_image(conn: sqlite3.Connection, recipe_id: int, url: str | None) -> None:
     """Download and attach a recipe photo, best-effort; never blocks a recipe from saving."""
     if not url:
@@ -135,6 +183,10 @@ def _obtain_html(conn: sqlite3.Connection, job: ingest.IngestJob) -> str:
     supplied = ingest.read_artifact(conn, job.id, "supplied_html")
     if supplied is not None:
         return supplied.decode("utf-8", errors="replace")
+    if job.reextract_recipe_id is not None and not job.refetch:
+        stored = ingest.read_artifact(conn, job.id, "fetched_html")  # linked by start_reread
+        if stored is not None:
+            return stored.decode("utf-8", errors="replace")
     ingest.set_status(conn, job.id, "fetching")
     result = fetch.fetch(job.normalized_url)
     ingest.store_artifact(conn, job.id, "fetched_html", result.html.encode("utf-8"))
@@ -143,7 +195,20 @@ def _obtain_html(conn: sqlite3.Connection, job: ingest.IngestJob) -> str:
 
 def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     """Process one ingest job to completion, recording failure categories for the inbox."""
-    if job.recipe_id:  # already produced a recipe (crash-safe replay)
+    if job.reextract_recipe_id is not None:
+        # An explicit re-read: never creates a recipe, ends in a draft run (see record_draft).
+        if conn.execute(
+            "SELECT 1 FROM extraction_runs WHERE job_id = ?", (job.id,)
+        ).fetchone() is not None:  # crash-safe replay: the draft already exists
+            ingest.set_status(conn, job.id, "done")
+            return
+        if recipes.get_recipe(conn, job.reextract_recipe_id) is None:
+            ingest.set_status(
+                conn, job.id, "failed", error_category="recipe_missing",
+                error_message="That recipe no longer exists.",
+            )
+            return
+    elif job.recipe_id:  # already produced a recipe (crash-safe replay)
         ingest.set_status(conn, job.id, "done", recipe_id=job.recipe_id)
         return
 
@@ -179,6 +244,20 @@ def run_job(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     )
 
 
+def _stored_reread_artifact(
+    conn: sqlite3.Connection, job: ingest.IngestJob, kind: str
+) -> str | None:
+    """The stored artifact a *reuse* re-read was linked to, as text; None for everything else.
+
+    A normal job and a "fetch again" re-read both get None, so they go to the network exactly as
+    before - this is the only place the reuse intent changes what a stage does.
+    """
+    if job.reextract_recipe_id is None or job.refetch:
+        return None
+    raw = ingest.read_artifact(conn, job.id, kind)
+    return raw.decode("utf-8", errors="replace") if raw is not None else None
+
+
 def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     """Ingest a YouTube video: description-first, captions as fallback, then LLM extraction."""
     if not get_settings().ai_enabled:
@@ -188,15 +267,20 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
         )
         return
 
-    ingest.set_status(conn, job.id, "fetching")
-    try:
-        data = youtube.fetch(job.normalized_url)
-    except youtube.YoutubeError as exc:
-        ingest.set_status(
-            conn, job.id, "failed", error_category="youtube_fetch", error_message=str(exc)[:400]
-        )
-        return
-    ingest.store_artifact(conn, job.id, "youtube_metadata", data.to_json().encode("utf-8"))
+    stored_meta = _stored_reread_artifact(conn, job, "youtube_metadata")
+    if stored_meta is not None:
+        data = youtube.YoutubeData.from_json(stored_meta)  # reuse: no network, no re-store
+    else:
+        ingest.set_status(conn, job.id, "fetching")
+        try:
+            data = youtube.fetch(job.normalized_url)
+        except youtube.YoutubeError as exc:
+            ingest.set_status(
+                conn, job.id, "failed", error_category="youtube_fetch",
+                error_message=str(exc)[:400],
+            )
+            return
+        ingest.store_artifact(conn, job.id, "youtube_metadata", data.to_json().encode("utf-8"))
 
     ingest.set_status(conn, job.id, "extracting")
     # require_steps=False: a video with an ingredient list but a spoken-only method is still a
@@ -235,8 +319,13 @@ def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
 
     thumbnail_url: str | None = None
     supplied = ingest.read_artifact(conn, job.id, "supplied_html")
+    stored_meta = _stored_reread_artifact(conn, job, "instagram_metadata")
     if supplied is not None:
         content = _page_text(supplied.decode("utf-8", errors="replace"))
+    elif stored_meta is not None:
+        stored = instagram.InstagramData.from_json(stored_meta)  # reuse: no network
+        content = stored.prompt_text()
+        thumbnail_url = stored.thumbnail_url
     else:
         ingest.set_status(conn, job.id, "fetching")
         shortcode = ingest.instagram_shortcode(job.normalized_url) or ""

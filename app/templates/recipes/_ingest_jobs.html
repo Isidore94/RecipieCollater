@@ -7,7 +7,14 @@
   {% for job in jobs %}
   <div class="ingest-job is-{{ job.status }}">
     <span class="ingest-job-dot" aria-hidden="true"></span>
-    {% if job.status == 'done' and job_recipes.get(job.id) %}
+    {% if job.reextract_recipe_id and job.status == 'done' and job_drafts.get(job.id) %}
+    <span class="ingest-job-status">New reading ready</span>
+    <a class="ingest-job-title" href="{{ job_drafts[job.id][1] }}">{{ job_drafts[job.id][0] }} &rarr;</a>
+    {% elif job.reextract_recipe_id %}
+    <span class="ingest-job-status">Re-reading</span>
+    <span class="ingest-job-url">{{ job.url }}</span>
+    <span class="ingest-job-status">{{ job_labels.get(job.status, job.status) }}</span>
+    {% elif job.status == 'done' and job_recipes.get(job.id) %}
     <span class="ingest-job-status">Added</span>
     <a class="ingest-job-title" href="/recipes/{{ job_recipes[job.id][1] }}">{{ job_recipes[job.id][0] }} &rarr;</a>
     {% else %}

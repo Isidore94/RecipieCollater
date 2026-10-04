@@ -374,8 +374,16 @@ def create_recipe(
 
 
 def update_recipe(
-    conn: sqlite3.Connection, recipe_id: int, data: RecipeInput, *, saved_by: int | None = None
+    conn: sqlite3.Connection,
+    recipe_id: int,
+    data: RecipeInput,
+    *,
+    saved_by: int | None = None,
+    food_status: str = "confirmed",
 ) -> bool:
+    """Replace a recipe's content (a revision snapshot is kept). ``food_status`` is the status a
+    NEWLY created food gets: a re-read applied from an AI/scraped draft passes 'pending' so those
+    foods go through the same review-before-trust flow as a first import."""
     current = get_recipe(conn, recipe_id)
     if current is None:
         return False
@@ -424,7 +432,7 @@ def update_recipe(
     conn.execute("DELETE FROM recipe_ingredients WHERE recipe_id = ?", (recipe_id,))
     conn.execute("DELETE FROM recipe_steps WHERE recipe_id = ?", (recipe_id,))
     conn.execute("DELETE FROM recipe_tags WHERE recipe_id = ?", (recipe_id,))
-    _insert_children(conn, recipe_id, data)
+    _insert_children(conn, recipe_id, data, food_status=food_status)
     _carry_over_pantry_knowledge(conn, recipe_id, old_lines, cook_refs)
     _carry_over_step_metadata(conn, recipe_id, old_steps)
     conn.commit()

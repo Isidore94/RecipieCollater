@@ -257,5 +257,5 @@ rather than applied twice.
 - **Receipts can still be stranded** (Tier 2.7) — no receipts index to find a pending one.
 - **Assistant has no conversation history** (Tier 2.10), and replies render markdown literally.
 - **No global search or "+" affordance**, and no motion anywhere (Tier 3).
-- From the docs-vs-code gap analysis: big-event mode, re-extract comparison, the embedded
-  per-step video player, and structured after-cook quantities remain unbuilt.
+- From the docs-vs-code gap analysis: big-event mode, the embedded per-step video player,
+  and structured after-cook quantities remain unbuilt.

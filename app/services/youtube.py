@@ -56,6 +56,19 @@ class YoutubeData:
             }
         )
 
+    @classmethod
+    def from_json(cls, text: str) -> YoutubeData:
+        """Rebuild from the stored artifact. The transcript is deliberately not stored (it is
+        large and re-fetchable), so a reuse reading works from the description alone; ask to
+        fetch again to bring the captions back."""
+        raw = json.loads(text)
+        return cls(
+            video_id=str(raw["video_id"]), title=str(raw.get("title") or ""),
+            description=str(raw.get("description") or ""), uploader=raw.get("uploader"),
+            thumbnail_url=raw.get("thumbnail_url"),
+            duration_seconds=_as_int(raw.get("duration_seconds")), captions=None,
+        )
+
 
 def _clean(value: Any) -> str | None:
     text = str(value).strip() if value is not None else ""
