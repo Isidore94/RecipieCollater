@@ -71,8 +71,39 @@
     <li>Set <strong>Request Body</strong> to <strong>JSON</strong> with one field <code>url</code>, whose value is the
       Shortcut Input (the shared link).</li>
     <li>Save it as “Send to RecipeCollater”. Now share any recipe page, YouTube video, or
-      Instagram reel and pick it.</li>
+      Instagram reel and pick it. (Want a heads-up when the recipe is ready? Add the next step.)</li>
   </ol>
+</section>
+
+<section class="card">
+  <h2>2b. Hear back when the recipe is ready (optional)</h2>
+  <p class="muted">
+    Reading a recipe takes a little while, so the first request only says &ldquo;got it&rdquo;. These
+    extra steps make your phone check back and tell you how it went. Add them at the end of the
+    Shortcut, after the steps above.
+  </p>
+  <ol class="shortcut-steps">
+    <li>Right after the request, add <strong>Get Dictionary Value</strong> for the key
+      <code>status_url</code> from the result. This is the address to check.</li>
+    <li>Add a <strong>Repeat</strong> action and set it to <strong>12</strong> times.</li>
+    <li>Inside the Repeat, add <strong>Wait</strong> for <strong>5 seconds</strong>.</li>
+    <li>Then add <strong>Get Contents of URL</strong> and give it the <code>status_url</code> value. Leave
+      the method as <code>GET</code> and add the same <code>Authorization</code> header as before.</li>
+    <li>Add <strong>Get Dictionary Value</strong> for <code>status</code>, then an <strong>If</strong>
+      that checks whether it is <code>done</code> or <code>failed</code>. Anything else
+      (<code>queued</code>, <code>fetching</code>, <code>extracting</code>) means it is still working, so
+      the loop goes around again.</li>
+    <li>If it is <strong>done</strong>: <strong>Show Notification</strong> with <code>recipe_title</code>
+      (for example &ldquo;Added: &hellip;&rdquo;). To jump straight to it, add <strong>Open URLs</strong>
+      with <code>recipe_url</code>.</li>
+    <li>If it is <strong>failed</strong>: <strong>Show Notification</strong> with
+      <code>error_message</code>, so you know to try another link.</li>
+    <li>Finish each of those with <strong>Stop This Shortcut</strong> so the loop ends.</li>
+  </ol>
+  <p class="muted">
+    If it is still working after about a minute, the loop just ends. The recipe will still show up in
+    your inbox when it finishes.
+  </p>
 </section>
 
 <section class="card">

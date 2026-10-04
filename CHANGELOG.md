@@ -5,6 +5,24 @@ All notable changes to RecipeCollater are recorded here. Phases refer to
 
 ## [Unreleased]
 
+### The Shortcut now tells you how it went (2026-10-04)
+
+No schema change. `POST /api/ingest` answered 202 and the phone never heard another word: a
+bot-walled site or a dead link looked identical to a success until someone opened the inbox
+later. The Shortcut could not close that loop because there was nothing for it to ask.
+
+- **`GET /api/ingest/{job_id}`** returns `status` (queued / fetching / extracting / done /
+  failed), `recipe_id`, `recipe_title`, an absolute `recipe_url`, and the failure's
+  `error_category` / `error_message`. It is authenticated by the same scoped ingest Bearer token
+  as the POST — so, like the POST, a browser cookie does not work — and only returns jobs the
+  token's user submitted; anyone else's job is a 404, indistinguishable from an unknown id. One
+  joined read, no writes. The worker's internal `normalizing` step is reported as `extracting`.
+- **The POST response gains `status_url`**, absolute and built from `APP_BASE_URL`, so the
+  Shortcut never has to assemble it.
+- **`/shortcut` and docs/04 §1.1** describe the optional poll loop: Repeat about 12 times, wait
+  5 seconds, fetch `status_url`, stop on done/failed, then notify with the recipe title (and open
+  it) or the error message.
+
 ### Tags that survive a big cookbook (2026-08-01)
 
 Schema 019. The tagging system was sound underneath — a normalised many-to-many, indexed into

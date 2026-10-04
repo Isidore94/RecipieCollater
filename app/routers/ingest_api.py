@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from app.auth import require_ingest_token
+from app.config import get_settings
 from app.deps import get_db
 from app.logging_config import get_logger
 from app.services import ingest, tokens
@@ -32,6 +33,10 @@ def schedule_processing(job_id: int) -> None:
         process_ingest_job(job_id)
     except Exception:
         log.warning("ingest_enqueue_failed", job_id=job_id)
+
+
+def _status_url(job_id: int) -> str:
+    return f"{get_settings().app_base_url}/api/ingest/{job_id}"
 
 
 @router.post("/ingest")
@@ -63,8 +68,45 @@ async def submit_ingest(
         {
             "job_id": job.id,
             "status": job.status,
+            "status_url": _status_url(job.id),
             "duplicate": not created,
             "recipe_id": job.recipe_id,
         },
         status_code=202 if created else 200,
+    )
+
+
+@router.get("/ingest/{job_id}")
+def ingest_status(
+    job_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+    token: tokens.ApiToken = Depends(require_ingest_token),
+) -> JSONResponse:
+    """Outcome of one job, for the Shortcut's poll loop. Only the submitting user's jobs."""
+    row = db.execute(
+        """SELECT j.status, j.recipe_id, j.error_category, j.error_message,
+                  r.title AS recipe_title, r.slug AS recipe_slug
+           FROM ingest_jobs j LEFT JOIN recipes r ON r.id = j.recipe_id
+           WHERE j.id = ? AND j.submitted_by = ?""",
+        (job_id, token.user_id),
+    ).fetchone()
+    if row is None:
+        return JSONResponse({"detail": "job not found"}, status_code=404)
+    # The worker's internal 'normalizing' step is still extraction as far as a phone cares.
+    status = "extracting" if row["status"] == "normalizing" else row["status"]
+    recipe_url = (
+        f"{get_settings().app_base_url}/recipes/{row['recipe_slug']}"
+        if row["recipe_slug"]
+        else None
+    )
+    return JSONResponse(
+        {
+            "job_id": job_id,
+            "status": status,
+            "recipe_id": row["recipe_id"],
+            "recipe_title": row["recipe_title"],
+            "recipe_url": recipe_url,
+            "error_category": row["error_category"],
+            "error_message": row["error_message"],
+        }
     )

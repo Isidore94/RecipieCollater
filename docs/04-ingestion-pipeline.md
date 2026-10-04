@@ -14,6 +14,7 @@ iOS PWAs **cannot** register as share targets (WebKit has never implemented Web 
   - Header `Authorization: Bearer <api_token>`
   - JSON body `{"url": <Shortcut Input>}`
 - Followed by **Show Notification** ("Recipe queued ✓").
+- Optional feedback loop: the 202 body includes an absolute `status_url` (`GET /api/ingest/{job_id}`, same Bearer ingest token, only the submitting user's jobs; 404 otherwise). The Shortcut runs **Repeat 12×** { **Wait 5 s** → **Get Contents of URL** `status_url` → exit when `status` is `done` or `failed` }, then **Show Notification** with `recipe_title` (+ **Open URLs** `recipe_url`) or `error_message`. The response carries `status` (`queued`/`fetching`/`extracting`/`done`/`failed`), `recipe_id`, `recipe_title`, `recipe_url`, `error_category`, `error_message`.
 - Distributed to family as a single iCloud link, with **Import Questions** prompting for server URL + personal token on install.
 - Works from the YouTube app, Safari, Chrome — anything that shares a URL.
 
