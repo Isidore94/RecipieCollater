@@ -14,6 +14,10 @@
     <span class="ingest-job-url">{{ job.url }}</span>
     <span class="ingest-job-status">{{ job_labels.get(job.status, job.status) }}</span>
     {% endif %}
+    {% if job.id in job_review %}<span class="ingest-job-note">{{ review_note }}</span>{% endif %}
+    {% if job.status == 'queued' and job.error_category == 'youtube_blocked' %}
+    <span class="ingest-job-error">{{ job.error_message }}</span>
+    {% endif %}
     {% if job.status == 'failed' %}
     {% if job.error_message %}<span class="ingest-job-error">{{ job.error_message }}</span>{% endif %}
     <span class="ingest-job-actions">

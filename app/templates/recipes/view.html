@@ -25,6 +25,7 @@
 
 {% if notice %}<p class="banner banner-ok" role="status">{{ notice }}</p>{% endif %}
 {% if error %}<p class="banner banner-err" role="alert">{{ error }}</p>{% endif %}
+{% if review_note %}<p class="banner banner-todo no-print" role="note">{{ review_note }}</p>{% endif %}
 
 {% if recipe.image_path %}
 <img class="recipe-hero" src="/recipes/{{ recipe.slug }}/image" alt="{{ recipe.title }}">

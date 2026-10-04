@@ -14,6 +14,7 @@ import hashlib
 import re
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from app.config import get_settings
@@ -261,6 +262,62 @@ def set_status(
         (status, error_category, error_message, recipe_id, stamp, stamp, job_id),
     )
     conn.commit()
+
+
+# --------------------------------------------------------------------------------------
+# YouTube "blocked" backoff
+# --------------------------------------------------------------------------------------
+
+YOUTUBE_BLOCKED = "youtube_blocked"
+YOUTUBE_BLOCKED_MESSAGE = (
+    "YouTube is blocking automated reads from this network right now. This usually clears on "
+    "its own in a few hours; retry later."
+)
+# Delay before each automatic retry after a "blocked" failure: ~30 min, 2 h, 6 h, then give up.
+BLOCKED_RETRY_DELAYS: tuple[int, ...] = (30 * 60, 2 * 3600, 6 * 3600)
+
+
+@dataclass(frozen=True, slots=True)
+class BlockedRetry:
+    """The next scheduled automatic retry for a blocked YouTube job."""
+
+    attempt: int  # 1-based number of this retry
+    delay_seconds: int
+    retry_at: datetime
+
+
+def plan_blocked_retry(blocked_attempt: int, now: datetime) -> BlockedRetry | None:
+    """Plan the next retry after ``blocked_attempt`` blocked runs (0 = the first run).
+
+    Returns None once the schedule is exhausted, at which point the job stays failed.
+    """
+    if blocked_attempt < 0 or blocked_attempt >= len(BLOCKED_RETRY_DELAYS):
+        return None
+    delay = BLOCKED_RETRY_DELAYS[blocked_attempt]
+    return BlockedRetry(blocked_attempt + 1, delay, now + timedelta(seconds=delay))
+
+
+def waiting_message(plan: BlockedRetry) -> str:
+    """Inbox copy for a job parked until its next automatic retry (local clock time)."""
+    when = plan.retry_at.astimezone().strftime("%a %H:%M")
+    return (
+        "YouTube is blocking automated reads from this network right now. "
+        f"Waiting to retry automatically around {when} "
+        f"(retry {plan.attempt} of {len(BLOCKED_RETRY_DELAYS)})."
+    )
+
+
+def mark_waiting_retry(conn: sqlite3.Connection, job_id: int, plan: BlockedRetry) -> None:
+    """Park a blocked job as 'queued' (visibly waiting) with the youtube_blocked category kept."""
+    set_status(
+        conn, job_id, "queued", error_category=YOUTUBE_BLOCKED,
+        error_message=waiting_message(plan),
+    )
+
+
+def is_waiting_retry(job: IngestJob) -> bool:
+    """True for a job parked by :func:`mark_waiting_retry` (queued but carrying the category)."""
+    return job.status == "queued" and job.error_category == YOUTUBE_BLOCKED
 
 
 def requeue_failed(conn: sqlite3.Connection, job_id: int) -> bool:

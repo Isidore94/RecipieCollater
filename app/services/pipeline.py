@@ -192,8 +192,9 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     try:
         data = youtube.fetch(job.normalized_url)
     except youtube.YoutubeError as exc:
+        category, message = _youtube_failure(exc)
         ingest.set_status(
-            conn, job.id, "failed", error_category="youtube_fetch", error_message=str(exc)[:400]
+            conn, job.id, "failed", error_category=category, error_message=message
         )
         return
     ingest.store_artifact(conn, job.id, "youtube_metadata", data.to_json().encode("utf-8"))
@@ -202,10 +203,13 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     # require_steps=False: a video with an ingredient list but a spoken-only method is still a
     # recipe worth keeping - the video IS the steps (the sheet keeps the link; cook mode still
     # gives the ingredient checklist). docs/04 section 6 is amended accordingly.
+    # A thin description means the model worked from the auto-caption transcript, whose amounts
+    # are spoken ("half a cup") and error-prone: record 'thin' confidence so the UI nudges a review.
+    confidence = "thin" if data.source_basis == "captions" else "medium"
     applied = _ai_extract_and_apply(
         conn, job, data.prompt_text(),
         extractor="youtube", source_type="youtube", operation="extract_youtube",
-        require_steps=False,
+        require_steps=False, confidence=confidence,
     )
     if not applied:
         ingest.set_status(
@@ -216,6 +220,18 @@ def _run_youtube(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
     refreshed = ingest.get_job(conn, job.id)
     if refreshed and refreshed.recipe_id:  # use the video thumbnail as the recipe photo
         _maybe_set_image(conn, refreshed.recipe_id, data.thumbnail_url)
+
+
+def _youtube_failure(exc: youtube.YoutubeError) -> tuple[str, str]:
+    """Map a YoutubeError onto the (error_category, honest message) the inbox shows."""
+    if exc.kind == youtube.KIND_BLOCKED:
+        return ingest.YOUTUBE_BLOCKED, ingest.YOUTUBE_BLOCKED_MESSAGE
+    if exc.kind == youtube.KIND_UNAVAILABLE:
+        return (
+            "youtube_unavailable",
+            "That video is private, removed, or otherwise unavailable.",
+        )
+    return "youtube_fetch", str(exc)[:400]
 
 
 def _run_instagram(conn: sqlite3.Connection, job: ingest.IngestJob) -> None:
@@ -290,6 +306,7 @@ def _ai_extract_and_apply(
     source_type: str,
     operation: str = "extract_web",
     require_steps: bool = True,
+    confidence: str = "medium",
 ) -> bool:
     """Budget-gated LLM extraction that applies the recipe on success; always logs to ai_usage_log.
 
@@ -329,6 +346,7 @@ def _ai_extract_and_apply(
     ingest.set_status(conn, job.id, "normalizing")
     apply_extraction(
         conn, job, result.recipe, extractor=extractor,
-        provider=result.provider, model=result.model, confidence="medium", source_type=source_type,
+        provider=result.provider, model=result.model, confidence=confidence,
+        source_type=source_type,
     )
     return True

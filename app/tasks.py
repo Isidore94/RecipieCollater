@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+from datetime import UTC, datetime
 
 from huey import SqliteHuey, crontab
 
@@ -42,12 +43,15 @@ def ping(value: str = "pong") -> str:
 
 
 @huey.task(retries=2, retry_delay=60)
-def process_ingest_job(job_id: int) -> None:
+def process_ingest_job(job_id: int, blocked_attempt: int = 0) -> None:
     """Process one ingest job (fetch -> extract -> save) in the worker subprocess.
 
     Expected failures (a blocked fetch, no recipe on the page) are recorded on the job by the
     pipeline and return normally. Only an *unexpected* error re-raises so Huey retries; the job is
     marked failed first so a stuck job never lingers mid-lifecycle.
+
+    A YouTube "blocked" failure is expected but transient (it clears in hours, not the 60 s Huey
+    retry gap), so it is re-scheduled on its own longer backoff via ``blocked_attempt`` instead.
     """
     from app.db import connect  # lazy heavy imports (CONVENTIONS 4)
     from app.services import ingest, pipeline
@@ -58,9 +62,22 @@ def process_ingest_job(job_id: int) -> None:
         if job is None:
             log.warning("ingest_job_missing", job_id=job_id)
             return
+        if blocked_attempt > 0 and not ingest.is_waiting_retry(job):
+            # Stale scheduled retry: the job was done, retried by hand, or dismissed meanwhile.
+            log.info("ingest_blocked_retry_stale", job_id=job_id, status=job.status)
+            return
         ingest.increment_attempts(conn, job.id)
         pipeline.run_job(conn, job)
         final = ingest.get_job(conn, job_id)
+        if final and final.status == "failed" and final.error_category == ingest.YOUTUBE_BLOCKED:
+            plan = ingest.plan_blocked_retry(blocked_attempt, datetime.now(UTC))
+            if plan is not None:
+                ingest.mark_waiting_retry(conn, job_id, plan)
+                process_ingest_job.schedule(
+                    args=(job_id, plan.attempt), delay=plan.delay_seconds
+                )
+                log.info("ingest_blocked_retry_scheduled", job_id=job_id, attempt=plan.attempt)
+                return
         log.info("ingest_job_processed", job_id=job_id, status=final.status if final else "gone")
     except Exception:
         log.exception("ingest_job_error", job_id=job_id)
